@@ -23,4 +23,20 @@ uv venv --python 3.12
 uv pip install -e ".[dev]"
 ```
 
-已验证：MPS 可用，`bge-m3` 已在本机 HuggingFace 缓存中。服务启动与入库命令随实现补全。
+已验证：MPS 可用，`bge-m3` 已在本机 HuggingFace 缓存中。
+
+密钥只从环境变量 `DEEPSEEK_API_KEY` 读取，不要写进仓库或配置文件。生成与视觉需要它；入库的 Dense 嵌入走本机 `bge-m3`。
+
+```bash
+uv run pytest
+
+uv run uvicorn wenmai.app:app --factory --host 127.0.0.1 --port 8000
+```
+
+```bash
+curl -X POST http://127.0.0.1:8000/ingest \
+  -H 'Content-Type: application/json' \
+  -d '{"source_path": "/absolute/path/to/file.md"}'
+```
+
+成功时返回 `document_id`、`chunk_count`、`elapsed_ms`、`trace_id`。Trace 追加写入 `logs/traces.jsonl`。

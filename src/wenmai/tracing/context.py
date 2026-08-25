@@ -1,0 +1,126 @@
+from __future__ import annotations
+
+import time
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+@dataclass
+class StageRecord:
+    name: str
+    method: str
+    provider: str
+    elapsed_ms: float
+    input_summary: str = ""
+    output_summary: str = ""
+    candidate_count: int | None = None
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "name": self.name,
+            "method": self.method,
+            "provider": self.provider,
+            "elapsed_ms": self.elapsed_ms,
+            "input_summary": self.input_summary,
+            "output_summary": self.output_summary,
+        }
+        if self.candidate_count is not None:
+            payload["candidate_count"] = self.candidate_count
+        if self.error is not None:
+            payload["error"] = self.error
+        return payload
+
+
+@dataclass
+class TraceContext:
+    trace_type: str
+    trace_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    started_at: str = field(default_factory=_now)
+    finished_at: str | None = None
+    stages: list[StageRecord] = field(default_factory=list)
+    total_elapsed_ms: float = 0.0
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    _wall_start: float = field(default_factory=time.perf_counter, repr=False)
+
+    def record_stage(
+        self,
+        name: str,
+        method: str,
+        provider: str,
+        elapsed_ms: float,
+        input_summary: str = "",
+        output_summary: str = "",
+        candidate_count: int | None = None,
+        error: str | None = None,
+    ) -> None:
+        self.stages.append(
+            StageRecord(
+                name=name,
+                method=method,
+                provider=provider,
+                elapsed_ms=elapsed_ms,
+                input_summary=input_summary,
+                output_summary=output_summary,
+                candidate_count=candidate_count,
+                error=error,
+            )
+        )
+
+    def close(self) -> None:
+        self.finished_at = _now()
+        self.total_elapsed_ms = (time.perf_counter() - self._wall_start) * 1000
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "trace_id": self.trace_id,
+            "trace_type": self.trace_type,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "total_elapsed_ms": self.total_elapsed_ms,
+            "stages": [stage.to_dict() for stage in self.stages],
+            "error": self.error,
+            "metadata": self.metadata,
+        }
+        return payload
+
+    @contextmanager
+    def stage(
+        self,
+        name: str,
+        method: str,
+        provider: str,
+        input_summary: str = "",
+    ) -> Iterator[dict[str, Any]]:
+        extras: dict[str, Any] = {
+            "output_summary": "",
+            "candidate_count": None,
+        }
+        started = time.perf_counter()
+        error: str | None = None
+        try:
+            yield extras
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
+            self.error = error
+            raise
+        finally:
+            self.record_stage(
+                name=name,
+                method=method,
+                provider=provider,
+                elapsed_ms=(time.perf_counter() - started) * 1000,
+                input_summary=input_summary,
+                output_summary=str(extras.get("output_summary") or ""),
+                candidate_count=extras.get("candidate_count"),
+                error=error,
+            )
