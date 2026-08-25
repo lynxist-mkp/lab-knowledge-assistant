@@ -53,6 +53,7 @@ class TransformConfig:
     enricher: str
     captioner: str
     domains: list[str]
+    enricher_prompt: str
     stages: list[str] = field(default_factory=list)
 
 

@@ -19,11 +19,12 @@ chunking:
   overlap_ratio: 0.15
 
 transform:
-  stages: []               # 17/18/20 各追加自己的阶段名；未列入的不跑
+  stages: ["enricher"]     # 17/18/20 各追加自己的阶段名；未列入的不跑
   refiner: "rule"          # 规则清洗，不打 LLM
   enricher: "llm"          # 抽 title/summary/tags/文化域
   captioner: "vision"      # 图转文；失败保留 [IMAGE: id] 不阻塞
   domains: ["海丝", "朱子", "妈祖", "船政", "其他"]
+  enricher_prompt: "prompts/enrich_v1.txt"
 
 retrieval:
   dense_k: 20
