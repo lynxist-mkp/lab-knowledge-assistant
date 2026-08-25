@@ -1,0 +1,378 @@
+# 福云·文脉助手公开语料清单（32 号票）
+# 正文由 scripts/fetch_corpus.py 抓取到本目录，默认不进 Git。
+# robots.txt 未能核验的站点不会自动抓取（见 README 与脚本日志）。
+
+version: 1
+space_default: minpai_culture
+
+# 明确排除：调研已记录 robots 无法核验，不写爬虫硬抓
+robots_blocked_hosts:
+  - host: www.fjtv.net
+    reason: robots.txt 返回客户端下载中间页，未能核验真实规则
+  - host: fjtv.net
+    reason: robots.txt 返回客户端下载中间页，未能核验真实规则
+
+items:
+  # ── 海丝（10）────────────────────────────────────────────
+  - id: haishi-unesco-quanzhou
+    title: 泉州：宋元中国的世界海洋商贸中心（UNESCO）
+    source_url: https://whc.unesco.org/en/list/1561/
+    source_org: UNESCO World Heritage Centre
+    license_note: 说明文本 CC BY-SA IGO 3.0，引用保留 URL 与获取日期
+    culture_domain: 海丝
+    space: minpai_culture
+    has_images: true
+
+  - id: haishi-wiki-citong
+    title: 刺桐（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%88%BA%E6%A1%90
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 海丝
+    space: minpai_culture
+    has_images: true
+
+  - id: haishi-wiki-maritime-silk-road
+    title: 海上丝绸之路（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%B5%B7%E4%B8%8A%E4%B8%9D%E7%BB%B8%E4%B9%8B%E8%B7%AF
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 海丝
+    space: minpai_culture
+    has_images: false
+
+  - id: haishi-wiki-quanzhou
+    title: 泉州市（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%B3%89%E5%B7%9E%E5%B8%82
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 海丝
+    space: minpai_culture
+    has_images: false
+
+  - id: haishi-wiki-qingjing-mosque
+    title: 清净寺（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%B8%85%E9%9D%99%E5%AF%BA
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 海丝
+    space: minpai_culture
+    has_images: true
+
+  - id: haishi-wiki-shibosi
+    title: 泉州市舶司（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%B3%89%E5%B7%9E%E5%B8%82%E8%88%B9%E5%8F%B8
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 海丝
+    space: minpai_culture
+    has_images: false
+
+  - id: haishi-wiki-dehua-porcelain
+    title: 德化瓷（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%BE%B7%E5%8C%96%E7%93%B7
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 海丝
+    space: minpai_culture
+    has_images: true
+
+  - id: haishi-wlt-library-llm
+    title: 省图书馆海丝文化大语言模型上线（省文旅厅转载）
+    source_url: https://wlt.fujian.gov.cn/wldt/btdt/202504/t20250425_6904832.htm
+    source_org: 福建省文化和旅游厅
+    license_note: 政府网站公开信息，引用时保留 URL
+    culture_domain: 海丝
+    space: minpai_culture
+    has_images: false
+
+  - id: haishi-mzd-shenyi-reply
+    title: 湄洲岛管委会提案协办意见（妈祖/海丝申遗）
+    source_url: https://mzd.putian.gov.cn/zfxxgkzl/zfxxgkml/202405/t20240528_1922640.htm
+    source_org: 湄洲岛国家旅游度假区管委会
+    license_note: 政府网站公开信息，引用时保留 URL
+    culture_domain: 海丝
+    space: minpai_culture
+    has_images: false
+
+  - id: haishi-wlt-badawenhua
+    title: 省文旅厅政协提案答复（福建八大文化标识总述）
+    source_url: https://wlt.fujian.gov.cn/zfxxgkzl/zfxxgkml/30qtyzdgkdzfxx/12zxtadf/202305/t20230504_6162831.htm
+    source_org: 福建省文化和旅游厅
+    license_note: 政府网站公开信息，引用时保留 URL
+    culture_domain: 海丝
+    space: minpai_culture
+    has_images: false
+
+  # ── 朱子（10）────────────────────────────────────────────
+  - id: zhuzi-wlt-zhuzi-plan
+    title: 福建省朱子文化旅游发展规划（2018–2022年）通知
+    source_url: https://wlt.fujian.gov.cn/zwgk/ghjh/202003/t20200306_5210317.htm
+    source_org: 福建省文化和旅游厅
+    license_note: 政府网站公开信息，引用时保留 URL；历史规划注意时效
+    culture_domain: 朱子
+    space: minpai_culture
+    has_images: true
+
+  - id: zhuzi-wiki-zhuxi
+    title: 朱熹（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%9C%B1%E7%86%B9
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 朱子
+    space: minpai_culture
+    has_images: true
+
+  - id: zhuzi-wiki-lixue
+    title: 理学（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E7%90%86%E5%AD%A6
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 朱子
+    space: minpai_culture
+    has_images: false
+
+  - id: zhuzi-wiki-wuyishan
+    title: 武夷山（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%AD%A6%E5%A4%B7%E5%B1%B1
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 朱子
+    space: minpai_culture
+    has_images: true
+
+  - id: zhuzi-wiki-kaoting
+    title: 考亭书院（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E8%80%83%E4%BA%AD%E4%B9%A6%E9%99%A2
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 朱子
+    space: minpai_culture
+    has_images: false
+
+  - id: zhuzi-wiki-zhuzixue
+    title: 朱子学（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%9C%B1%E5%AD%90%E5%AD%A6
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 朱子
+    space: minpai_culture
+    has_images: false
+
+  - id: zhuzi-wiki-sishu
+    title: 四书（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%9B%9B%E4%B9%A6
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 朱子
+    space: minpai_culture
+    has_images: false
+
+  - id: zhuzi-wiki-jianyang
+    title: 建阳区（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%BB%BA%E9%98%B3%E5%8C%BA
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 朱子
+    space: minpai_culture
+    has_images: false
+
+  - id: zhuzi-wiki-nanping
+    title: 南平市（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%8D%97%E5%B9%B3%E5%B8%82
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 朱子
+    space: minpai_culture
+    has_images: false
+
+  - id: zhuzi-wiki-bailudong
+    title: 白鹿洞书院（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E7%99%BD%E9%B9%BF%E6%B4%9E%E4%B9%A6%E9%99%A2
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 朱子
+    space: minpai_culture
+    has_images: false
+
+  # ── 妈祖（10）────────────────────────────────────────────
+  - id: mazu-mzmz-intro
+    title: 湄洲妈祖祖庙简介
+    source_url: https://www.mzmz.org.cn/introduction.html
+    source_org: 湄洲妈祖祖庙董事会
+    license_note: 祖庙官网公开信息，引用时保留 URL
+    culture_domain: 妈祖
+    space: minpai_culture
+    has_images: true
+
+  - id: mazu-wiki-mazu
+    title: 妈祖（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%A6%88%E7%A5%96
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 妈祖
+    space: minpai_culture
+    has_images: true
+
+  - id: mazu-wiki-quanzhou-tianhou
+    title: 泉州天后宫（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%B3%89%E5%B7%9E%E5%A4%A9%E5%90%8E%E5%AE%AB
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 妈祖
+    space: minpai_culture
+    has_images: true
+
+  - id: mazu-wiki-tianhou
+    title: 天后（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%A4%A9%E5%90%8E
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 妈祖
+    space: minpai_culture
+    has_images: false
+
+  - id: mazu-wiki-meizhou-island
+    title: 湄洲岛（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%B9%96%E6%B4%B2%E5%B2%9B
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 妈祖
+    space: minpai_culture
+    has_images: false
+
+  - id: mazu-wiki-mazu-belief
+    title: 妈祖信俗（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%A6%88%E7%A5%96%E4%BF%A1%E4%BF%97
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 妈祖
+    space: minpai_culture
+    has_images: false
+
+  - id: mazu-wiki-putian
+    title: 莆田市（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E8%8E%86%E7%94%B0%E5%B8%82
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 妈祖
+    space: minpai_culture
+    has_images: false
+
+  - id: mazu-wiki-lin-moniang
+    title: 林默娘（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%9E%97%E9%BB%98%E5%A8%98
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 妈祖
+    space: minpai_culture
+    has_images: false
+
+  - id: mazu-wiki-lugang-tianhou
+    title: 鹿港天后宫（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E9%B9%BF%E6%B8%AF%E5%A4%A9%E5%90%8E%E5%AE%AB
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 妈祖
+    space: minpai_culture
+    has_images: false
+
+  - id: mazu-wiki-beigang-chaotian
+    title: 北港朝天宫（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%8C%97%E6%B8%AF%E6%9C%9D%E5%A4%A9%E5%AE%AB
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 妈祖
+    space: minpai_culture
+    has_images: false
+
+  # ── 船政（10）────────────────────────────────────────────
+  - id: chuanzheng-wlj-industrial-tourism
+    title: 船政文化景区入选国家工业旅游示范基地（福州市文旅局）
+    source_url: https://wlj.fuzhou.gov.cn/zwgk/lyzx/202310/t20231016_4698930.htm
+    source_org: 福州市文化和旅游局
+    license_note: 政府网站公开信息，引用时保留 URL
+    culture_domain: 船政
+    space: minpai_culture
+    has_images: true
+
+  - id: chuanzheng-mawei-museum-news
+    title: 中国船政文化博物馆「上新」（马尾区政府）
+    source_url: https://www.mawei.gov.cn/xjwz/zwgk/zfxxgkzdgz/ggtywh/whycbh/202301/t20230104_4516214.htm
+    source_org: 福州市马尾区人民政府
+    license_note: 政府网站公开信息，引用时保留 URL
+    culture_domain: 船政
+    space: minpai_culture
+    has_images: true
+
+  - id: chuanzheng-wiki-chuanzheng-xuetang
+    title: 船政学堂（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E8%88%B9%E6%94%BF%E5%AD%A6%E5%A0%82
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 船政
+    space: minpai_culture
+    has_images: true
+
+  - id: chuanzheng-wiki-mawei-shipyard
+    title: 马尾船政（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E9%A9%AC%E5%B0%BE%E8%88%B9%E6%94%BF
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 船政
+    space: minpai_culture
+    has_images: false
+
+  - id: chuanzheng-wiki-fuzhou-shipyard
+    title: 福州船政局（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E7%A6%8F%E5%B7%9E%E8%88%B9%E6%94%BF%E5%B1%80
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 船政
+    space: minpai_culture
+    has_images: false
+
+  - id: chuanzheng-wiki-zuo-zongtang
+    title: 左宗棠（维基百科，船政创办背景）
+    source_url: https://zh.wikipedia.org/wiki/%E5%B7%A6%E5%AE%97%E6%A3%8B
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 船政
+    space: minpai_culture
+    has_images: false
+
+  - id: chuanzheng-wiki-shen-baozhen
+    title: 沈葆桢（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%B2%88%E4%BF%9D%E6%9E%B5
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 船政
+    space: minpai_culture
+    has_images: false
+
+  - id: chuanzheng-wiki-mawei
+    title: 马尾区（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E9%A9%AC%E5%B0%BE%E5%8C%BA
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 船政
+    space: minpai_culture
+    has_images: false
+
+  - id: chuanzheng-wiki-yangwu
+    title: 洋务运动（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%B4%8B%E5%8A%A1%E8%BF%90%E5%8A%A8
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 船政
+    space: minpai_culture
+    has_images: false
+
+  - id: chuanzheng-wiki-yan-fu
+    title: 严复（维基百科，船政学堂出身）
+    source_url: https://zh.wikipedia.org/wiki/%E4%B8%A5%E5%A4%8D
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 船政
+    space: minpai_culture
+    has_images: false
