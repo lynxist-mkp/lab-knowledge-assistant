@@ -70,6 +70,7 @@ def test_ingesting_markdown_makes_chunks_retrievable_and_records_four_trace_stag
     assert [stage["name"] for stage in trace["stages"]] == [
         "load",
         "split",
+        "transform",
         "embed",
         "upsert",
     ]
@@ -79,3 +80,59 @@ def test_ingesting_markdown_makes_chunks_retrievable_and_records_four_trace_stag
         assert "elapsed_ms" in stage
         assert stage["input_summary"]
         assert stage["output_summary"]
+
+
+def _write_dirty_markdown(path: Path) -> Path:
+    good_body = "湄洲岛是妈祖信仰的发源地，祖庙是信俗活动的中心场所。" * 30
+    garbage = "@#" * 40
+    path.write_text(
+        f"""---
+title: 带噪声的妈祖材料
+---
+
+第 1 页
+
+{good_body}
+
+{garbage}
+
+版权所有 2024 湄洲妈祖祖庙
+""",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_refiner_cleans_headers_footers_and_drops_garbage_chunks(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    source = _write_dirty_markdown(tmp_path / "dirty_matsu.md")
+    client = TestClient(create_app(test_settings))
+
+    response = client.post("/ingest", json={"source_path": str(source)})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["chunk_count"] >= 1
+
+    store = vector_store_factory.create(test_settings)
+    chunks = store.get_by_document_id(body["document_id"])
+    assert len(chunks) == body["chunk_count"]
+    combined = "\n".join(chunk.text for chunk in chunks)
+    assert "妈祖" in combined
+    assert "第 1 页" not in combined
+    assert "版权所有" not in combined
+    assert "@#" not in combined
+
+    trace_path = Path(test_settings.paths.traces)
+    trace = json.loads(trace_path.read_text(encoding="utf-8").splitlines()[0])
+    stage_names = [stage["name"] for stage in trace["stages"]]
+    assert "transform" in stage_names
+    transform_stage = next(stage for stage in trace["stages"] if stage["name"] == "transform")
+    assert transform_stage["method"] == "rule"
+    assert transform_stage["provider"] == "refiner"
+    assert "discarded" in transform_stage["output_summary"].lower()
+
+    discarded = trace["metadata"].get("transform_discarded", [])
+    assert discarded
+    assert any("effective_char_ratio" in item["reason"] for item in discarded)

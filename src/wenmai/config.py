@@ -54,6 +54,7 @@ class TransformConfig:
     captioner: str
     domains: list[str]
     stages: list[str] = field(default_factory=list)
+    refiner_min_ratio: float = 0.5
 
 
 @dataclass
