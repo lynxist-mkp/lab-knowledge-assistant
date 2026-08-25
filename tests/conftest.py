@@ -40,4 +40,4 @@ def test_settings(tmp_path: Path) -> Settings:
         "splitter": "ok",
         "vector_store": "ok",
     }
-    return Settings.from_dict(raw, root=tmp_path)
+    return Settings.from_dict(raw, root=repo_settings.parent)
