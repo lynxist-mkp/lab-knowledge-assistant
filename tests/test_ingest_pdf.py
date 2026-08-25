@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from pathlib import Path
@@ -23,6 +24,12 @@ def _write_pdf_with_embedded_image(path: Path) -> Path:
 
     pdf = canvas.Canvas(str(path), pagesize=letter)
     pdf.drawString(72, 720, "Fuzhou shipyard heritage photo below.")
+    pdf.drawString(
+        72,
+        700,
+        "The Minpai shipbuilding tradition spans centuries along the Fujian coast. "
+        "Artifacts from the yard document maritime trade and naval engineering.",
+    )
     pdf.drawImage(str(image_path), 72, 580, width=120, height=120)
     pdf.save()
     return path
@@ -39,6 +46,12 @@ def test_ingesting_pdf_extracts_image_writes_index_and_chunk_placeholder(
     assert response.status_code == 200
     body = response.json()
     assert body["chunk_count"] >= 1
+
+    trace_path = Path(test_settings.paths.traces)
+    trace = json.loads(trace_path.read_text(encoding="utf-8").splitlines()[-1])
+    load_stage = next(stage for stage in trace["stages"] if stage["name"] == "load")
+    assert load_stage["method"] == "markitdown"
+    assert load_stage["provider"] == "markitdown"
 
     store = vector_store_factory.create(test_settings)
     chunks = store.get_by_document_id(body["document_id"])

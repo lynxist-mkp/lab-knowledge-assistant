@@ -117,6 +117,25 @@ class Dolphin:
 
 
 @dataclass
+class PdfLoad:
+    mode: str
+    chars_per_page_threshold: int
+
+
+@dataclass
+class PaddleOCR:
+    python: str
+    script: str
+    mlx_python: str
+    mlx_model: str
+    mlx_fallback_model: str
+    server_port: int
+    server_url: str
+    vl_rec_api_model_name: str
+    idle_timeout_seconds: int
+
+
+@dataclass
 class Settings:
     product: Product
     paths: Paths
@@ -129,6 +148,8 @@ class Settings:
     observability: Observability
     evaluation: Evaluation
     dolphin: Dolphin
+    pdf_load: PdfLoad
+    paddleocr: PaddleOCR
     fakes: dict[str, str] = field(default_factory=dict)
     root: Path = field(default_factory=lambda: Path("."))
 
@@ -146,6 +167,8 @@ class Settings:
             observability=_build(Observability, raw["observability"]),
             evaluation=_build(Evaluation, raw["evaluation"]),
             dolphin=_build(Dolphin, raw["dolphin"]),
+            pdf_load=_build(PdfLoad, raw["pdf_load"]),
+            paddleocr=_build(PaddleOCR, raw["paddleocr"]),
             fakes=dict(raw.get("fakes") or {}),
             root=Path(root) if root is not None else Path("."),
         )

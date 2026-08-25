@@ -114,10 +114,12 @@ class TraceContext:
             self.error = error
             raise
         finally:
+            stage_method = str(extras.get("method") or method)
+            stage_provider = str(extras.get("provider") or provider)
             self.record_stage(
                 name=name,
-                method=method,
-                provider=provider,
+                method=stage_method,
+                provider=stage_provider,
                 elapsed_ms=(time.perf_counter() - started) * 1000,
                 input_summary=input_summary,
                 output_summary=str(extras.get("output_summary") or ""),

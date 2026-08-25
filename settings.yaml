@@ -70,3 +70,18 @@ dolphin:
   model: "small.cn"
   lang: "zh"
   region: "MINNAN"
+
+pdf_load:
+  mode: "auto"
+  chars_per_page_threshold: 100
+
+paddleocr:
+  python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.venvs/paddleocr-env/bin/python"
+  script: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/scripts/paddleocr_parse_pdf.py"
+  mlx_python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.venvs/paddleocr-env/bin/python"
+  mlx_model: "mlx-community/PaddleOCR-VL-1.6-5bit"
+  mlx_fallback_model: "PaddlePaddle/PaddleOCR-VL-1.6"
+  server_port: 8111
+  server_url: "http://127.0.0.1:8111/"
+  vl_rec_api_model_name: "mlx-community/PaddleOCR-VL-1.6-5bit"
+  idle_timeout_seconds: 60

@@ -11,6 +11,11 @@ import pypdfium2 as pdfium
 import yaml
 from markitdown import MarkItDown
 
+from wenmai.components.paddleocr import (
+    build_text_from_ocr_payload,
+    choose_pdf_route,
+    parse_scanned_pdf,
+)
 from wenmai.config import Settings
 from wenmai.storage.images import ImageStore
 
@@ -26,14 +31,21 @@ class LoadedDocument:
     page: int
     source_path: str
     extra: dict[str, Any]
+    load_method: str = ""
+    load_provider: str = ""
 
 
-def load_source(path: Path, settings: Settings) -> LoadedDocument:
+def load_source(
+    path: Path,
+    settings: Settings,
+    *,
+    pdf_load_mode: str | None = None,
+) -> LoadedDocument:
     suffix = path.suffix.lower()
     if suffix == ".md":
         return load_markdown(path)
     if suffix == ".pdf":
-        return load_pdf(path, settings)
+        return load_pdf(path, settings, pdf_load_mode=pdf_load_mode)
     raise ValueError(f"unsupported source type: {path.suffix}")
 
 
@@ -66,10 +78,24 @@ def load_markdown(path: Path) -> LoadedDocument:
         page=page,
         source_path=str(path),
         extra=extra,
+        load_method="markdown",
+        load_provider="file",
     )
 
 
-def load_pdf(path: Path, settings: Settings) -> LoadedDocument:
+def load_pdf(
+    path: Path,
+    settings: Settings,
+    *,
+    pdf_load_mode: str | None = None,
+) -> LoadedDocument:
+    route = choose_pdf_route(path, settings.pdf_load, override_mode=pdf_load_mode)
+    if route == "markitdown":
+        return _load_pdf_markitdown(path, settings)
+    return _load_pdf_paddleocr(path, settings)
+
+
+def _load_pdf_markitdown(path: Path, settings: Settings) -> LoadedDocument:
     raw_bytes = path.read_bytes()
     document_id = hashlib.sha256(raw_bytes).hexdigest()
     source_path = str(path)
@@ -86,7 +112,36 @@ def load_pdf(path: Path, settings: Settings) -> LoadedDocument:
         url="",
         page=1,
         source_path=source_path,
-        extra={"doc_type": "pdf"},
+        extra={"doc_type": "pdf", "load_route": "markitdown"},
+        load_method="markitdown",
+        load_provider="markitdown",
+    )
+
+
+def _load_pdf_paddleocr(path: Path, settings: Settings) -> LoadedDocument:
+    raw_bytes = path.read_bytes()
+    document_id = hashlib.sha256(raw_bytes).hexdigest()
+    source_path = str(path)
+
+    payload = parse_scanned_pdf(path, config=settings.paddleocr)
+    image_store = ImageStore(settings)
+    text = build_text_from_ocr_payload(
+        payload,
+        image_store,
+        document_id=document_id,
+        source_path=source_path,
+    )
+
+    return LoadedDocument(
+        document_id=document_id,
+        text=text,
+        title=path.stem,
+        url="",
+        page=1,
+        source_path=source_path,
+        extra={"doc_type": "pdf", "load_route": "paddleocr-vl"},
+        load_method="paddleocr-vl",
+        load_provider="mlx-vlm-server",
     )
 
 

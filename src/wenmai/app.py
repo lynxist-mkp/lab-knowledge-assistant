@@ -12,6 +12,7 @@ from wenmai.pipelines.ingestion import ingest_markdown
 
 class IngestRequest(BaseModel):
     source_path: str
+    pdf_load_mode: str | None = None
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -25,7 +26,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         path = Path(request.source_path)
         if not path.is_file():
             raise HTTPException(status_code=404, detail="source file not found")
-        result = ingest_markdown(path, resolved)
+        result = ingest_markdown(path, resolved, pdf_load_mode=request.pdf_load_mode)
         return result.as_dict()
 
     return app

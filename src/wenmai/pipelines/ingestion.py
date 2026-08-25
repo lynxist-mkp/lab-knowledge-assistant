@@ -16,20 +16,33 @@ from wenmai.tracing.context import TraceContext
 from wenmai.tracing.writer import JsonlTraceWriter
 
 
-def ingest_markdown(source_path: Path, settings: Settings) -> IngestResult:
+def ingest_markdown(
+    source_path: Path,
+    settings: Settings,
+    *,
+    pdf_load_mode: str | None = None,
+) -> IngestResult:
     trace = TraceContext(trace_type="ingestion")
     writer = JsonlTraceWriter(store_path(settings, "traces"))
     fingerprint_store = FingerprintStore.from_settings(settings)
     chunks: list[Chunk] = []
     status = "ingested"
     try:
-        load_method = source_path.suffix.lower().lstrip(".") or "unknown"
         with trace.stage(
-            "load", method=load_method, provider="file", input_summary=str(source_path)
+            "load",
+            method="pending",
+            provider="pending",
+            input_summary=str(source_path),
         ) as load_info:
-            document = load_source(source_path, settings)
+            document = load_source(source_path, settings, pdf_load_mode=pdf_load_mode)
             load_info["output_summary"] = document.title
             load_info["candidate_count"] = 1
+            load_method = document.load_method or (
+                source_path.suffix.lower().lstrip(".") or "unknown"
+            )
+            load_provider = document.load_provider or "file"
+            load_info["method"] = load_method
+            load_info["provider"] = load_provider
 
         previous = fingerprint_store.get_by_source_path(document.source_path)
         with trace.stage(
