@@ -81,6 +81,7 @@ def test_ingesting_markdown_makes_chunks_retrievable_and_records_pipeline_stages
     assert "error" in trace
     assert [stage["name"] for stage in trace["stages"]] == [
         "load",
+        "integrity",
         "split",
         "transform",
         "enricher",

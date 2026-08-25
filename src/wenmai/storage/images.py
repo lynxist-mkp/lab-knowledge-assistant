@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import sqlite3
 from dataclasses import dataclass
+from pathlib import Path
 
 from wenmai.config import Settings
 from wenmai.storage.paths import store_path
@@ -90,6 +91,19 @@ class ImageStore:
             file_path=row[4],
             mime_type=row[5],
         )
+
+    def delete_by_document_id(self, document_id: str) -> None:
+        with sqlite3.connect(self._index_path) as conn:
+            rows = conn.execute(
+                "SELECT file_path FROM images WHERE document_id = ?",
+                (document_id,),
+            ).fetchall()
+            conn.execute("DELETE FROM images WHERE document_id = ?", (document_id,))
+            conn.commit()
+        for (file_path,) in rows:
+            path = Path(file_path)
+            if path.is_file():
+                path.unlink()
 
 
 def _extension_for_mime(mime_type: str) -> str:
