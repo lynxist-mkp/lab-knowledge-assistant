@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+data/db/
+data/images/
+data/eval/runs/
+logs/
+
+# 抓来的公开材料只在本机；仓库里留清单与抓取脚本，换机器重跑即可复现。
+data/corpus/*
+!data/corpus/manifest.yaml
+
+# 红线：任何音频都不进公开 Git。演示音频要提交需显式 git add -f。
+data/audio/
+.env
+*.pt
+*.bin
+.DS_Store
