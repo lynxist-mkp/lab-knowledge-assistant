@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "model": "small.cn",
+    "device": "mps",
+    "lang_sym": "zh",
+    "region_sym": "MINNAN"
+  },
+  "audio_file": "demo.mp3",
+  "segments": [
+    {
+      "text": "<zh><MINNAN><asr><notimestamp>你好世界",
+      "text_nospecial": "你好世界",
+      "language": "zh",
+      "region": "MINNAN",
+      "start": 0.0,
+      "end": 1.5,
+      "duration": 1.5,
+      "word_count": 4,
+      "word_timestamps": []
+    },
+    {
+      "text": "<zh><MINNAN><asr><notimestamp>闽南语测试",
+      "text_nospecial": "闽南语测试",
+      "language": "zh",
+      "region": "MINNAN",
+      "start": 1.5,
+      "end": 3.0,
+      "duration": 1.5,
+      "word_count": 5,
+      "word_timestamps": []
+    }
+  ],
+  "word_stream": [],
+  "statistics": {
+    "total_segments": 2,
+    "total_words": 9
+  },
+  "processing_time_sec": 0.5
+}
