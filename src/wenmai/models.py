@@ -19,6 +19,7 @@ class IngestResult:
     chunk_count: int
     elapsed_ms: float
     trace_id: str
+    status: str = "ingested"
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -26,4 +27,5 @@ class IngestResult:
             "chunk_count": self.chunk_count,
             "elapsed_ms": self.elapsed_ms,
             "trace_id": self.trace_id,
+            "status": self.status,
         }

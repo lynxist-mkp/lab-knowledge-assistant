@@ -69,6 +69,7 @@ def test_ingesting_markdown_makes_chunks_retrievable_and_records_four_trace_stag
     assert "error" in trace
     assert [stage["name"] for stage in trace["stages"]] == [
         "load",
+        "integrity",
         "split",
         "embed",
         "upsert",

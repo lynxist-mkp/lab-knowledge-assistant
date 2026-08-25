@@ -14,6 +14,8 @@ from wenmai.factories import splitter as splitter_factory
 from wenmai.factories import transform as transform_factory
 from wenmai.factories import vector_store as vector_store_factory
 from wenmai.models import Chunk, IngestResult
+from wenmai.storage.cleanup import delete_document_from_stores
+from wenmai.storage.fingerprints import FingerprintStore
 from wenmai.storage.paths import store_path
 from wenmai.tracing.context import TraceContext
 from wenmai.tracing.writer import JsonlTraceWriter
@@ -70,6 +72,10 @@ def load_markdown(path: Path) -> LoadedDocument:
 def ingest_markdown(source_path: Path, settings: Settings) -> IngestResult:
     trace = TraceContext(trace_type="ingestion")
     writer = JsonlTraceWriter(store_path(settings, "traces"))
+    fingerprint_store = FingerprintStore.from_settings(settings)
+    document: LoadedDocument | None = None
+    chunks: list[Chunk] = []
+    status = "ingested"
     try:
         with trace.stage(
             "load", method="markdown", provider="file", input_summary=str(source_path)
@@ -77,6 +83,38 @@ def ingest_markdown(source_path: Path, settings: Settings) -> IngestResult:
             document = load_markdown(source_path)
             load_info["output_summary"] = document.title
             load_info["candidate_count"] = 1
+
+        assert document is not None
+        previous = fingerprint_store.get_by_source_path(document.source_path)
+        with trace.stage(
+            "integrity",
+            method="sha256",
+            provider="sqlite",
+            input_summary=document.document_id[:12],
+        ) as integrity_info:
+            if previous and previous.sha256 == document.document_id:
+                status = "skipped"
+                integrity_info["output_summary"] = "skipped: unchanged sha256"
+                integrity_info["candidate_count"] = 0
+            elif previous:
+                status = "rebuilt"
+                delete_document_from_stores(settings, previous.document_id)
+                integrity_info["output_summary"] = (
+                    f"rebuilt: replaced {previous.document_id[:12]}..."
+                )
+                integrity_info["candidate_count"] = 1
+            else:
+                integrity_info["output_summary"] = "new file"
+                integrity_info["candidate_count"] = 1
+
+        if status == "skipped":
+            return IngestResult(
+                document_id=document.document_id,
+                chunk_count=0,
+                elapsed_ms=trace.total_elapsed_ms,
+                trace_id=trace.trace_id,
+                status=status,
+            )
 
         splitter = splitter_factory.create(settings)
         with trace.stage(
@@ -135,13 +173,22 @@ def ingest_markdown(source_path: Path, settings: Settings) -> IngestResult:
             store.upsert(chunks)
             upsert_info["candidate_count"] = len(chunks)
             upsert_info["output_summary"] = f"upserted {len(chunks)}"
+
+        fingerprint_store.upsert(
+            source_path=document.source_path,
+            sha256=document.document_id,
+            document_id=document.document_id,
+            status=status,
+        )
     finally:
         trace.close()
         writer.write(trace)
+        fingerprint_store.close()
 
     return IngestResult(
         document_id=document.document_id,
         chunk_count=len(chunks),
         elapsed_ms=trace.total_elapsed_ms,
         trace_id=trace.trace_id,
+        status=status,
     )
