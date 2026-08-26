@@ -36,11 +36,12 @@ def test_config_snapshot_includes_group_and_retrieval(test_settings) -> None:
 
 
 def test_group_metrics_payload_shape() -> None:
-    payload = group_metrics_payload(0.8, 0.65, 1.0, 30, 12)
+    payload = group_metrics_payload(0.8, 0.65, 1.0, 0.9, 30, 12)
     assert payload == {
         "hit_at_5": 0.8,
         "mrr": 0.65,
         "refusal_accuracy": 1.0,
+        "citation_coverage": 0.9,
         "answerable_count": 30,
         "unanswerable_count": 12,
     }

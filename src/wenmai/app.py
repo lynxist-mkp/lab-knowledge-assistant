@@ -29,6 +29,7 @@ from wenmai.services.query_traces import (
     list_stage_latencies,
     summarize_query_trace,
 )
+from wenmai.services.eval_runs import eval_chart_data, get_eval_dashboard, list_eval_runs
 from wenmai.services.stats import get_overview_stats
 from wenmai.services.traces import get_trace_by_id, read_traces_by_type
 
@@ -291,12 +292,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             },
         )
 
+    @app.get("/api/eval/runs")
+    def api_eval_runs() -> list[dict[str, object]]:
+        return [run.as_dict() for run in list_eval_runs(resolved)]
+
     @app.get("/eval", response_class=HTMLResponse)
     def eval_page(request: Request) -> HTMLResponse:
+        dashboard = get_eval_dashboard(resolved)
         return templates.TemplateResponse(
             request,
-            "placeholder.html",
-            {"active_page": "eval", "page_title": "评估面板"},
+            "eval.html",
+            {
+                "active_page": "eval",
+                "dashboard": dashboard,
+                "chart_data": eval_chart_data(dashboard),
+            },
         )
 
     return app

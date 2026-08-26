@@ -83,3 +83,21 @@ def aggregate_mrr(items: list[GoldItem], ranked_per_item: list[list[str]]) -> fl
     if not scores:
         return 0.0
     return sum(scores) / len(scores)
+
+
+def citation_coverage(
+    items: list[GoldItem],
+    refused_flags: list[bool],
+    citation_counts: list[int],
+) -> float:
+    """Among answerable items that were answered, fraction with at least one citation."""
+    if len(items) != len(refused_flags) or len(items) != len(citation_counts):
+        raise ValueError("items, refused_flags, and citation_counts length mismatch")
+    answered = [
+        count
+        for item, refused, count in zip(items, refused_flags, citation_counts)
+        if item.answerable and not refused
+    ]
+    if not answered:
+        return 1.0
+    return sum(1 for count in answered if count > 0) / len(answered)

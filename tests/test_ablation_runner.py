@@ -71,6 +71,7 @@ def test_run_ablation_batch_writes_four_groups(test_settings: Settings, tmp_path
         assert "hit_at_5" in metrics
         assert "mrr" in metrics
         assert "refusal_accuracy" in metrics
+        assert "citation_coverage" in metrics
         assert metrics["answerable_count"] == 1
         assert metrics["unanswerable_count"] == 1
         config = group_data["config"]

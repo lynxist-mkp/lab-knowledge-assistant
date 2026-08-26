@@ -64,6 +64,7 @@ def group_metrics_payload(
     hit_at_5: float,
     mrr: float,
     refusal_accuracy: float,
+    citation_coverage: float,
     answerable_count: int,
     unanswerable_count: int,
 ) -> dict[str, Any]:
@@ -71,6 +72,7 @@ def group_metrics_payload(
         "hit_at_5": round(hit_at_5, 6),
         "mrr": round(mrr, 6),
         "refusal_accuracy": round(refusal_accuracy, 6),
+        "citation_coverage": round(citation_coverage, 6),
         "answerable_count": answerable_count,
         "unanswerable_count": unanswerable_count,
     }

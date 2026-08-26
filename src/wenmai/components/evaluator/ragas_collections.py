@@ -60,6 +60,10 @@ class RagasCollectionsEvaluator(BaseEvaluator):
     def judge_available(self) -> bool:
         return self._faithfulness is not None and self._context_precision is not None
 
+    @property
+    def judge_unavailable_reason(self) -> str:
+        return self._init_error
+
     def score(self, **kwargs: Any) -> dict[str, Any]:
         user_input = str(kwargs.get("user_input") or "")
         response = str(kwargs.get("response") or "")

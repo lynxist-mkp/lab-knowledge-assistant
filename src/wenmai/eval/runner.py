@@ -11,6 +11,7 @@ from wenmai.eval.golden import GoldItem, load_golden_set_from_settings
 from wenmai.eval.metrics import (
     aggregate_hit_at_5,
     aggregate_mrr,
+    citation_coverage,
     corpus_doc_ids_from_chunks,
     refusal_accuracy,
 )
@@ -32,12 +33,14 @@ def run_ablation_group(
     group_settings = apply_ablation(settings, group)
     ranked_per_item: list[list[str]] = []
     refused_flags: list[bool] = []
+    citation_counts: list[int] = []
 
     for item in items:
         scored = retrieve_for_question(item.question, group_settings)
         ranked_per_item.append(corpus_doc_ids_from_chunks(scored))
         ask_result = ask_question(item.question, group_settings)
         refused_flags.append(ask_result.refused)
+        citation_counts.append(len(ask_result.citations))
 
     answerable_count = sum(1 for item in items if item.answerable)
     unanswerable_count = sum(1 for item in items if not item.answerable)
@@ -46,6 +49,7 @@ def run_ablation_group(
         hit_at_5=aggregate_hit_at_5(items, ranked_per_item),
         mrr=aggregate_mrr(items, ranked_per_item),
         refusal_accuracy=refusal_accuracy(items, refused_flags),
+        citation_coverage=citation_coverage(items, refused_flags, citation_counts),
         answerable_count=answerable_count,
         unanswerable_count=unanswerable_count,
     )
