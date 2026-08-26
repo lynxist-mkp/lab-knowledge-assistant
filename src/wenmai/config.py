@@ -66,7 +66,7 @@ class Retrieval:
     rrf_k: int
     fused_k: int
     rerank_top: int
-    mode: str = "dense_only"
+    mode: str = "rrf"
 
 
 @dataclass

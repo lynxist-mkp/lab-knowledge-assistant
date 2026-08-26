@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from collections.abc import Callable
 from pathlib import Path
 
 from wenmai.components.paddleocr.adapter import choose_pdf_route
@@ -14,8 +16,36 @@ from wenmai.models import Chunk, IngestResult
 from wenmai.storage.cleanup import delete_document_from_stores
 from wenmai.storage.fingerprints import FingerprintStore
 from wenmai.storage.paths import store_path
-from wenmai.tracing.context import TraceContext
+from wenmai.tracing.context import StageRecord, TraceContext
 from wenmai.tracing.writer import JsonlTraceWriter
+
+_IMAGE_PLACEHOLDER = re.compile(r"\[IMAGE:\s*[a-f0-9]+\s*\]")
+
+
+def _chunks_with_images(chunks: list[Chunk]) -> int:
+    return sum(1 for chunk in chunks if _IMAGE_PLACEHOLDER.search(chunk.text))
+
+
+def _set_trace_summary(
+    trace: TraceContext,
+    *,
+    source_path: str,
+    document_id: str,
+    title: str,
+    status: str,
+    chunk_count: int,
+    chunks_with_images: int,
+) -> None:
+    trace.metadata.update(
+        {
+            "source_path": source_path,
+            "document_id": document_id,
+            "title": title,
+            "status": status,
+            "chunk_count": chunk_count,
+            "chunks_with_images": chunks_with_images,
+        }
+    )
 
 
 def ingest_markdown(
@@ -23,12 +53,17 @@ def ingest_markdown(
     settings: Settings,
     *,
     pdf_load_mode: str | None = None,
+    on_stage: Callable[[StageRecord], None] | None = None,
 ) -> IngestResult:
     trace = TraceContext(trace_type="ingestion")
+    trace._on_stage = on_stage
     writer = JsonlTraceWriter(store_path(settings, "traces"))
     fingerprint_store = FingerprintStore.from_settings(settings)
     chunks: list[Chunk] = []
     status = "ingested"
+    document_id = ""
+    document_title = ""
+    document_source_path = str(source_path)
     try:
         with trace.stage(
             "load",
@@ -49,6 +84,9 @@ def ingest_markdown(
                     load_info["method"] = "paddleocr-vl"
                     load_info["provider"] = "mlx-vlm-server"
             document = load_source(source_path, settings, pdf_load_mode=pdf_load_mode)
+            document_id = document.document_id
+            document_title = document.title
+            document_source_path = document.source_path
             load_info["output_summary"] = document.title
             load_info["candidate_count"] = 1
             load_method = document.load_method or (
@@ -81,9 +119,18 @@ def ingest_markdown(
                 integrity_info["candidate_count"] = 1
 
         if status == "skipped":
+            _set_trace_summary(
+                trace,
+                source_path=document_source_path,
+                document_id=document_id,
+                title=document_title,
+                status=status,
+                chunk_count=0,
+                chunks_with_images=0,
+            )
             trace.close()
             return IngestResult(
-                document_id=document.document_id,
+                document_id=document_id,
                 chunk_count=0,
                 elapsed_ms=trace.total_elapsed_ms,
                 trace_id=trace.trace_id,
@@ -123,6 +170,16 @@ def ingest_markdown(
         ]
 
         chunks = transform_factory.run_registered(chunks, settings, trace)
+
+        _set_trace_summary(
+            trace,
+            source_path=document_source_path,
+            document_id=document_id,
+            title=document_title,
+            status=status,
+            chunk_count=len(chunks),
+            chunks_with_images=_chunks_with_images(chunks),
+        )
 
         embedder = embedding_factory.create(settings)
         with trace.stage(

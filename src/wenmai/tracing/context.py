@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -24,6 +24,8 @@ class StageRecord:
     candidate_count: int | None = None
     error: str | None = None
     candidates: list[dict[str, Any]] | None = None
+    dense_candidates: list[dict[str, Any]] | None = None
+    sparse_candidates: list[dict[str, Any]] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -40,6 +42,10 @@ class StageRecord:
             payload["error"] = self.error
         if self.candidates is not None:
             payload["candidates"] = self.candidates
+        if self.dense_candidates is not None:
+            payload["dense_candidates"] = self.dense_candidates
+        if self.sparse_candidates is not None:
+            payload["sparse_candidates"] = self.sparse_candidates
         return payload
 
 
@@ -54,6 +60,7 @@ class TraceContext:
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     _wall_start: float = field(default_factory=time.perf_counter, repr=False)
+    _on_stage: Callable[[StageRecord], None] | None = field(default=None, repr=False)
 
     def record_stage(
         self,
@@ -66,20 +73,25 @@ class TraceContext:
         candidate_count: int | None = None,
         error: str | None = None,
         candidates: list[dict[str, Any]] | None = None,
+        dense_candidates: list[dict[str, Any]] | None = None,
+        sparse_candidates: list[dict[str, Any]] | None = None,
     ) -> None:
-        self.stages.append(
-            StageRecord(
-                name=name,
-                method=method,
-                provider=provider,
-                elapsed_ms=elapsed_ms,
-                input_summary=input_summary,
-                output_summary=output_summary,
-                candidate_count=candidate_count,
-                error=error,
-                candidates=candidates,
-            )
+        record = StageRecord(
+            name=name,
+            method=method,
+            provider=provider,
+            elapsed_ms=elapsed_ms,
+            input_summary=input_summary,
+            output_summary=output_summary,
+            candidate_count=candidate_count,
+            error=error,
+            candidates=candidates,
+            dense_candidates=dense_candidates,
+            sparse_candidates=sparse_candidates,
         )
+        self.stages.append(record)
+        if self._on_stage is not None:
+            self._on_stage(record)
 
     def close(self) -> None:
         self.finished_at = _now()
@@ -131,4 +143,6 @@ class TraceContext:
                 candidate_count=extras.get("candidate_count"),
                 error=error,
                 candidates=extras.get("candidates"),
+                dense_candidates=extras.get("dense_candidates"),
+                sparse_candidates=extras.get("sparse_candidates"),
             )

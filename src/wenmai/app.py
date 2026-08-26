@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import json
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
@@ -13,7 +16,12 @@ from wenmai.pipelines.ingestion import ingest_markdown
 from wenmai.pipelines.query import QueryGenerationError
 from wenmai.services.ask import ask as ask_service
 from wenmai.services.browse import browse_by_culture_domain, get_chunk_detail
+from wenmai.services.ingestion_traces import (
+    list_degradations,
+    summarize_ingestion_trace,
+)
 from wenmai.services.stats import get_overview_stats
+from wenmai.services.traces import get_trace_by_id, read_traces_by_type
 
 
 class IngestRequest(BaseModel):
@@ -73,6 +81,76 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="chunk not found")
         return detail
 
+    @app.get("/api/traces/ingestion")
+    def api_ingestion_traces() -> list[dict[str, object]]:
+        traces = read_traces_by_type(resolved, "ingestion")
+        return [summarize_ingestion_trace(trace).as_dict() for trace in reversed(traces)]
+
+    @app.get("/api/traces/{trace_id}")
+    def api_trace_detail(trace_id: str) -> dict[str, object]:
+        trace = get_trace_by_id(resolved, trace_id)
+        if trace is None:
+            raise HTTPException(status_code=404, detail="trace not found")
+        return trace
+
+    @app.get("/api/traces/{trace_id}/summary")
+    def api_trace_summary(trace_id: str) -> dict[str, object]:
+        trace = get_trace_by_id(resolved, trace_id)
+        if trace is None:
+            raise HTTPException(status_code=404, detail="trace not found")
+        return summarize_ingestion_trace(trace).as_dict()
+
+    @app.get("/api/traces/{trace_id}/degradations")
+    def api_trace_degradations(trace_id: str) -> list[dict[str, str]]:
+        trace = get_trace_by_id(resolved, trace_id)
+        if trace is None:
+            raise HTTPException(status_code=404, detail="trace not found")
+        return [item.as_dict() for item in list_degradations(trace)]
+
+    @app.post("/api/ingestion/run")
+    async def api_ingestion_run(request: IngestRequest) -> StreamingResponse:
+        path = Path(request.source_path)
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="source file not found")
+
+        async def event_stream():
+            queue: asyncio.Queue[dict[str, object] | None] = asyncio.Queue()
+            loop = asyncio.get_running_loop()
+
+            def on_stage(stage: object) -> None:
+                payload = {"event": "stage", "stage": stage.to_dict()}  # type: ignore[union-attr]
+                loop.call_soon_threadsafe(queue.put_nowait, payload)
+
+            def run_ingest() -> None:
+                try:
+                    result = ingest_markdown(
+                        path,
+                        resolved,
+                        pdf_load_mode=request.pdf_load_mode,
+                        on_stage=on_stage,
+                    )
+                    loop.call_soon_threadsafe(
+                        queue.put_nowait,
+                        {"event": "done", "result": result.as_dict()},
+                    )
+                except Exception as exc:
+                    loop.call_soon_threadsafe(
+                        queue.put_nowait,
+                        {"event": "error", "message": f"{type(exc).__name__}: {exc}"},
+                    )
+                finally:
+                    loop.call_soon_threadsafe(queue.put_nowait, None)
+
+            threading.Thread(target=run_ingest, daemon=True).start()
+
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+
     @app.get("/", response_class=HTMLResponse)
     def overview_page(request: Request) -> HTMLResponse:
         stats = get_overview_stats(resolved)
@@ -101,16 +179,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def ingestion_page(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(
             request,
-            "placeholder.html",
-            {"active_page": "ingestion", "page_title": "Ingestion 管理"},
+            "ingestion.html",
+            {"active_page": "ingestion"},
         )
 
     @app.get("/ingestion/traces", response_class=HTMLResponse)
     def ingestion_traces_page(request: Request) -> HTMLResponse:
+        traces = read_traces_by_type(resolved, "ingestion")
+        summaries = [summarize_ingestion_trace(trace) for trace in reversed(traces)]
         return templates.TemplateResponse(
             request,
-            "placeholder.html",
-            {"active_page": "ingestion_traces", "page_title": "Ingestion 追踪"},
+            "ingestion_traces.html",
+            {
+                "active_page": "ingestion_traces",
+                "traces": summaries,
+            },
+        )
+
+    @app.get("/ingestion/traces/{trace_id}", response_class=HTMLResponse)
+    def ingestion_trace_detail_page(request: Request, trace_id: str) -> HTMLResponse:
+        trace = get_trace_by_id(resolved, trace_id)
+        if trace is None or trace.get("trace_type") != "ingestion":
+            raise HTTPException(status_code=404, detail="ingestion trace not found")
+        stages = []
+        for stage in trace.get("stages") or []:
+            payload = dict(stage)
+            payload["raw_json"] = json.dumps(stage, ensure_ascii=False, indent=2)
+            stages.append(payload)
+        trace_view = dict(trace)
+        trace_view["stages"] = stages
+        return templates.TemplateResponse(
+            request,
+            "ingestion_trace_detail.html",
+            {
+                "active_page": "ingestion_traces",
+                "trace": trace_view,
+                "summary": summarize_ingestion_trace(trace),
+                "degradations": list_degradations(trace),
+            },
         )
 
     @app.get("/query/traces", response_class=HTMLResponse)

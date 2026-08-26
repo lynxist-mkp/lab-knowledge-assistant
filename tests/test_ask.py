@@ -59,12 +59,14 @@ def test_ask_returns_answer_with_matching_citations_and_query_trace(
     assert [stage["name"] for stage in query_trace["stages"]] == [
         "query_processing",
         "dense",
+        "sparse",
+        "fusion",
         "generation",
     ]
-    dense_stage = next(stage for stage in query_trace["stages"] if stage["name"] == "dense")
-    assert dense_stage["candidates"]
-    assert dense_stage["candidates"][0]["chunk_id"] == first["chunk_id"]
-    assert "score" in dense_stage["candidates"][0]
+    fusion_stage = next(stage for stage in query_trace["stages"] if stage["name"] == "fusion")
+    assert fusion_stage["candidates"]
+    assert fusion_stage["candidates"][0]["chunk_id"] == first["chunk_id"]
+    assert "score" in fusion_stage["candidates"][0]
 
 
 def test_ask_records_generation_failure_in_trace_and_returns_error(

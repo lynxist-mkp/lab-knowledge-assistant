@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 
+from wenmai.components.retrieval.rrf import reciprocal_rank_fusion
 from wenmai.config import Settings
 from wenmai.factories import bm25 as bm25_factory
 from wenmai.factories import embedding as embedding_factory
@@ -109,51 +112,157 @@ def _candidate_records(scored_chunks: list[ScoredChunk]) -> list[dict[str, objec
     ]
 
 
+def _run_dense_search(settings: Settings, normalized: str) -> list[ScoredChunk]:
+    store = vector_store_factory.create(settings)
+    embedder = embedding_factory.create(settings)
+    query_vector = embedder.embed_query(normalized)
+    return store.query(query_vector, top_k=settings.retrieval.dense_k)
+
+
+def _run_sparse_search(settings: Settings, normalized: str) -> list[ScoredChunk]:
+    store = vector_store_factory.create(settings)
+    bm25_index = bm25_factory.create(settings)
+    hits = bm25_index.search(normalized, top_k=settings.retrieval.sparse_k)
+    chunk_ids = [hit.chunk_id for hit in hits]
+    chunks = store.get_by_ids(chunk_ids)
+    chunk_by_id = {chunk.chunk_id: chunk for chunk in chunks}
+    return [
+        ScoredChunk(chunk=chunk_by_id[hit.chunk_id], score=hit.score)
+        for hit in hits
+        if hit.chunk_id in chunk_by_id
+    ]
+
+
+def _timed_dense_search(settings: Settings, normalized: str) -> tuple[list[ScoredChunk], float]:
+    started = time.perf_counter()
+    chunks = _run_dense_search(settings, normalized)
+    return chunks, (time.perf_counter() - started) * 1000
+
+
+def _timed_sparse_search(settings: Settings, normalized: str) -> tuple[list[ScoredChunk], float]:
+    started = time.perf_counter()
+    chunks = _run_sparse_search(settings, normalized)
+    return chunks, (time.perf_counter() - started) * 1000
+
+
+def _record_dense_stage(
+    trace: TraceContext,
+    settings: Settings,
+    scored_chunks: list[ScoredChunk],
+    elapsed_ms: float,
+) -> None:
+    store = vector_store_factory.create(settings)
+    trace.record_stage(
+        name="dense",
+        method="vector_query",
+        provider=store.provider_name,
+        elapsed_ms=elapsed_ms,
+        input_summary=f"k={settings.retrieval.dense_k}",
+        output_summary=f"retrieved {len(scored_chunks)} chunks",
+        candidate_count=len(scored_chunks),
+        candidates=_candidate_records(scored_chunks),
+    )
+
+
+def _record_sparse_stage(
+    trace: TraceContext,
+    settings: Settings,
+    scored_chunks: list[ScoredChunk],
+    elapsed_ms: float,
+) -> None:
+    trace.record_stage(
+        name="sparse",
+        method="bm25",
+        provider="local",
+        elapsed_ms=elapsed_ms,
+        input_summary=f"k={settings.retrieval.sparse_k}",
+        output_summary=f"retrieved {len(scored_chunks)} chunks",
+        candidate_count=len(scored_chunks),
+        candidates=_candidate_records(scored_chunks),
+    )
+
+
+def _dense_retrieve(
+    settings: Settings,
+    normalized: str,
+    trace: TraceContext,
+) -> list[ScoredChunk]:
+    scored_chunks, elapsed_ms = _timed_dense_search(settings, normalized)
+    _record_dense_stage(trace, settings, scored_chunks, elapsed_ms)
+    return scored_chunks
+
+
+def _sparse_retrieve(
+    settings: Settings,
+    normalized: str,
+    trace: TraceContext,
+) -> list[ScoredChunk]:
+    scored_chunks, elapsed_ms = _timed_sparse_search(settings, normalized)
+    _record_sparse_stage(trace, settings, scored_chunks, elapsed_ms)
+    return scored_chunks
+
+
+def _fuse_retrievals(
+    settings: Settings,
+    dense_chunks: list[ScoredChunk],
+    sparse_chunks: list[ScoredChunk],
+    trace: TraceContext,
+) -> list[ScoredChunk]:
+    chunk_by_id = {
+        item.chunk.chunk_id: item.chunk
+        for item in dense_chunks + sparse_chunks
+    }
+    fused_ids = reciprocal_rank_fusion(
+        [
+            [item.chunk.chunk_id for item in dense_chunks],
+            [item.chunk.chunk_id for item in sparse_chunks],
+        ],
+        k=settings.retrieval.rrf_k,
+        top_k=settings.retrieval.fused_k,
+    )
+    with trace.stage(
+        "fusion",
+        method="rrf",
+        provider="local",
+        input_summary=(
+            f"dense={len(dense_chunks)} sparse={len(sparse_chunks)} "
+            f"k={settings.retrieval.rrf_k}"
+        ),
+    ) as fusion_info:
+        scored_chunks = [
+            ScoredChunk(chunk=chunk_by_id[chunk_id], score=score)
+            for chunk_id, score in fused_ids
+            if chunk_id in chunk_by_id
+        ]
+        fusion_info["candidate_count"] = len(scored_chunks)
+        fusion_info["output_summary"] = f"fused {len(scored_chunks)} chunks"
+        fusion_info["dense_candidates"] = _candidate_records(dense_chunks)
+        fusion_info["sparse_candidates"] = _candidate_records(sparse_chunks)
+        fusion_info["candidates"] = _candidate_records(scored_chunks)
+    return scored_chunks
+
+
 def _retrieve_chunks(
     settings: Settings,
     normalized: str,
     trace: TraceContext,
 ) -> list[ScoredChunk]:
     mode = settings.retrieval.mode
-    store = vector_store_factory.create(settings)
 
     if mode == "sparse_only":
-        bm25_index = bm25_factory.create(settings)
-        top_k = settings.retrieval.sparse_k
-        with trace.stage(
-            "sparse",
-            method="bm25",
-            provider="local",
-            input_summary=f"k={top_k}",
-        ) as sparse_info:
-            hits = bm25_index.search(normalized, top_k=top_k)
-            chunk_ids = [hit.chunk_id for hit in hits]
-            chunks = store.get_by_ids(chunk_ids)
-            chunk_by_id = {chunk.chunk_id: chunk for chunk in chunks}
-            scored_chunks = [
-                ScoredChunk(chunk=chunk_by_id[hit.chunk_id], score=hit.score)
-                for hit in hits
-                if hit.chunk_id in chunk_by_id
-            ]
-            sparse_info["candidate_count"] = len(scored_chunks)
-            sparse_info["output_summary"] = f"retrieved {len(scored_chunks)} chunks"
-            sparse_info["candidates"] = _candidate_records(scored_chunks)
-        return scored_chunks
+        return _sparse_retrieve(settings, normalized, trace)
 
-    embedder = embedding_factory.create(settings)
-    query_vector = embedder.embed_query(normalized)
-    top_k = settings.retrieval.dense_k
-    with trace.stage(
-        "dense",
-        method="vector_query",
-        provider=store.provider_name,
-        input_summary=f"k={top_k}",
-    ) as dense_info:
-        scored_chunks = store.query(query_vector, top_k=top_k)
-        dense_info["candidate_count"] = len(scored_chunks)
-        dense_info["output_summary"] = f"retrieved {len(scored_chunks)} chunks"
-        dense_info["candidates"] = _candidate_records(scored_chunks)
-    return scored_chunks
+    if mode == "dense_only":
+        return _dense_retrieve(settings, normalized, trace)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        dense_future = executor.submit(_timed_dense_search, settings, normalized)
+        sparse_future = executor.submit(_timed_sparse_search, settings, normalized)
+        dense_chunks, dense_ms = dense_future.result()
+        sparse_chunks, sparse_ms = sparse_future.result()
+    _record_dense_stage(trace, settings, dense_chunks, dense_ms)
+    _record_sparse_stage(trace, settings, sparse_chunks, sparse_ms)
+    return _fuse_retrievals(settings, dense_chunks, sparse_chunks, trace)
 
 
 def ask_question(question: str, settings: Settings) -> AskResult:

@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}Ingestion 管理 · 福云·文脉助手{% endblock %}
+
+{% block head %}
+<style>
+  .form-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .form-row input[type="text"] {
+    flex: 1 1 320px;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font: inherit;
+  }
+  .primary-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    cursor: pointer;
+    font: inherit;
+  }
+  .primary-btn:disabled { opacity: 0.6; cursor: wait; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+  .badge { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 999px; font-size: 0.85rem; }
+  .badge-ok { background: #ecfdf5; color: #0f766e; }
+  .badge-warn { background: #fff7ed; color: #c2410c; }
+  .badge-skip { background: #f1f5f9; color: #475569; }
+  .badge-error { background: #fef2f2; color: #b91c1c; }
+  .hidden { display: none; }
+  tr.stage-live { background: #ecfdf5; }
+  tr.stage-integrity { background: #f0fdfa; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Ingestion 管理</h2>
+  <p class="muted">触发入库并实时查看各阶段耗时。指纹未变时在 integrity 阶段跳过全流程。</p>
+  <form id="ingestForm" class="form-row">
+    <input type="text" id="sourcePath" name="source_path" placeholder="源文件绝对路径，例如 /path/to/doc.md" required>
+    <button type="submit" class="primary-btn" id="ingestBtn">开始入库</button>
+  </form>
+  <p id="ingestStatus" class="muted hidden">入库进行中，等待各阶段回调…</p>
+</section>
+
+<section id="progressPanel" class="panel hidden">
+  <h3>实时进度</h3>
+  <table>
+    <thead>
+      <tr><th>阶段</th><th>方法</th><th>耗时 (ms)</th><th>摘要</th><th>降级</th></tr>
+    </thead>
+    <tbody id="stageRows"></tbody>
+  </table>
+</section>
+
+<section id="resultPanel" class="panel hidden">
+  <h3>本次结果</h3>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">状态</div>
+      <div class="value" id="resultStatus">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">块数</div>
+      <div class="value" id="resultChunks">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">带图块</div>
+      <div class="value" id="resultImages">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">总耗时 (ms)</div>
+      <div class="value" id="resultElapsed">—</div>
+    </div>
+  </div>
+  <p class="muted">Trace: <a id="traceLink" href="#">—</a></p>
+  <canvas id="stageChart" height="120"></canvas>
+  <div id="degradationBox" class="hidden" style="margin-top: 1rem;">
+    <h4>降级与失败</h4>
+    <ul id="degradationList"></ul>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const form = document.getElementById("ingestForm");
+  const statusEl = document.getElementById("ingestStatus");
+  const progressPanel = document.getElementById("progressPanel");
+  const resultPanel = document.getElementById("resultPanel");
+  const ingestBtn = document.getElementById("ingestBtn");
+  const stageRows = document.getElementById("stageRows");
+  let stageChart = null;
+
+  function badgeClass(status) {
+    if (status === "skipped") return "badge-skip";
+    if (status === "rebuilt") return "badge-warn";
+    if (status === "ingested") return "badge-ok";
+    return "badge-error";
+  }
+
+  function appendStageRow(stage, live) {
+    const row = document.createElement("tr");
+    if (live) row.classList.add("stage-live");
+    if (stage.name === "integrity") row.classList.add("stage-integrity");
+    const degraded = stage.error
+      ? `<span class="badge badge-error">${stage.error}</span>`
+      : "—";
+    row.innerHTML = `
+      <td>${stage.name}</td>
+      <td>${stage.method || ""}</td>
+      <td>${Number(stage.elapsed_ms || 0).toFixed(1)}</td>
+      <td>${stage.output_summary || ""}</td>
+      <td>${degraded}</td>`;
+    stageRows.appendChild(row);
+    row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function renderChart(stages) {
+    const ctx = document.getElementById("stageChart");
+    if (stageChart) stageChart.destroy();
+    stageChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: stages.map((stage) => stage.name),
+        datasets: [{
+          label: "耗时 (ms)",
+          data: stages.map((stage) => Number(stage.elapsed_ms || 0)),
+          backgroundColor: "#14b8a6",
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } },
+      },
+    });
+  }
+
+  async function consumeSseResponse(response) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const stages = [];
+    let traceId = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split("\n\n");
+      buffer = chunks.pop() || "";
+      for (const chunk of chunks) {
+        const line = chunk.trim();
+        if (!line.startsWith("data: ")) continue;
+        const payload = JSON.parse(line.slice(6));
+        if (payload.event === "stage") {
+          stages.push(payload.stage);
+          appendStageRow(payload.stage, true);
+        } else if (payload.event === "done") {
+          traceId = payload.result.trace_id;
+        } else if (payload.event === "error") {
+          throw new Error(payload.message || "入库失败");
+        }
+      }
+    }
+    return { stages, traceId };
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const sourcePath = document.getElementById("sourcePath").value.trim();
+    if (!sourcePath) return;
+
+    ingestBtn.disabled = true;
+    statusEl.classList.remove("hidden");
+    progressPanel.classList.remove("hidden");
+    resultPanel.classList.add("hidden");
+    stageRows.innerHTML = "";
+
+    try {
+      const response = await fetch("/api/ingestion/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_path: sourcePath }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || "入库失败");
+      }
+
+      const { stages, traceId } = await consumeSseResponse(response);
+      if (!traceId) throw new Error("未收到 trace_id");
+
+      const summaryResp = await fetch(`/api/traces/${traceId}/summary`);
+      const summary = await summaryResp.json();
+      const degradationsResp = await fetch(`/api/traces/${traceId}/degradations`);
+      const degradations = await degradationsResp.json();
+
+      document.getElementById("resultStatus").innerHTML =
+        `<span class="badge ${badgeClass(summary.status)}">${summary.status}</span>`;
+      document.getElementById("resultChunks").textContent = String(summary.chunk_count);
+      document.getElementById("resultImages").textContent = String(summary.image_chunk_count);
+      document.getElementById("resultElapsed").textContent = summary.total_elapsed_ms.toFixed(1);
+
+      const traceLink = document.getElementById("traceLink");
+      traceLink.textContent = traceId;
+      traceLink.href = `/ingestion/traces/${traceId}`;
+
+      renderChart(stages);
+
+      const degBox = document.getElementById("degradationBox");
+      const degList = document.getElementById("degradationList");
+      degList.innerHTML = "";
+      if (degradations.length) {
+        degBox.classList.remove("hidden");
+        for (const item of degradations) {
+          const li = document.createElement("li");
+          li.textContent = `${item.stage}: ${item.reason}`;
+          degList.appendChild(li);
+        }
+      } else {
+        degBox.classList.add("hidden");
+      }
+
+      resultPanel.classList.remove("hidden");
+    } catch (error) {
+      alert(error.message || String(error));
+    } finally {
+      ingestBtn.disabled = false;
+      statusEl.classList.add("hidden");
+    }
+  });
+</script>
+{% endblock %}

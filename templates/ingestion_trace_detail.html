@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Ingestion Trace · {{ summary.trace_id[:8] }}…{% endblock %}
+
+{% block head %}
+<style>
+  table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+  th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .badge { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 999px; font-size: 0.85rem; }
+  .badge-error { background: #fef2f2; color: #b91c1c; }
+  .badge-warn { background: #fff7ed; color: #c2410c; }
+  pre.stage-json { font-size: 0.85rem; max-height: 240px; overflow: auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <p><a href="/ingestion/traces">← 返回列表</a></p>
+  <h2>Ingestion Trace</h2>
+  <p class="muted"><code>{{ summary.trace_id }}</code></p>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">状态</div>
+      <div class="value">{{ summary.status }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">块数 / 带图</div>
+      <div class="value">{{ summary.chunk_count }} / {{ summary.image_chunk_count }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">总耗时 (ms)</div>
+      <div class="value">{{ "%.1f"|format(summary.total_elapsed_ms) }}</div>
+    </div>
+  </div>
+  <p><strong>源文件</strong> {{ summary.source_path }}</p>
+  {% if summary.skipped %}
+  <p><span class="badge badge-warn">指纹未变，integrity 阶段跳过</span></p>
+  {% endif %}
+  {% if summary.error %}
+  <p><span class="badge badge-error">{{ summary.error }}</span></p>
+  {% endif %}
+</section>
+
+{% if degradations %}
+<section class="panel">
+  <h3>降级与失败</h3>
+  <ul>
+    {% for item in degradations %}
+    <li><strong>{{ item.stage }}</strong> — {{ item.reason }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="panel">
+  <h3>stages[]</h3>
+  <table>
+    <thead>
+      <tr><th>name</th><th>method</th><th>provider</th><th>elapsed_ms</th><th>output</th><th>error</th></tr>
+    </thead>
+    <tbody>
+      {% for stage in trace.stages %}
+      <tr>
+        <td>{{ stage.name }}</td>
+        <td>{{ stage.method }}</td>
+        <td>{{ stage.provider }}</td>
+        <td>{{ "%.1f"|format(stage.elapsed_ms) }}</td>
+        <td>{{ stage.output_summary }}</td>
+        <td>{% if stage.error %}<span class="badge badge-error">{{ stage.error }}</span>{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% for stage in trace.stages %}
+  <details>
+    <summary>{{ stage.name }} 原始字段</summary>
+    <pre class="stage-json">{{ stage.raw_json }}</pre>
+  </details>
+  {% endfor %}
+  <canvas id="stageChart" height="120" style="margin-top: 1rem;"></canvas>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const stages = {{ trace.stages | tojson }};
+  const ctx = document.getElementById("stageChart");
+  new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: stages.map((stage) => stage.name),
+      datasets: [{
+        label: "耗时 (ms)",
+        data: stages.map((stage) => Number(stage.elapsed_ms || 0)),
+        backgroundColor: "#0f766e",
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } },
+    },
+  });
+</script>
+{% endblock %}

@@ -29,7 +29,7 @@ transform:
   captioner_prompt: "prompts/caption_v1.txt"
 
 retrieval:
-  mode: dense_only          # dense_only | sparse_only
+  mode: rrf                 # rrf | dense_only | sparse_only
   dense_k: 20
   sparse_k: 20
   rrf_k: 60                # Elastic 公式 1/(k+rank)，rank 从 1 起
