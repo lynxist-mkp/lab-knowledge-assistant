@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from wenmai.config import Settings
+from wenmai.factories import bm25 as bm25_factory
 from wenmai.factories import embedding as embedding_factory
 from wenmai.factories import llm as llm_factory
 from wenmai.factories import vector_store as vector_store_factory
@@ -83,11 +84,57 @@ def _candidate_records(scored_chunks: list[ScoredChunk]) -> list[dict[str, objec
     ]
 
 
+def _retrieve_chunks(
+    settings: Settings,
+    normalized: str,
+    trace: TraceContext,
+) -> list[ScoredChunk]:
+    mode = settings.retrieval.mode
+    store = vector_store_factory.create(settings)
+
+    if mode == "sparse_only":
+        bm25_index = bm25_factory.create(settings)
+        top_k = settings.retrieval.sparse_k
+        with trace.stage(
+            "sparse",
+            method="bm25",
+            provider="local",
+            input_summary=f"k={top_k}",
+        ) as sparse_info:
+            hits = bm25_index.search(normalized, top_k=top_k)
+            chunk_ids = [hit.chunk_id for hit in hits]
+            chunks = store.get_by_ids(chunk_ids)
+            chunk_by_id = {chunk.chunk_id: chunk for chunk in chunks}
+            scored_chunks = [
+                ScoredChunk(chunk=chunk_by_id[hit.chunk_id], score=hit.score)
+                for hit in hits
+                if hit.chunk_id in chunk_by_id
+            ]
+            sparse_info["candidate_count"] = len(scored_chunks)
+            sparse_info["output_summary"] = f"retrieved {len(scored_chunks)} chunks"
+            sparse_info["candidates"] = _candidate_records(scored_chunks)
+        return scored_chunks
+
+    embedder = embedding_factory.create(settings)
+    query_vector = embedder.embed_query(normalized)
+    top_k = settings.retrieval.dense_k
+    with trace.stage(
+        "dense",
+        method="vector_query",
+        provider=store.provider_name,
+        input_summary=f"k={top_k}",
+    ) as dense_info:
+        scored_chunks = store.query(query_vector, top_k=top_k)
+        dense_info["candidate_count"] = len(scored_chunks)
+        dense_info["output_summary"] = f"retrieved {len(scored_chunks)} chunks"
+        dense_info["candidates"] = _candidate_records(scored_chunks)
+    return scored_chunks
+
+
 def ask_question(question: str, settings: Settings) -> AskResult:
     trace = TraceContext(trace_type="query", metadata={"question": question})
     writer = JsonlTraceWriter(store_path(settings, "traces"))
     normalized = _normalize_question(question)
-    top_k = settings.retrieval.dense_k
 
     try:
         with trace.stage(
@@ -99,20 +146,7 @@ def ask_question(question: str, settings: Settings) -> AskResult:
             stage_info["output_summary"] = normalized
             stage_info["candidate_count"] = 1
 
-        embedder = embedding_factory.create(settings)
-        query_vector = embedder.embed_query(normalized)
-
-        store = vector_store_factory.create(settings)
-        with trace.stage(
-            "dense",
-            method="vector_query",
-            provider=store.provider_name,
-            input_summary=f"k={top_k}",
-        ) as dense_info:
-            scored_chunks = store.query(query_vector, top_k=top_k)
-            dense_info["candidate_count"] = len(scored_chunks)
-            dense_info["output_summary"] = f"retrieved {len(scored_chunks)} chunks"
-            dense_info["candidates"] = _candidate_records(scored_chunks)
+        scored_chunks = _retrieve_chunks(settings, normalized, trace)
 
         llm = llm_factory.create(settings)
         template = _load_qa_prompt(settings)

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from wenmai.config import Settings
+from wenmai.factories import bm25 as bm25_factory
 from wenmai.factories import vector_store as vector_store_factory
 from wenmai.storage.images import ImageStore
-from wenmai.storage.paths import store_path
 
 
 def delete_document_from_stores(settings: Settings, document_id: str) -> None:
@@ -14,9 +14,9 @@ def delete_document_from_stores(settings: Settings, document_id: str) -> None:
 
 
 def _delete_bm25_document(settings: Settings, document_id: str) -> None:
-    """Hook for ticket 14: delete BM25 postings keyed by document_id."""
-    _ = store_path(settings, "bm25")
-    _ = document_id
+    index = bm25_factory.create(settings)
+    index.delete_by_document_id(document_id)
+    index.save()
 
 
 def _delete_image_document(settings: Settings, document_id: str) -> None:

@@ -66,12 +66,15 @@ class Retrieval:
     rrf_k: int
     fused_k: int
     rerank_top: int
+    mode: str = "dense_only"
 
 
 @dataclass
 class Bm25:
     k1: float
     b: float
+    domain_dict: str = "data/lexicon/domain.txt"
+    stopwords: str = "data/lexicon/stopwords.txt"
 
 
 @dataclass

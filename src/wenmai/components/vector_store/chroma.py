@@ -79,6 +79,31 @@ class ChromaVectorStore(BaseVectorStore):
         if ids:
             self._collection.delete(ids=ids)
 
+    def get_by_ids(self, chunk_ids: list[str]) -> list[Chunk]:
+        if not chunk_ids:
+            return []
+        result = self._collection.get(
+            ids=chunk_ids,
+            include=["documents", "metadatas"],
+        )
+        chunks: list[Chunk] = []
+        ids = result.get("ids") or []
+        documents = result.get("documents") or []
+        metadatas = result.get("metadatas") or []
+        for chunk_id, text, metadata in zip(ids, documents, metadatas, strict=True):
+            meta = dict(metadata or {})
+            chunks.append(
+                Chunk(
+                    chunk_id=chunk_id,
+                    document_id=str(meta.get("document_id") or ""),
+                    text=text or "",
+                    metadata=meta,
+                )
+            )
+        order = {chunk_id: index for index, chunk_id in enumerate(chunk_ids)}
+        chunks.sort(key=lambda chunk: order.get(chunk.chunk_id, len(order)))
+        return chunks
+
     def query(self, query_embedding: list[float], top_k: int) -> list[ScoredChunk]:
         if top_k <= 0:
             return []
@@ -149,6 +174,13 @@ class FakeVectorStore(BaseVectorStore):
         stale = [key for key, chunk in bucket.items() if chunk.document_id == document_id]
         for chunk_id in stale:
             del bucket[chunk_id]
+
+    def get_by_ids(self, chunk_ids: list[str]) -> list[Chunk]:
+        bucket = self._memory[self.collection_name]
+        chunks = [bucket[chunk_id] for chunk_id in chunk_ids if chunk_id in bucket]
+        order = {chunk_id: index for index, chunk_id in enumerate(chunk_ids)}
+        chunks.sort(key=lambda chunk: order.get(chunk.chunk_id, len(order)))
+        return chunks
 
     def query(self, query_embedding: list[float], top_k: int) -> list[ScoredChunk]:
         apply_behavior(self.behavior, "vector_store")

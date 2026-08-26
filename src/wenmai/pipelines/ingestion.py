@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from wenmai.components.paddleocr.adapter import choose_pdf_route
 from wenmai.config import Settings
+from wenmai.factories import bm25 as bm25_factory
 from wenmai.factories import embedding as embedding_factory
 from wenmai.factories import splitter as splitter_factory
 from wenmai.factories import transform as transform_factory
 from wenmai.factories import vector_store as vector_store_factory
-from wenmai.components.paddleocr.adapter import choose_pdf_route
 from wenmai.ingestion.loaders import load_source
 from wenmai.models import Chunk, IngestResult
 from wenmai.storage.cleanup import delete_document_from_stores
@@ -144,6 +145,9 @@ def ingest_markdown(
             input_summary=f"{len(chunks)} chunks",
         ) as upsert_info:
             store.upsert(chunks)
+            bm25_index = bm25_factory.create(settings)
+            bm25_index.upsert(chunks)
+            bm25_index.save()
             upsert_info["candidate_count"] = len(chunks)
             upsert_info["output_summary"] = f"upserted {len(chunks)}"
 
