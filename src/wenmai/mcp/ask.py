@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+from typing import Any
+
+from wenmai.config import Settings
+from wenmai.pipelines.query import QueryGenerationError
+from wenmai.services.ask import ask
+
+
+class AskWenmaiError(Exception):
+    def __init__(self, message: str, trace_id: str) -> None:
+        super().__init__(message)
+        self.trace_id = trace_id
+
+
+def ask_wenmai(question: str, settings: Settings | None = None) -> dict[str, Any]:
+    """MCP tool handler: ask via service layer and return structured result."""
+    resolved = settings or Settings.load()
+    try:
+        result = ask(question, resolved)
+    except QueryGenerationError as exc:
+        raise AskWenmaiError(str(exc), exc.trace_id) from exc
+    return result.as_dict()

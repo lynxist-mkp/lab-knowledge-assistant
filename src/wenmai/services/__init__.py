@@ -1,1 +1,1 @@
-"""Read-only service layer for dashboard pages and JSON APIs."""
+"""Service layer: the only interface HTTP, dashboard pages, and MCP should call."""
