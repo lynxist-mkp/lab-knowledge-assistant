@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any
 
 from wenmai.components.retrieval.rrf import reciprocal_rank_fusion
@@ -133,6 +133,49 @@ def _rank_changes(
     return changes
 
 
+def _call_reranker(
+    reranker: object,
+    query: str,
+    texts: list[str],
+    timeout_seconds: float,
+) -> list[tuple[int, float]]:
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(reranker.rerank, query, texts)
+        try:
+            return future.result(timeout=timeout_seconds)
+        except FuturesTimeoutError as exc:
+            raise TimeoutError(f"reranker timed out after {timeout_seconds}s") from exc
+
+
+def _apply_rerank_rankings(
+    pre_rerank: list[ScoredChunk],
+    rankings: list[tuple[int, float]],
+    rerank_top: int,
+) -> list[ScoredChunk]:
+    reranked: list[ScoredChunk] = []
+    seen: set[str] = set()
+    for index, score in rankings:
+        if len(reranked) >= rerank_top:
+            break
+        if index < 0 or index >= len(pre_rerank):
+            continue
+        item = pre_rerank[index]
+        chunk_id = item.chunk.chunk_id
+        if chunk_id in seen:
+            continue
+        reranked.append(ScoredChunk(chunk=item.chunk, score=score))
+        seen.add(chunk_id)
+    for item in pre_rerank:
+        if len(reranked) >= rerank_top:
+            break
+        chunk_id = item.chunk.chunk_id
+        if chunk_id in seen:
+            continue
+        reranked.append(item)
+        seen.add(chunk_id)
+    return reranked
+
+
 def _rerank_chunks(
     settings: Settings,
     query: str,
@@ -155,15 +198,17 @@ def _rerank_chunks(
         texts = [item.chunk.text for item in pre_rerank]
         rerank_info["pre_rerank_candidates"] = _candidate_records(pre_rerank)
         try:
-            rankings = reranker.rerank(query, texts)
+            rankings = _call_reranker(
+                reranker,
+                query,
+                texts,
+                settings.retrieval.rerank_timeout_seconds,
+            )
             if not rankings:
                 raise RuntimeError("reranker returned no scores")
-            reranked: list[ScoredChunk] = []
-            for index, score in rankings[:rerank_top]:
-                if index < 0 or index >= len(pre_rerank):
-                    continue
-                chunk = pre_rerank[index]
-                reranked.append(ScoredChunk(chunk=chunk.chunk, score=score))
+            reranked = _apply_rerank_rankings(pre_rerank, rankings, rerank_top)
+            if not reranked:
+                raise RuntimeError("reranker produced no usable candidates")
             rerank_info["output_summary"] = f"reranked to {len(reranked)} chunks"
             rerank_info["candidate_count"] = len(reranked)
             rerank_info["candidates"] = _candidate_records(reranked)

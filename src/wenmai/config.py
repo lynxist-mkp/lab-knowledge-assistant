@@ -67,6 +67,7 @@ class Retrieval:
     fused_k: int
     rerank_top: int
     mode: str = "rrf"
+    rerank_timeout_seconds: float = 30.0
 
 
 @dataclass

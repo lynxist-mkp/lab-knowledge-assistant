@@ -82,7 +82,58 @@ def test_rerank_failure_falls_back_to_rrf_and_query_succeeds(
     query_trace = next(trace for trace in traces if trace["trace_id"] == body["trace_id"])
     rerank_stage = next(stage for stage in query_trace["stages"] if stage["name"] == "rerank")
     assert rerank_stage.get("error")
+    assert rerank_stage.get("fallback_reason")
     assert "fallback" in rerank_stage["output_summary"].lower()
     assert rerank_stage["method"] == "rrf_fallback"
     assert rerank_stage["candidates"]
     assert rerank_stage["candidates"][0]["chunk_id"] == body["citations"][0]["chunk_id"]
+
+
+def test_rerank_timeout_falls_back_to_rrf(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    test_settings.fakes["reranker"] = "timeout"
+    source = _write_minpai_markdown(tmp_path / "matsu.md")
+    client = TestClient(create_app(test_settings))
+    client.post("/ingest", json={"source_path": str(source)})
+
+    response = client.post("/ask", json={"question": "妈祖信仰的发源地在哪里？"})
+
+    assert response.status_code == 200
+    trace_path = Path(test_settings.paths.traces)
+    traces = [
+        json.loads(line)
+        for line in trace_path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    query_trace = next(
+        trace for trace in traces if trace["trace_id"] == response.json()["trace_id"]
+    )
+    rerank_stage = next(stage for stage in query_trace["stages"] if stage["name"] == "rerank")
+    assert rerank_stage["method"] == "rrf_fallback"
+    assert "TimeoutError" in rerank_stage["fallback_reason"]
+
+
+def test_rerank_empty_rankings_falls_back_to_rrf(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    test_settings.fakes["reranker"] = "garbage"
+    source = _write_minpai_markdown(tmp_path / "matsu.md")
+    client = TestClient(create_app(test_settings))
+    client.post("/ingest", json={"source_path": str(source)})
+
+    response = client.post("/ask", json={"question": "妈祖信仰的发源地在哪里？"})
+
+    assert response.status_code == 200
+    trace_path = Path(test_settings.paths.traces)
+    traces = [
+        json.loads(line)
+        for line in trace_path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    query_trace = next(
+        trace for trace in traces if trace["trace_id"] == response.json()["trace_id"]
+    )
+    rerank_stage = next(stage for stage in query_trace["stages"] if stage["name"] == "rerank")
+    assert rerank_stage["method"] == "rrf_fallback"
+    assert rerank_stage.get("fallback_reason")
