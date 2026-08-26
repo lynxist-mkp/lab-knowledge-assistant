@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 from wenmai.config import Settings
 from wenmai.factories.loader import ensure_providers
 from wenmai.pipelines.ingestion import ingest_markdown
-from wenmai.pipelines.query import QueryGenerationError, ask_question
+from wenmai.pipelines.query import QueryGenerationError
+from wenmai.services.ask import ask as ask_service
 
 
 class IngestRequest(BaseModel):
@@ -37,7 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/ask")
     def ask(request: AskRequest) -> dict[str, object]:
         try:
-            result = ask_question(request.question, resolved)
+            result = ask_service(request.question, resolved)
         except QueryGenerationError as exc:
             raise HTTPException(
                 status_code=502,
