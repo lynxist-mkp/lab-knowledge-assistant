@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}总览 · 福云·文脉助手{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>系统总览</h2>
+  <p class="muted">当前知识库规模与查询延迟概况。</p>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">文档数</div>
+      <div class="value">{{ stats.document_count }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">块数</div>
+      <div class="value">{{ stats.chunk_count }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">平均查询延迟 (ms)</div>
+      <div class="value">
+        {% if stats.avg_query_latency_ms is not none %}
+          {{ "%.1f"|format(stats.avg_query_latency_ms) }}
+        {% else %}
+          —
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <canvas id="overviewChart" height="120"></canvas>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const ctx = document.getElementById("overviewChart");
+  new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ["文档数", "块数", "平均查询延迟 (ms)"],
+      datasets: [{
+        label: "当前值",
+        data: [
+          {{ stats.document_count }},
+          {{ stats.chunk_count }},
+          {{ stats.avg_query_latency_ms if stats.avg_query_latency_ms is not none else 0 }}
+        ],
+        backgroundColor: ["#0f766e", "#14b8a6", "#5eead4"],
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } },
+    },
+  });
+</script>
+{% endblock %}

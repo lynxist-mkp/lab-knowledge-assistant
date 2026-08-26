@@ -21,3 +21,9 @@ class BaseVectorStore(ABC):
 
     @abstractmethod
     def query(self, query_embedding: list[float], top_k: int) -> list[ScoredChunk]: ...
+
+    @abstractmethod
+    def list_all(self) -> list[Chunk]: ...
+
+    @abstractmethod
+    def get_by_chunk_id(self, chunk_id: str) -> Chunk | None: ...

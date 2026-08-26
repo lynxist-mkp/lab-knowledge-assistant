@@ -109,6 +109,41 @@ class ChromaVectorStore(BaseVectorStore):
             )
         return scored
 
+    def list_all(self) -> list[Chunk]:
+        result = self._collection.get(include=["documents", "metadatas"])
+        chunks: list[Chunk] = []
+        ids = result.get("ids") or []
+        documents = result.get("documents") or []
+        metadatas = result.get("metadatas") or []
+        for chunk_id, text, metadata in zip(ids, documents, metadatas, strict=True):
+            meta = dict(metadata or {})
+            chunks.append(
+                Chunk(
+                    chunk_id=chunk_id,
+                    document_id=str(meta.get("document_id") or ""),
+                    text=text or "",
+                    metadata=meta,
+                )
+            )
+        chunks.sort(key=lambda chunk: chunk.chunk_id)
+        return chunks
+
+    def get_by_chunk_id(self, chunk_id: str) -> Chunk | None:
+        result = self._collection.get(ids=[chunk_id], include=["documents", "metadatas"])
+        ids = result.get("ids") or []
+        if not ids:
+            return None
+        documents = result.get("documents") or []
+        metadatas = result.get("metadatas") or []
+        text = documents[0] if documents else ""
+        meta = dict(metadatas[0] or {}) if metadatas else {}
+        return Chunk(
+            chunk_id=chunk_id,
+            document_id=str(meta.get("document_id") or ""),
+            text=text or "",
+            metadata=meta,
+        )
+
 
 @registry.register("fake")
 class FakeVectorStore(BaseVectorStore):
@@ -171,3 +206,13 @@ class FakeVectorStore(BaseVectorStore):
             )
         scored.sort(key=lambda item: item.score, reverse=True)
         return scored[:top_k]
+
+    def list_all(self) -> list[Chunk]:
+        bucket = self._memory[self.collection_name]
+        found = list(bucket.values())
+        found.sort(key=lambda chunk: chunk.chunk_id)
+        return found
+
+    def get_by_chunk_id(self, chunk_id: str) -> Chunk | None:
+        bucket = self._memory[self.collection_name]
+        return bucket.get(chunk_id)
