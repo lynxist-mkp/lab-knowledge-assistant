@@ -100,9 +100,11 @@ paddleocr:
   idle_timeout_seconds: 60
 
 gemma:
-  mlx_python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.venvs/paddleocr-env/bin/python"
+  # 本机默认 Gemma：mlx 栈在 minicpm-probe venv（paddleocr-env 的 mlx_vlm 已损坏）
+  mlx_python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.scratch/minicpm-probe/.venv/bin/python3.12"
   resolve_script: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/scripts/resolve_modelscope_model.py"
-  model: "mlx-community/gemma-4-e2b-it-mxfp4"
+  # 已缓存则直接用本地目录；也可改回 ModelScope id 让 resolve_script 解析
+  model: "/Users/linkslinks/.cache/modelscope/models/mlx-community--gemma-4-e2b-it-mxfp4/snapshots/master"
   server_port: 8120
   server_url: "http://127.0.0.1:8120/"
   idle_timeout_seconds: 60

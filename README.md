@@ -29,6 +29,13 @@ uv pip install -e ".[dev]"
 
 密钥与 MLX 服务见 `settings.yaml` 与 `docs/adr/`。开发期测试走 fake provider，不加载真实模型。
 
+**本机生成/图转文默认 Gemma MLX**（`providers.llm` / `providers.vision` = `mlx_gemma`）。首次 ask 或 caption 前建议先起服务（需 Terminal.app + Metal）：
+
+```bash
+./scripts/start_gemma_mlx.sh
+# 或双击 scripts/start_gemma_mlx.command
+```
+
 ```bash
 uv run pytest
 
