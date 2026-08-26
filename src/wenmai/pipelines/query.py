@@ -432,6 +432,23 @@ def _retrieve_chunks(
     return _fuse_retrievals(settings, dense_chunks, sparse_chunks, trace)
 
 
+def retrieve_for_question(
+    question: str,
+    settings: Settings,
+    culture_domain: str | None = None,
+) -> list[ScoredChunk]:
+    """Run retrieval (and optional rerank) without generation or trace persistence."""
+    normalized = _normalize_question(question)
+    trace = TraceContext(trace_type="query", metadata={"question": question, "eval": True})
+    try:
+        scored_chunks = _retrieve_chunks(settings, normalized, trace, culture_domain)
+        if settings.retrieval.mode == "rrf" and settings.retrieval.rerank_enabled:
+            scored_chunks = _rerank_chunks(settings, normalized, scored_chunks, trace)
+        return scored_chunks
+    finally:
+        trace.close()
+
+
 def ask_question(
     question: str,
     settings: Settings,
@@ -454,7 +471,7 @@ def ask_question(
                 stage_info["culture_domain"] = culture_domain
 
         scored_chunks = _retrieve_chunks(settings, normalized, trace, culture_domain)
-        if settings.retrieval.mode == "rrf":
+        if settings.retrieval.mode == "rrf" and settings.retrieval.rerank_enabled:
             scored_chunks = _rerank_chunks(settings, normalized, scored_chunks, trace)
 
         llm = llm_factory.create(settings)
