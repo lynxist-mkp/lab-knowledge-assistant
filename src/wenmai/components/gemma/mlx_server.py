@@ -29,8 +29,15 @@ class GemmaMlxServerManager:
     def ensure_running(self) -> None:
         with self._lock:
             self._cancel_idle_timer()
-            if self._process is None or self._process.poll() is not None:
-                self._start_server()
+            if self._process is not None and self._process.poll() is None:
+                self._last_touch = time.monotonic()
+                return
+            # Reuse an already-healthy server (e.g. started by scripts/start_gemma_mlx.sh)
+            # instead of binding a second process to the same port.
+            if self._health_ok():
+                self._last_touch = time.monotonic()
+                return
+            self._start_server()
             self._last_touch = time.monotonic()
 
     def touch(self) -> None:
@@ -85,18 +92,22 @@ class GemmaMlxServerManager:
             self._active_model_path = None
             raise
 
+    def _health_ok(self) -> bool:
+        url = self.config.server_url.rstrip("/") + _SERVER_READY_PATH
+        try:
+            with urllib.request.urlopen(url, timeout=2) as response:
+                return response.status < 500
+        except (urllib.error.URLError, TimeoutError):
+            return False
+
     def _wait_until_ready(self, timeout_seconds: float = 180.0) -> None:
         deadline = time.monotonic() + timeout_seconds
-        url = self.config.server_url.rstrip("/") + _SERVER_READY_PATH
         while time.monotonic() < deadline:
             if self._process is not None and self._process.poll() is not None:
                 raise RuntimeError("mlx_vlm.server exited before becoming ready")
-            try:
-                with urllib.request.urlopen(url, timeout=2) as response:
-                    if response.status < 500:
-                        return
-            except (urllib.error.URLError, TimeoutError):
-                time.sleep(0.5)
+            if self._health_ok():
+                return
+            time.sleep(0.5)
         raise RuntimeError("mlx_vlm.server did not become ready within timeout")
 
     def _cancel_idle_timer(self) -> None:
