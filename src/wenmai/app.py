@@ -20,6 +20,15 @@ from wenmai.services.ingestion_traces import (
     list_degradations,
     summarize_ingestion_trace,
 )
+from wenmai.services.query_traces import (
+    get_dense_candidates,
+    get_fusion_candidates,
+    get_rank_changes,
+    get_rerank_candidates,
+    get_sparse_candidates,
+    list_stage_latencies,
+    summarize_query_trace,
+)
 from wenmai.services.stats import get_overview_stats
 from wenmai.services.traces import get_trace_by_id, read_traces_by_type
 
@@ -90,6 +99,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def api_ingestion_traces() -> list[dict[str, object]]:
         traces = read_traces_by_type(resolved, "ingestion")
         return [summarize_ingestion_trace(trace).as_dict() for trace in reversed(traces)]
+
+    @app.get("/api/traces/query")
+    def api_query_traces() -> list[dict[str, object]]:
+        traces = read_traces_by_type(resolved, "query")
+        return [summarize_query_trace(trace).as_dict() for trace in reversed(traces)]
 
     @app.get("/api/traces/{trace_id}")
     def api_trace_detail(trace_id: str) -> dict[str, object]:
@@ -225,11 +239,56 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     @app.get("/query/traces", response_class=HTMLResponse)
-    def query_traces_page(request: Request) -> HTMLResponse:
+    def query_traces_page(request: Request, trace_id: str | None = None) -> HTMLResponse:
+        traces = read_traces_by_type(resolved, "query")
+        summaries = [summarize_query_trace(trace) for trace in reversed(traces)]
         return templates.TemplateResponse(
             request,
-            "placeholder.html",
-            {"active_page": "query_traces", "page_title": "Query 追踪"},
+            "query_traces.html",
+            {
+                "active_page": "query_traces",
+                "traces": summaries,
+                "highlight_trace_id": trace_id,
+            },
+        )
+
+    @app.get("/query/traces/{trace_id}", response_class=HTMLResponse)
+    def query_trace_detail_page(request: Request, trace_id: str) -> HTMLResponse:
+        trace = get_trace_by_id(resolved, trace_id)
+        if trace is None or trace.get("trace_type") != "query":
+            raise HTTPException(status_code=404, detail="query trace not found")
+        stages = []
+        for stage in trace.get("stages") or []:
+            payload = dict(stage)
+            payload["raw_json"] = json.dumps(stage, ensure_ascii=False, indent=2)
+            stages.append(payload)
+        trace_view = dict(trace)
+        trace_view["stages"] = stages
+        summary = summarize_query_trace(trace)
+        rerank_stage = next(
+            (stage for stage in trace.get("stages") or [] if stage.get("name") == "rerank"),
+            None,
+        )
+        rerank_fallback_reason = None
+        if rerank_stage is not None:
+            rerank_fallback_reason = rerank_stage.get("fallback_reason") or rerank_stage.get(
+                "error"
+            )
+        return templates.TemplateResponse(
+            request,
+            "query_trace_detail.html",
+            {
+                "active_page": "query_traces",
+                "trace": trace_view,
+                "summary": summary,
+                "stage_latencies": [item.as_dict() for item in list_stage_latencies(trace)],
+                "dense_candidates": get_dense_candidates(trace),
+                "sparse_candidates": get_sparse_candidates(trace),
+                "fusion_candidates": get_fusion_candidates(trace),
+                "rerank_candidates": get_rerank_candidates(trace),
+                "rank_changes": get_rank_changes(trace),
+                "rerank_fallback_reason": rerank_fallback_reason,
+            },
         )
 
     @app.get("/eval", response_class=HTMLResponse)
