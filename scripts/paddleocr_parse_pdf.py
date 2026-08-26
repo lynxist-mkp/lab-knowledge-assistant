@@ -76,6 +76,21 @@ def _block_from_layout_item(item: Any) -> dict[str, Any] | None:
     return block
 
 
+def _blocks_from_markdown_dict(markdown: dict[str, Any]) -> list[dict[str, Any]]:
+    blocks: list[dict[str, Any]] = []
+    texts = str(markdown.get("markdown_texts") or "").strip()
+    if texts and "<img" not in texts:
+        blocks.append({"label": "text", "content": texts})
+    images = markdown.get("markdown_images") or {}
+    for image in images.values():
+        if image is not None:
+            image_b64, mime_type = _image_to_b64(image)
+            blocks.append(
+                {"label": "image", "image_b64": image_b64, "mime_type": mime_type}
+            )
+    return blocks
+
+
 def _extract_pages(results: list[Any]) -> list[dict[str, Any]]:
     pages: list[dict[str, Any]] = []
     for page_index, result in enumerate(results, start=1):
@@ -97,9 +112,14 @@ def _extract_pages(results: list[Any]) -> list[dict[str, Any]]:
                 if block is not None:
                     blocks.append(block)
 
-        markdown = getattr(result, "markdown", None) or result.get("markdown")
+        markdown = getattr(result, "markdown", None)
+        if markdown is None and hasattr(result, "get"):
+            markdown = result.get("markdown")
         if markdown and not blocks:
-            blocks.append({"label": "text", "content": str(markdown).strip()})
+            if isinstance(markdown, dict):
+                blocks.extend(_blocks_from_markdown_dict(markdown))
+            else:
+                blocks.append({"label": "text", "content": str(markdown).strip()})
 
         pages.append({"page_number": page_index, "blocks": blocks})
     return pages

@@ -7,6 +7,7 @@ from wenmai.factories import embedding as embedding_factory
 from wenmai.factories import splitter as splitter_factory
 from wenmai.factories import transform as transform_factory
 from wenmai.factories import vector_store as vector_store_factory
+from wenmai.components.paddleocr.adapter import choose_pdf_route
 from wenmai.ingestion.loaders import load_source
 from wenmai.models import Chunk, IngestResult
 from wenmai.storage.cleanup import delete_document_from_stores
@@ -34,6 +35,18 @@ def ingest_markdown(
             provider="pending",
             input_summary=str(source_path),
         ) as load_info:
+            if source_path.suffix.lower() == ".pdf":
+                route = choose_pdf_route(
+                    source_path,
+                    settings.pdf_load,
+                    override_mode=pdf_load_mode,
+                )
+                if route == "markitdown":
+                    load_info["method"] = "markitdown"
+                    load_info["provider"] = "markitdown"
+                else:
+                    load_info["method"] = "paddleocr-vl"
+                    load_info["provider"] = "mlx-vlm-server"
             document = load_source(source_path, settings, pdf_load_mode=pdf_load_mode)
             load_info["output_summary"] = document.title
             load_info["candidate_count"] = 1

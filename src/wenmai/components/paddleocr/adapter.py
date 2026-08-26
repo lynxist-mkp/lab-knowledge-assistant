@@ -114,7 +114,10 @@ def _build_command(
     pdf_path: Path,
     output_path: Path,
     config: PaddleOCR,
+    *,
+    vl_rec_api_model_name: str | None = None,
 ) -> list[str]:
+    model_name = vl_rec_api_model_name or config.vl_rec_api_model_name
     return [
         "env",
         "-u",
@@ -131,7 +134,7 @@ def _build_command(
         "--vl-rec-server-url",
         config.server_url,
         "--vl-rec-api-model-name",
-        config.vl_rec_api_model_name,
+        model_name,
     ]
 
 
@@ -147,12 +150,16 @@ def parse_scanned_pdf(
     run = runner or _default_runner
     manager = server_manager or get_mlx_server_manager(config)
     manager.ensure_running()
+    active_model = getattr(manager, "active_mlx_model", None)
+    vl_model = active_model or config.vl_rec_api_model_name
 
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as handle:
         output_path = Path(handle.name)
 
     try:
-        result = run(_build_command(pdf, output_path, config))
+        result = run(
+            _build_command(pdf, output_path, config, vl_rec_api_model_name=vl_model)
+        )
         if result.returncode != 0:
             excerpt = _stderr_excerpt(result.stderr or "")
             detail = f" (stderr: {excerpt})" if excerpt else ""

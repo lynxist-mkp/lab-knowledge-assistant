@@ -245,3 +245,34 @@ def test_ingesting_scanned_pdf_records_paddleocr_trace_and_placeholder(
         assert load_stage["provider"] == "mlx-vlm-server"
     finally:
         loaders_module.parse_scanned_pdf = original_parse
+
+
+def test_ingesting_scanned_pdf_failure_records_trace_without_markitdown_fallback(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    from fastapi.testclient import TestClient
+
+    from wenmai.app import create_app
+    from wenmai.ingestion import loaders as loaders_module
+
+    pdf = _write_image_only_pdf(tmp_path / "scan.pdf")
+
+    def failing_parse(pdf_path, **kwargs):
+        raise RuntimeError("PaddleOCR-VL parsing failed with exit code 1 (stderr: layout model failed)")
+
+    original_parse = loaders_module.parse_scanned_pdf
+    loaders_module.parse_scanned_pdf = failing_parse
+    try:
+        client = TestClient(create_app(test_settings), raise_server_exceptions=False)
+        response = client.post("/ingest", json={"source_path": str(pdf)})
+        assert response.status_code == 500
+
+        trace_path = Path(test_settings.paths.traces)
+        trace = json.loads(trace_path.read_text(encoding="utf-8").splitlines()[-1])
+        assert trace["error"] is not None
+        load_stage = next(stage for stage in trace["stages"] if stage["name"] == "load")
+        assert load_stage["method"] == "paddleocr-vl"
+        assert load_stage["error"] is not None
+        assert "MarkItDown" not in load_stage["error"]
+    finally:
+        loaders_module.parse_scanned_pdf = original_parse
