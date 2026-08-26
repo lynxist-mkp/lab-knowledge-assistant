@@ -13,6 +13,7 @@ from wenmai.tracing.context import TraceContext
 from wenmai.tracing.writer import JsonlTraceWriter
 
 _CITATION_PATTERN = re.compile(r"\[(\d+)\]")
+_REFUSAL_PREFIX = "拒答："
 
 
 class QueryGenerationError(Exception):
@@ -54,24 +55,48 @@ def _excerpt(text: str, limit: int = 160) -> str:
     return compact[: limit - 1] + "…"
 
 
+def _citation_for_index(index: int, scored_chunks: list[ScoredChunk]) -> Citation | None:
+    if index < 1 or index > len(scored_chunks):
+        return None
+    chunk = scored_chunks[index - 1].chunk
+    return Citation(
+        index=index,
+        chunk_id=chunk.chunk_id,
+        document_id=chunk.document_id,
+        title=str(chunk.metadata.get("title") or chunk.metadata.get("chunk_title") or ""),
+        excerpt=_excerpt(chunk.text),
+        url=str(chunk.metadata.get("url") or ""),
+    )
+
+
 def _extract_citations(answer: str, scored_chunks: list[ScoredChunk]) -> list[Citation]:
     indices = sorted({int(match) for match in _CITATION_PATTERN.findall(answer)})
     citations: list[Citation] = []
     for index in indices:
-        if index < 1 or index > len(scored_chunks):
-            continue
-        chunk = scored_chunks[index - 1].chunk
-        citations.append(
-            Citation(
-                index=index,
-                chunk_id=chunk.chunk_id,
-                document_id=chunk.document_id,
-                title=str(chunk.metadata.get("title") or chunk.metadata.get("chunk_title") or ""),
-                excerpt=_excerpt(chunk.text),
-                url=str(chunk.metadata.get("url") or ""),
-            )
-        )
+        citation = _citation_for_index(index, scored_chunks)
+        if citation is not None:
+            citations.append(citation)
     return citations
+
+
+def _citations_from_retrieved(scored_chunks: list[ScoredChunk]) -> list[Citation]:
+    citations: list[Citation] = []
+    for index in range(1, len(scored_chunks) + 1):
+        citation = _citation_for_index(index, scored_chunks)
+        if citation is not None:
+            citations.append(citation)
+    return citations
+
+
+def _is_refusal(answer: str) -> bool:
+    return answer.strip().startswith(_REFUSAL_PREFIX)
+
+
+def _resolve_response(answer: str, scored_chunks: list[ScoredChunk]) -> tuple[bool, list[Citation]]:
+    refused = _is_refusal(answer)
+    if refused:
+        return True, _citations_from_retrieved(scored_chunks)
+    return False, _extract_citations(answer, scored_chunks)
 
 
 def _candidate_records(scored_chunks: list[ScoredChunk]) -> list[dict[str, object]]:
@@ -165,11 +190,16 @@ def ask_question(question: str, settings: Settings) -> AskResult:
                 generation_info["error"] = f"{type(exc).__name__}: {exc}"
                 trace.error = generation_info["error"]
                 raise QueryGenerationError(str(exc), trace.trace_id) from exc
-            generation_info["output_summary"] = f"{len(answer)} chars"
+            refused, citations = _resolve_response(answer, scored_chunks)
+            generation_info["output_summary"] = "refusal" if refused else f"{len(answer)} chars"
             generation_info["candidate_count"] = len(scored_chunks)
 
-        citations = _extract_citations(answer, scored_chunks)
-        return AskResult(answer=answer, citations=citations, trace_id=trace.trace_id)
+        return AskResult(
+            answer=answer,
+            citations=citations,
+            trace_id=trace.trace_id,
+            refused=refused,
+        )
     finally:
         trace.close()
         writer.write(trace)

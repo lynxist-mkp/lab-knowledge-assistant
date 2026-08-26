@@ -46,6 +46,7 @@ class AskResult:
     answer: str
     citations: list[Citation]
     trace_id: str
+    refused: bool = False
     error: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -53,6 +54,7 @@ class AskResult:
             "answer": self.answer,
             "citations": [citation.as_dict() for citation in self.citations],
             "trace_id": self.trace_id,
+            "refused": self.refused,
         }
         if self.error:
             payload["error"] = self.error
