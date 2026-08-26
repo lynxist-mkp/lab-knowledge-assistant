@@ -69,6 +69,13 @@ def test_mrr_zero_when_not_found() -> None:
     assert mean_reciprocal_rank(ranked, item) == 0.0
 
 
+def test_mrr_zero_when_evidence_beyond_top_five() -> None:
+    item = _gold("g1", ["doc-f"])
+    ranked = ["doc-a", "doc-b", "doc-c", "doc-d", "doc-e", "doc-f"]
+
+    assert mean_reciprocal_rank(ranked, item) == 0.0
+
+
 def test_mrr_uses_best_rank_when_multiple_evidence_ids() -> None:
     item = _gold("g1", ["doc-b", "doc-d"])
     ranked = ["doc-a", "doc-b", "doc-c", "doc-d"]

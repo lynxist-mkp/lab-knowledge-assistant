@@ -38,12 +38,12 @@ def hit_at_5(ranked_doc_ids: list[str], item: GoldItem) -> float | None:
 
 
 def mean_reciprocal_rank(ranked_doc_ids: list[str], item: GoldItem) -> float | None:
-    """Reciprocal rank of the first matching evidence doc; None if not answerable."""
+    """Reciprocal rank of the first matching evidence doc within top-5; None if not answerable."""
     if not item.answerable:
         return None
     if not item.evidence_doc_ids:
         return 0.0
-    top = unique_corpus_doc_ids(ranked_doc_ids, top_k=len(ranked_doc_ids))
+    top = unique_corpus_doc_ids(ranked_doc_ids, top_k=5)
     for rank, doc_id in enumerate(top, start=1):
         if doc_id in item.evidence_doc_ids:
             return 1.0 / rank

@@ -8,11 +8,11 @@
 
 - 文本 + 图转文 + 本地 `bge-m3` Dense + jieba BM25 + **RRF（已默认）** + Cross-Encoder 精排 + 文化域过滤（#16、#19 ✅）
 - 生成：本地 Gemma MLX（`mlx_vlm.server` :8120），回答带引用，无依据则拒答
-- 服务与监测：FastAPI + Jinja2 六页 — **总览 / 数据浏览 / Ingestion 管理 / Ingestion 追踪已可用**；Query 追踪 / 评估面板待做
-- 评测：黄金集 50 条已就位（#25 ✅）；Ragas + Hit@5/MRR + 四组消融（#26–28 待做）
+- 服务与监测：FastAPI + Jinja2 六页 — **总览 / 数据浏览 / Ingestion 管理 / Ingestion 追踪 / Query 追踪已可用**；评估面板待做（#28）
+- 评测：黄金集 50 条（#25 ✅）；Hit@5/MRR + 四组消融（#26 ✅，`scripts/run_eval_ablation.py`）；Ragas collections（#27 ✅，缺钥降级）
 - 音频（Dolphin 转写）放在文本、图、监测、评测都完成之后（#31）
 
-**进度快照**见 `.scratch/fuyun-wenmai/map.md` 的 Checkpoint 段（2026-08-26，`b99dcc32`，74 tests）。
+**进度快照**见 `.scratch/fuyun-wenmai/map.md` 的 Checkpoint 段。
 
 实现规格见 `.scratch/fuyun-wenmai/spec.md`。
 
