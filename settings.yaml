@@ -35,6 +35,7 @@ retrieval:
   rrf_k: 60                # Elastic 公式 1/(k+rank)，rank 从 1 起
   fused_k: 10
   rerank_top: 5
+  rerank_enabled: true     # false = RRF fusion only (rrf ablation)
   rerank_timeout_seconds: 30
 
 bm25:
