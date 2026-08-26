@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 from wenmai.models import Chunk, ScoredChunk
 
@@ -20,7 +21,12 @@ class BaseVectorStore(ABC):
     def delete_by_document_id(self, document_id: str) -> None: ...
 
     @abstractmethod
-    def query(self, query_embedding: list[float], top_k: int) -> list[ScoredChunk]: ...
+    def query(
+        self,
+        query_embedding: list[float],
+        top_k: int,
+        where: dict[str, Any] | None = None,
+    ) -> list[ScoredChunk]: ...
 
     @abstractmethod
     def get_by_ids(self, chunk_ids: list[str]) -> list[Chunk]: ...

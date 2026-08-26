@@ -26,6 +26,7 @@ class StageRecord:
     candidates: list[dict[str, Any]] | None = None
     dense_candidates: list[dict[str, Any]] | None = None
     sparse_candidates: list[dict[str, Any]] | None = None
+    culture_domain: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -46,7 +47,22 @@ class StageRecord:
             payload["dense_candidates"] = self.dense_candidates
         if self.sparse_candidates is not None:
             payload["sparse_candidates"] = self.sparse_candidates
+        if self.culture_domain is not None:
+            payload["culture_domain"] = self.culture_domain
         return payload
+
+
+_STAGE_RESERVED_KEYS = frozenset(
+    {
+        "output_summary",
+        "candidate_count",
+        "method",
+        "provider",
+        "candidates",
+        "dense_candidates",
+        "sparse_candidates",
+    }
+)
 
 
 @dataclass
@@ -75,6 +91,7 @@ class TraceContext:
         candidates: list[dict[str, Any]] | None = None,
         dense_candidates: list[dict[str, Any]] | None = None,
         sparse_candidates: list[dict[str, Any]] | None = None,
+        culture_domain: str | None = None,
     ) -> None:
         record = StageRecord(
             name=name,
@@ -88,6 +105,7 @@ class TraceContext:
             candidates=candidates,
             dense_candidates=dense_candidates,
             sparse_candidates=sparse_candidates,
+            culture_domain=culture_domain,
         )
         self.stages.append(record)
         if self._on_stage is not None:
@@ -133,6 +151,7 @@ class TraceContext:
         finally:
             stage_method = str(extras.get("method") or method)
             stage_provider = str(extras.get("provider") or provider)
+            stage_error = extras.get("error") or error
             self.record_stage(
                 name=name,
                 method=stage_method,
@@ -141,8 +160,9 @@ class TraceContext:
                 input_summary=input_summary,
                 output_summary=str(extras.get("output_summary") or ""),
                 candidate_count=extras.get("candidate_count"),
-                error=error,
+                error=stage_error,
                 candidates=extras.get("candidates"),
                 dense_candidates=extras.get("dense_candidates"),
                 sparse_candidates=extras.get("sparse_candidates"),
+                culture_domain=extras.get("culture_domain"),
             )
