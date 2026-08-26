@@ -114,6 +114,13 @@ class Evaluation:
 
 
 @dataclass
+class RagasJudge:
+    model: str = "deepseek-chat"
+    base_url: str = "https://api.deepseek.com"
+    api_key_env: str = "DEEPSEEK_API_KEY"
+
+
+@dataclass
 class Dolphin:
     python: str
     script: str
@@ -163,6 +170,7 @@ class Settings:
     server: Server
     observability: Observability
     evaluation: Evaluation
+    ragas_judge: RagasJudge
     dolphin: Dolphin
     pdf_load: PdfLoad
     paddleocr: PaddleOCR
@@ -183,6 +191,7 @@ class Settings:
             server=_build(Server, raw["server"]),
             observability=_build(Observability, raw["observability"]),
             evaluation=_build(Evaluation, raw["evaluation"]),
+            ragas_judge=_build(RagasJudge, raw.get("ragas_judge") or {}),
             dolphin=_build(Dolphin, raw["dolphin"]),
             pdf_load=_build(PdfLoad, raw["pdf_load"]),
             paddleocr=_build(PaddleOCR, raw["paddleocr"]),
