@@ -21,6 +21,7 @@ class _ChunkStats:
     document_id: str
     doc_length: int
     term_freqs: dict[str, int]
+    culture_domain: str = ""
 
 
 class Bm25Index:
@@ -57,7 +58,12 @@ class Bm25Index:
             del self._chunks[chunk_id]
         self._recompute_idf()
 
-    def search(self, query: str, top_k: int) -> list[Bm25Hit]:
+    def search(
+        self,
+        query: str,
+        top_k: int,
+        culture_domain: str | None = None,
+    ) -> list[Bm25Hit]:
         if top_k <= 0 or not self._chunks:
             return []
         query_terms = self.tokenizer.tokenize(query)
@@ -74,6 +80,9 @@ class Bm25Index:
             idf = entry["idf"]
             for posting in entry["postings"]:
                 chunk_id = posting["chunk_id"]
+                stats = self._chunks[chunk_id]
+                if culture_domain is not None and stats.culture_domain != culture_domain:
+                    continue
                 tf = posting["tf"]
                 doc_length = posting["doc_length"]
                 denom = tf + self.k1 * (1 - self.b + self.b * doc_length / avgdl)
@@ -96,10 +105,12 @@ class Bm25Index:
         term_freqs: dict[str, int] = {}
         for token in tokens:
             term_freqs[token] = term_freqs.get(token, 0) + 1
+        culture_domain = str(chunk.metadata.get("culture_domain") or "")
         self._chunks[chunk.chunk_id] = _ChunkStats(
             document_id=chunk.document_id,
             doc_length=len(tokens),
             term_freqs=term_freqs,
+            culture_domain=culture_domain,
         )
 
     def _avg_doc_length(self) -> float:
@@ -131,6 +142,7 @@ class Bm25Index:
                         "document_id": stats.document_id,
                         "tf": stats.term_freqs[term],
                         "doc_length": stats.doc_length,
+                        "culture_domain": stats.culture_domain,
                     }
                 )
             inverted[term] = {"idf": idf, "postings": postings}
@@ -158,6 +170,7 @@ class Bm25Index:
                         document_id=posting["document_id"],
                         doc_length=posting["doc_length"],
                         term_freqs={},
+                        culture_domain=str(posting.get("culture_domain") or ""),
                     ),
                 )
                 stats.term_freqs[term] = posting["tf"]

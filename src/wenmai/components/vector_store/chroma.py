@@ -104,14 +104,22 @@ class ChromaVectorStore(BaseVectorStore):
         chunks.sort(key=lambda chunk: order.get(chunk.chunk_id, len(order)))
         return chunks
 
-    def query(self, query_embedding: list[float], top_k: int) -> list[ScoredChunk]:
+    def query(
+        self,
+        query_embedding: list[float],
+        top_k: int,
+        where: dict[str, Any] | None = None,
+    ) -> list[ScoredChunk]:
         if top_k <= 0:
             return []
-        result = self._collection.query(
-            query_embeddings=[query_embedding],
-            n_results=top_k,
-            include=["documents", "metadatas", "distances"],
-        )
+        query_kwargs: dict[str, Any] = {
+            "query_embeddings": [query_embedding],
+            "n_results": top_k,
+            "include": ["documents", "metadatas", "distances"],
+        }
+        if where:
+            query_kwargs["where"] = where
+        result = self._collection.query(**query_kwargs)
         scored: list[ScoredChunk] = []
         ids = (result.get("ids") or [[]])[0]
         documents = (result.get("documents") or [[]])[0]
@@ -217,7 +225,12 @@ class FakeVectorStore(BaseVectorStore):
         chunks.sort(key=lambda chunk: order.get(chunk.chunk_id, len(order)))
         return chunks
 
-    def query(self, query_embedding: list[float], top_k: int) -> list[ScoredChunk]:
+    def query(
+        self,
+        query_embedding: list[float],
+        top_k: int,
+        where: dict[str, Any] | None = None,
+    ) -> list[ScoredChunk]:
         apply_behavior(self.behavior, "vector_store")
         if top_k <= 0:
             return []
@@ -229,9 +242,19 @@ class FakeVectorStore(BaseVectorStore):
             norm_b = sum(x * x for x in b) ** 0.5 or 1.0
             return dot / (norm_a * norm_b)
 
+        def matches_filter(chunk: Chunk) -> bool:
+            if not where:
+                return True
+            for key, value in where.items():
+                if chunk.metadata.get(key) != value:
+                    return False
+            return True
+
         scored: list[ScoredChunk] = []
         for chunk in bucket.values():
             if chunk.embedding is None:
+                continue
+            if not matches_filter(chunk):
                 continue
             scored.append(
                 ScoredChunk(chunk=chunk, score=cosine(query_embedding, chunk.embedding))

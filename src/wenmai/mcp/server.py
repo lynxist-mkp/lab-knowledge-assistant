@@ -17,7 +17,10 @@ def create_mcp_server() -> MCPServer:
         name="ask_wenmai",
         description="Ask the Minpai culture knowledge base and get an answer with citations.",
     )
-    def ask_wenmai_tool(question: str) -> dict[str, object]:
-        return ask_wenmai(question)
+    def ask_wenmai_tool(
+        question: str,
+        culture_domain: str | None = None,
+    ) -> dict[str, object]:
+        return ask_wenmai(question, culture_domain=culture_domain)
 
     return server

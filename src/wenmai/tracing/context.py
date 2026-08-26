@@ -29,6 +29,7 @@ class StageRecord:
     pre_rerank_candidates: list[dict[str, Any]] | None = None
     fallback_reason: str | None = None
     rank_changes: list[dict[str, Any]] | None = None
+    culture_domain: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -55,6 +56,8 @@ class StageRecord:
             payload["fallback_reason"] = self.fallback_reason
         if self.rank_changes is not None:
             payload["rank_changes"] = self.rank_changes
+        if self.culture_domain is not None:
+            payload["culture_domain"] = self.culture_domain
         return payload
 
 
@@ -87,6 +90,7 @@ class TraceContext:
         pre_rerank_candidates: list[dict[str, Any]] | None = None,
         fallback_reason: str | None = None,
         rank_changes: list[dict[str, Any]] | None = None,
+        culture_domain: str | None = None,
     ) -> None:
         record = StageRecord(
             name=name,
@@ -103,6 +107,7 @@ class TraceContext:
             pre_rerank_candidates=pre_rerank_candidates,
             fallback_reason=fallback_reason,
             rank_changes=rank_changes,
+            culture_domain=culture_domain,
         )
         self.stages.append(record)
         if self._on_stage is not None:
@@ -164,4 +169,5 @@ class TraceContext:
                 pre_rerank_candidates=extras.get("pre_rerank_candidates"),
                 fallback_reason=extras.get("fallback_reason"),
                 rank_changes=extras.get("rank_changes"),
+                culture_domain=extras.get("culture_domain"),
             )

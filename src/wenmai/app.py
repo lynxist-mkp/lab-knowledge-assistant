@@ -31,6 +31,7 @@ class IngestRequest(BaseModel):
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=1)
+    culture_domain: str | None = None
 
 
 def _templates_dir(settings: Settings) -> Path:
@@ -58,7 +59,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/ask")
     def ask(request: AskRequest) -> dict[str, object]:
         try:
-            result = ask_service(request.question, resolved)
+            result = ask_service(
+                request.question,
+                resolved,
+                culture_domain=request.culture_domain,
+            )
         except QueryGenerationError as exc:
             raise HTTPException(
                 status_code=502,

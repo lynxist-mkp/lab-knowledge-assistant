@@ -6,17 +6,19 @@
 
 ## 本周范围
 
-- 文本 + 图转文（Caption 缝进 chunk）+ 本地 `bge-m3` Dense + jieba BM25 + RRF + Cross-Encoder 精排
-- 生成：DeepSeek V4 Flash，回答带引用，无依据则拒答
-- 服务与监测：FastAPI + Jinja2 六页（总览 / 数据浏览 / Ingestion 管理 / Ingestion 追踪 / Query 追踪 / 评估面板）
-- 评测：Ragas Faithfulness + 自算 Hit@5、MRR，四组消融
-- 音频（Dolphin 转写）放在文本、图、监测、评测都完成之后
+- 文本 + 图转文 + 本地 `bge-m3` Dense + jieba BM25 + **RRF（已默认）** + Cross-Encoder 精排（#16 待做）
+- 生成：本地 Gemma MLX（`mlx_vlm.server` :8120），回答带引用，无依据则拒答
+- 服务与监测：FastAPI + Jinja2 六页 — **总览 / 数据浏览 / Ingestion 管理 / Ingestion 追踪已可用**；Query 追踪 / 评估面板待做
+- 评测：Ragas + Hit@5/MRR + 四组消融（#25–28 待做）
+- 音频（Dolphin 转写）放在文本、图、监测、评测都完成之后（#31）
+
+**进度快照**见 `.scratch/fuyun-wenmai/map.md` 的 Checkpoint 段（2026-08-26，`b2ceba7e`，61 tests）。
 
 实现规格见 `.scratch/fuyun-wenmai/spec.md`。
 
 ## 运行
 
-需要 Python 3.12（系统自带的 3.9 太旧）与环境变量 `DEEPSEEK_API_KEY`。
+需要 Python 3.12 与 ModelScope 缓存的模型（生成/图转文 Gemma、Dense `bge-m3`；扫描件 OCR 另需 `paddleocr-env`）。
 
 ```bash
 uv venv --python 3.12
@@ -25,7 +27,7 @@ uv pip install -e ".[dev]"
 
 已验证：MPS 可用，`bge-m3` 已在本机 HuggingFace 缓存中。
 
-密钥只从环境变量 `DEEPSEEK_API_KEY` 读取，不要写进仓库或配置文件。生成与视觉需要它；入库的 Dense 嵌入走本机 `bge-m3`。
+密钥与 MLX 服务见 `settings.yaml` 与 `docs/adr/`。开发期测试走 fake provider，不加载真实模型。
 
 ```bash
 uv run pytest

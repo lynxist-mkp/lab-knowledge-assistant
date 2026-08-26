@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 from wenmai.components.retrieval.rrf import reciprocal_rank_fusion
 from wenmai.config import Settings
@@ -180,17 +181,53 @@ def _rerank_chunks(
             return fallback
 
 
-def _run_dense_search(settings: Settings, normalized: str) -> list[ScoredChunk]:
+def _metadata_filter(culture_domain: str | None) -> dict[str, Any] | None:
+    if culture_domain is None:
+        return None
+    return {"culture_domain": culture_domain}
+
+
+def _dense_input_summary(settings: Settings, culture_domain: str | None) -> str:
+    summary = f"k={settings.retrieval.dense_k}"
+    if culture_domain is not None:
+        summary += f" culture_domain={culture_domain}"
+    return summary
+
+
+def _sparse_input_summary(settings: Settings, culture_domain: str | None) -> str:
+    summary = f"k={settings.retrieval.sparse_k}"
+    if culture_domain is not None:
+        summary += f" culture_domain={culture_domain}"
+    return summary
+
+
+def _run_dense_search(
+    settings: Settings,
+    normalized: str,
+    culture_domain: str | None = None,
+) -> list[ScoredChunk]:
     store = vector_store_factory.create(settings)
     embedder = embedding_factory.create(settings)
     query_vector = embedder.embed_query(normalized)
-    return store.query(query_vector, top_k=settings.retrieval.dense_k)
+    return store.query(
+        query_vector,
+        top_k=settings.retrieval.dense_k,
+        where=_metadata_filter(culture_domain),
+    )
 
 
-def _run_sparse_search(settings: Settings, normalized: str) -> list[ScoredChunk]:
+def _run_sparse_search(
+    settings: Settings,
+    normalized: str,
+    culture_domain: str | None = None,
+) -> list[ScoredChunk]:
     store = vector_store_factory.create(settings)
     bm25_index = bm25_factory.create(settings)
-    hits = bm25_index.search(normalized, top_k=settings.retrieval.sparse_k)
+    hits = bm25_index.search(
+        normalized,
+        top_k=settings.retrieval.sparse_k,
+        culture_domain=culture_domain,
+    )
     chunk_ids = [hit.chunk_id for hit in hits]
     chunks = store.get_by_ids(chunk_ids)
     chunk_by_id = {chunk.chunk_id: chunk for chunk in chunks}
@@ -201,15 +238,23 @@ def _run_sparse_search(settings: Settings, normalized: str) -> list[ScoredChunk]
     ]
 
 
-def _timed_dense_search(settings: Settings, normalized: str) -> tuple[list[ScoredChunk], float]:
+def _timed_dense_search(
+    settings: Settings,
+    normalized: str,
+    culture_domain: str | None = None,
+) -> tuple[list[ScoredChunk], float]:
     started = time.perf_counter()
-    chunks = _run_dense_search(settings, normalized)
+    chunks = _run_dense_search(settings, normalized, culture_domain)
     return chunks, (time.perf_counter() - started) * 1000
 
 
-def _timed_sparse_search(settings: Settings, normalized: str) -> tuple[list[ScoredChunk], float]:
+def _timed_sparse_search(
+    settings: Settings,
+    normalized: str,
+    culture_domain: str | None = None,
+) -> tuple[list[ScoredChunk], float]:
     started = time.perf_counter()
-    chunks = _run_sparse_search(settings, normalized)
+    chunks = _run_sparse_search(settings, normalized, culture_domain)
     return chunks, (time.perf_counter() - started) * 1000
 
 
@@ -218,6 +263,7 @@ def _record_dense_stage(
     settings: Settings,
     scored_chunks: list[ScoredChunk],
     elapsed_ms: float,
+    culture_domain: str | None = None,
 ) -> None:
     store = vector_store_factory.create(settings)
     trace.record_stage(
@@ -225,7 +271,7 @@ def _record_dense_stage(
         method="vector_query",
         provider=store.provider_name,
         elapsed_ms=elapsed_ms,
-        input_summary=f"k={settings.retrieval.dense_k}",
+        input_summary=_dense_input_summary(settings, culture_domain),
         output_summary=f"retrieved {len(scored_chunks)} chunks",
         candidate_count=len(scored_chunks),
         candidates=_candidate_records(scored_chunks),
@@ -237,13 +283,14 @@ def _record_sparse_stage(
     settings: Settings,
     scored_chunks: list[ScoredChunk],
     elapsed_ms: float,
+    culture_domain: str | None = None,
 ) -> None:
     trace.record_stage(
         name="sparse",
         method="bm25",
         provider="local",
         elapsed_ms=elapsed_ms,
-        input_summary=f"k={settings.retrieval.sparse_k}",
+        input_summary=_sparse_input_summary(settings, culture_domain),
         output_summary=f"retrieved {len(scored_chunks)} chunks",
         candidate_count=len(scored_chunks),
         candidates=_candidate_records(scored_chunks),
@@ -254,9 +301,10 @@ def _dense_retrieve(
     settings: Settings,
     normalized: str,
     trace: TraceContext,
+    culture_domain: str | None = None,
 ) -> list[ScoredChunk]:
-    scored_chunks, elapsed_ms = _timed_dense_search(settings, normalized)
-    _record_dense_stage(trace, settings, scored_chunks, elapsed_ms)
+    scored_chunks, elapsed_ms = _timed_dense_search(settings, normalized, culture_domain)
+    _record_dense_stage(trace, settings, scored_chunks, elapsed_ms, culture_domain)
     return scored_chunks
 
 
@@ -264,9 +312,10 @@ def _sparse_retrieve(
     settings: Settings,
     normalized: str,
     trace: TraceContext,
+    culture_domain: str | None = None,
 ) -> list[ScoredChunk]:
-    scored_chunks, elapsed_ms = _timed_sparse_search(settings, normalized)
-    _record_sparse_stage(trace, settings, scored_chunks, elapsed_ms)
+    scored_chunks, elapsed_ms = _timed_sparse_search(settings, normalized, culture_domain)
+    _record_sparse_stage(trace, settings, scored_chunks, elapsed_ms, culture_domain)
     return scored_chunks
 
 
@@ -314,26 +363,35 @@ def _retrieve_chunks(
     settings: Settings,
     normalized: str,
     trace: TraceContext,
+    culture_domain: str | None = None,
 ) -> list[ScoredChunk]:
     mode = settings.retrieval.mode
 
     if mode == "sparse_only":
-        return _sparse_retrieve(settings, normalized, trace)
+        return _sparse_retrieve(settings, normalized, trace, culture_domain)
 
     if mode == "dense_only":
-        return _dense_retrieve(settings, normalized, trace)
+        return _dense_retrieve(settings, normalized, trace, culture_domain)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        dense_future = executor.submit(_timed_dense_search, settings, normalized)
-        sparse_future = executor.submit(_timed_sparse_search, settings, normalized)
+        dense_future = executor.submit(
+            _timed_dense_search, settings, normalized, culture_domain
+        )
+        sparse_future = executor.submit(
+            _timed_sparse_search, settings, normalized, culture_domain
+        )
         dense_chunks, dense_ms = dense_future.result()
         sparse_chunks, sparse_ms = sparse_future.result()
-    _record_dense_stage(trace, settings, dense_chunks, dense_ms)
-    _record_sparse_stage(trace, settings, sparse_chunks, sparse_ms)
+    _record_dense_stage(trace, settings, dense_chunks, dense_ms, culture_domain)
+    _record_sparse_stage(trace, settings, sparse_chunks, sparse_ms, culture_domain)
     return _fuse_retrievals(settings, dense_chunks, sparse_chunks, trace)
 
 
-def ask_question(question: str, settings: Settings) -> AskResult:
+def ask_question(
+    question: str,
+    settings: Settings,
+    culture_domain: str | None = None,
+) -> AskResult:
     trace = TraceContext(trace_type="query", metadata={"question": question})
     writer = JsonlTraceWriter(store_path(settings, "traces"))
     normalized = _normalize_question(question)
@@ -347,8 +405,10 @@ def ask_question(question: str, settings: Settings) -> AskResult:
         ) as stage_info:
             stage_info["output_summary"] = normalized
             stage_info["candidate_count"] = 1
+            if culture_domain is not None:
+                stage_info["culture_domain"] = culture_domain
 
-        scored_chunks = _retrieve_chunks(settings, normalized, trace)
+        scored_chunks = _retrieve_chunks(settings, normalized, trace, culture_domain)
         if settings.retrieval.mode == "rrf":
             scored_chunks = _rerank_chunks(settings, normalized, scored_chunks, trace)
 
