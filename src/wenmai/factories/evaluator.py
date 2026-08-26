@@ -13,4 +13,5 @@ def create(settings: Settings) -> BaseEvaluator:
     return registry.create(
         settings.providers.evaluator,
         behavior=settings.fake_behavior("evaluator"),
+        settings=settings,
     )
