@@ -7,6 +7,9 @@ from wenmai.components.llm.base import BaseLLM
 from wenmai.components.vision.base import BaseVisionLLM
 from wenmai.factories.llm import registry, vision_registry
 
+_ENRICHER_MARKER = "入库助手"
+_QA_MARKER = "文脉助手"
+
 
 @registry.register("fake")
 class FakeLLM(BaseLLM):
@@ -22,10 +25,14 @@ class FakeLLM(BaseLLM):
         apply_behavior(self.behavior, "llm")
         if self.behavior == "garbage":
             return "<<<not-json>>>"
-        return (
-            '{"title": "妈祖祖庙", "summary": "湄洲岛妈祖信仰中心", '
-            '"tags": ["妈祖"], "culture_domain": "妈祖"}'
-        )
+        if _QA_MARKER in prompt:
+            return "湄洲岛是妈祖信仰的发源地，祖庙是信俗活动的中心场所[1]。"
+        if _ENRICHER_MARKER in prompt:
+            return (
+                '{"title": "妈祖祖庙", "summary": "湄洲岛妈祖信仰中心", '
+                '"tags": ["妈祖"], "culture_domain": "妈祖"}'
+            )
+        return "占位回答[1]。"
 
 
 @vision_registry.register("fake")

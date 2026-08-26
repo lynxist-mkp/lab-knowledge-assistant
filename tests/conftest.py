@@ -31,6 +31,7 @@ def test_settings(tmp_path: Path) -> Settings:
     raw["providers"]["splitter"] = "recursive_zh"
     raw["providers"]["vector_store"] = "chroma"
     raw["providers"]["evaluator"] = "fake"
+    raw["transform"]["stages"] = ["refiner", "enricher"]
     raw["fakes"] = {
         "llm": "ok",
         "vision": "ok",

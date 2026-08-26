@@ -14,6 +14,52 @@ class Chunk:
 
 
 @dataclass
+class ScoredChunk:
+    chunk: Chunk
+    score: float
+
+
+@dataclass
+class Citation:
+    index: int
+    chunk_id: str
+    document_id: str
+    title: str
+    excerpt: str
+    url: str = ""
+
+    def as_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "index": self.index,
+            "chunk_id": self.chunk_id,
+            "document_id": self.document_id,
+            "title": self.title,
+            "excerpt": self.excerpt,
+        }
+        if self.url:
+            payload["url"] = self.url
+        return payload
+
+
+@dataclass
+class AskResult:
+    answer: str
+    citations: list[Citation]
+    trace_id: str
+    error: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "answer": self.answer,
+            "citations": [citation.as_dict() for citation in self.citations],
+            "trace_id": self.trace_id,
+        }
+        if self.error:
+            payload["error"] = self.error
+        return payload
+
+
+@dataclass
 class IngestResult:
     document_id: str
     chunk_count: int

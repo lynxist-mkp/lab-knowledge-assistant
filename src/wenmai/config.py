@@ -54,6 +54,7 @@ class TransformConfig:
     captioner: str
     domains: list[str]
     enricher_prompt: str
+    captioner_prompt: str
     stages: list[str] = field(default_factory=list)
     refiner_min_ratio: float = 0.5
 

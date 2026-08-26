@@ -8,7 +8,7 @@ import chromadb
 from wenmai.components.fakes import apply_behavior
 from wenmai.components.vector_store.base import BaseVectorStore
 from wenmai.factories.vector_store import registry
-from wenmai.models import Chunk
+from wenmai.models import Chunk, ScoredChunk
 
 
 def _flatten(metadata: dict[str, Any]) -> dict[str, str | int | float | bool]:
@@ -79,6 +79,36 @@ class ChromaVectorStore(BaseVectorStore):
         if ids:
             self._collection.delete(ids=ids)
 
+    def query(self, query_embedding: list[float], top_k: int) -> list[ScoredChunk]:
+        if top_k <= 0:
+            return []
+        result = self._collection.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k,
+            include=["documents", "metadatas", "distances"],
+        )
+        scored: list[ScoredChunk] = []
+        ids = (result.get("ids") or [[]])[0]
+        documents = (result.get("documents") or [[]])[0]
+        metadatas = (result.get("metadatas") or [[]])[0]
+        distances = (result.get("distances") or [[]])[0]
+        for chunk_id, text, metadata, distance in zip(
+            ids, documents, metadatas, distances, strict=True
+        ):
+            meta = dict(metadata or {})
+            scored.append(
+                ScoredChunk(
+                    chunk=Chunk(
+                        chunk_id=chunk_id,
+                        document_id=str(meta.get("document_id") or ""),
+                        text=text or "",
+                        metadata=meta,
+                    ),
+                    score=1.0 - float(distance),
+                )
+            )
+        return scored
+
 
 @registry.register("fake")
 class FakeVectorStore(BaseVectorStore):
@@ -119,3 +149,25 @@ class FakeVectorStore(BaseVectorStore):
         stale = [key for key, chunk in bucket.items() if chunk.document_id == document_id]
         for chunk_id in stale:
             del bucket[chunk_id]
+
+    def query(self, query_embedding: list[float], top_k: int) -> list[ScoredChunk]:
+        apply_behavior(self.behavior, "vector_store")
+        if top_k <= 0:
+            return []
+        bucket = self._memory[self.collection_name]
+
+        def cosine(a: list[float], b: list[float]) -> float:
+            dot = sum(x * y for x, y in zip(a, b, strict=True))
+            norm_a = sum(x * x for x in a) ** 0.5 or 1.0
+            norm_b = sum(x * x for x in b) ** 0.5 or 1.0
+            return dot / (norm_a * norm_b)
+
+        scored: list[ScoredChunk] = []
+        for chunk in bucket.values():
+            if chunk.embedding is None:
+                continue
+            scored.append(
+                ScoredChunk(chunk=chunk, score=cosine(query_embedding, chunk.embedding))
+            )
+        scored.sort(key=lambda item: item.score, reverse=True)
+        return scored[:top_k]

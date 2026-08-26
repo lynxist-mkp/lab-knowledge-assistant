@@ -23,6 +23,7 @@ class StageRecord:
     output_summary: str = ""
     candidate_count: int | None = None
     error: str | None = None
+    candidates: list[dict[str, Any]] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -37,6 +38,8 @@ class StageRecord:
             payload["candidate_count"] = self.candidate_count
         if self.error is not None:
             payload["error"] = self.error
+        if self.candidates is not None:
+            payload["candidates"] = self.candidates
         return payload
 
 
@@ -62,6 +65,7 @@ class TraceContext:
         output_summary: str = "",
         candidate_count: int | None = None,
         error: str | None = None,
+        candidates: list[dict[str, Any]] | None = None,
     ) -> None:
         self.stages.append(
             StageRecord(
@@ -73,6 +77,7 @@ class TraceContext:
                 output_summary=output_summary,
                 candidate_count=candidate_count,
                 error=error,
+                candidates=candidates,
             )
         )
 
@@ -125,4 +130,5 @@ class TraceContext:
                 output_summary=str(extras.get("output_summary") or ""),
                 candidate_count=extras.get("candidate_count"),
                 error=error,
+                candidates=extras.get("candidates"),
             )

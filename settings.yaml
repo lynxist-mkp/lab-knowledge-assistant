@@ -19,13 +19,14 @@ chunking:
   overlap_ratio: 0.15
 
 transform:
-  stages: ["refiner", "enricher"]  # 未列入的不跑
+  stages: ["refiner", "enricher", "captioner"]  # 未列入的不跑
   refiner: "rule"          # 规则清洗，不打 LLM
   refiner_min_ratio: 0.5   # 有效字符率低于此值的块丢弃
   enricher: "llm"          # 抽 title/summary/tags/文化域
   captioner: "vision"      # 图转文；失败保留 [IMAGE: id] 不阻塞
   domains: ["海丝", "朱子", "妈祖", "船政", "其他"]
   enricher_prompt: "prompts/enrich_v1.txt"
+  captioner_prompt: "prompts/caption_v1.txt"
 
 retrieval:
   dense_k: 20
@@ -79,6 +80,7 @@ paddleocr:
   python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.venvs/paddleocr-env/bin/python"
   script: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/scripts/paddleocr_parse_pdf.py"
   mlx_python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.venvs/paddleocr-env/bin/python"
+  # ModelScope repo ids — runtime downloads via scripts/resolve_modelscope_model.py (not HuggingFace).
   mlx_model: "mlx-community/PaddleOCR-VL-1.6-5bit"
   mlx_fallback_model: "PaddlePaddle/PaddleOCR-VL-1.6"
   server_port: 8111
