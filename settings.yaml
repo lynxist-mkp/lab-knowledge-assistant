@@ -40,10 +40,10 @@ bm25:
   b: 0.75
 
 providers:
-  llm: "deepseek"
-  llm_model: "deepseek-v4-flash"
-  vision: "deepseek"
-  vision_model: "deepseek-v4-flash-vision-exp"
+  llm: "mlx_gemma"
+  llm_model: "mlx-community/gemma-4-e2b-it-mxfp4"
+  vision: "mlx_gemma"
+  vision_model: "mlx-community/gemma-4-e2b-it-mxfp4"
   embedding: "bge_m3"
   embedding_model: "BAAI/bge-m3"
   reranker: "cross_encoder"
@@ -86,4 +86,12 @@ paddleocr:
   server_port: 8111
   server_url: "http://127.0.0.1:8111/"
   vl_rec_api_model_name: "mlx-community/PaddleOCR-VL-1.6-5bit"
+  idle_timeout_seconds: 60
+
+gemma:
+  mlx_python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.venvs/paddleocr-env/bin/python"
+  resolve_script: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/scripts/resolve_modelscope_model.py"
+  model: "mlx-community/gemma-4-e2b-it-mxfp4"
+  server_port: 8120
+  server_url: "http://127.0.0.1:8120/"
   idle_timeout_seconds: 60

@@ -137,6 +137,16 @@ class PaddleOCR:
 
 
 @dataclass
+class Gemma:
+    mlx_python: str
+    resolve_script: str
+    model: str
+    server_port: int
+    server_url: str
+    idle_timeout_seconds: int
+
+
+@dataclass
 class Settings:
     product: Product
     paths: Paths
@@ -151,6 +161,7 @@ class Settings:
     dolphin: Dolphin
     pdf_load: PdfLoad
     paddleocr: PaddleOCR
+    gemma: Gemma
     fakes: dict[str, str] = field(default_factory=dict)
     root: Path = field(default_factory=lambda: Path("."))
 
@@ -170,6 +181,7 @@ class Settings:
             dolphin=_build(Dolphin, raw["dolphin"]),
             pdf_load=_build(PdfLoad, raw["pdf_load"]),
             paddleocr=_build(PaddleOCR, raw["paddleocr"]),
+            gemma=_build(Gemma, raw["gemma"]),
             fakes=dict(raw.get("fakes") or {}),
             root=Path(root) if root is not None else Path("."),
         )

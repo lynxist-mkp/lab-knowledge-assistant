@@ -16,6 +16,7 @@ def create(settings: Settings) -> BaseLLM:
         settings.providers.llm,
         model=settings.providers.llm_model,
         behavior=settings.fake_behavior("llm"),
+        settings=settings,
     )
 
 
@@ -25,4 +26,5 @@ def create_vision(settings: Settings) -> BaseVisionLLM:
         settings.providers.vision,
         model=settings.providers.vision_model,
         behavior=settings.fake_behavior("vision"),
+        settings=settings,
     )

@@ -41,4 +41,13 @@ def test_settings(tmp_path: Path) -> Settings:
         "splitter": "ok",
         "vector_store": "ok",
     }
+    if "gemma" not in raw:
+        raw["gemma"] = {
+            "mlx_python": "python3",
+            "resolve_script": str(repo_settings.parent / "scripts/resolve_modelscope_model.py"),
+            "model": "mlx-community/gemma-4-e2b-it-mxfp4",
+            "server_port": 8120,
+            "server_url": "http://127.0.0.1:8120/",
+            "idle_timeout_seconds": 60,
+        }
     return Settings.from_dict(raw, root=repo_settings.parent)
