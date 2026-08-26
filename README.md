@@ -12,7 +12,7 @@
 - 评测：黄金集 50 条已就位（#25 ✅）；Ragas + Hit@5/MRR + 四组消融（#26–28 待做）
 - 音频（Dolphin 转写）放在文本、图、监测、评测都完成之后（#31）
 
-**进度快照**见 `.scratch/fuyun-wenmai/map.md` 的 Checkpoint 段（2026-08-26，74 tests）。
+**进度快照**见 `.scratch/fuyun-wenmai/map.md` 的 Checkpoint 段（2026-08-26，`b99dcc32`，74 tests）。
 
 实现规格见 `.scratch/fuyun-wenmai/spec.md`。
 
