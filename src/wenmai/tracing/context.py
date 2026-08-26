@@ -26,6 +26,9 @@ class StageRecord:
     candidates: list[dict[str, Any]] | None = None
     dense_candidates: list[dict[str, Any]] | None = None
     sparse_candidates: list[dict[str, Any]] | None = None
+    pre_rerank_candidates: list[dict[str, Any]] | None = None
+    fallback_reason: str | None = None
+    rank_changes: list[dict[str, Any]] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -46,6 +49,12 @@ class StageRecord:
             payload["dense_candidates"] = self.dense_candidates
         if self.sparse_candidates is not None:
             payload["sparse_candidates"] = self.sparse_candidates
+        if self.pre_rerank_candidates is not None:
+            payload["pre_rerank_candidates"] = self.pre_rerank_candidates
+        if self.fallback_reason is not None:
+            payload["fallback_reason"] = self.fallback_reason
+        if self.rank_changes is not None:
+            payload["rank_changes"] = self.rank_changes
         return payload
 
 
@@ -75,6 +84,9 @@ class TraceContext:
         candidates: list[dict[str, Any]] | None = None,
         dense_candidates: list[dict[str, Any]] | None = None,
         sparse_candidates: list[dict[str, Any]] | None = None,
+        pre_rerank_candidates: list[dict[str, Any]] | None = None,
+        fallback_reason: str | None = None,
+        rank_changes: list[dict[str, Any]] | None = None,
     ) -> None:
         record = StageRecord(
             name=name,
@@ -88,6 +100,9 @@ class TraceContext:
             candidates=candidates,
             dense_candidates=dense_candidates,
             sparse_candidates=sparse_candidates,
+            pre_rerank_candidates=pre_rerank_candidates,
+            fallback_reason=fallback_reason,
+            rank_changes=rank_changes,
         )
         self.stages.append(record)
         if self._on_stage is not None:
@@ -133,6 +148,7 @@ class TraceContext:
         finally:
             stage_method = str(extras.get("method") or method)
             stage_provider = str(extras.get("provider") or provider)
+            stage_error = extras.get("error") or error
             self.record_stage(
                 name=name,
                 method=stage_method,
@@ -141,8 +157,11 @@ class TraceContext:
                 input_summary=input_summary,
                 output_summary=str(extras.get("output_summary") or ""),
                 candidate_count=extras.get("candidate_count"),
-                error=error,
+                error=stage_error,
                 candidates=extras.get("candidates"),
                 dense_candidates=extras.get("dense_candidates"),
                 sparse_candidates=extras.get("sparse_candidates"),
+                pre_rerank_candidates=extras.get("pre_rerank_candidates"),
+                fallback_reason=extras.get("fallback_reason"),
+                rank_changes=extras.get("rank_changes"),
             )

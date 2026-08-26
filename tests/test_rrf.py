@@ -81,6 +81,7 @@ title: 湄洲妈祖祖庙简介
         "dense",
         "sparse",
         "fusion",
+        "rerank",
         "generation",
     ]
 

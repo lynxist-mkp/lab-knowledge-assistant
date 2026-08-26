@@ -9,6 +9,7 @@ from wenmai.config import Settings
 from wenmai.factories import bm25 as bm25_factory
 from wenmai.factories import embedding as embedding_factory
 from wenmai.factories import llm as llm_factory
+from wenmai.factories import reranker as reranker_factory
 from wenmai.factories import vector_store as vector_store_factory
 from wenmai.models import AskResult, Citation, ScoredChunk
 from wenmai.storage.paths import store_path
@@ -110,6 +111,73 @@ def _candidate_records(scored_chunks: list[ScoredChunk]) -> list[dict[str, objec
         }
         for item in scored_chunks
     ]
+
+
+def _rank_changes(
+    pre_rerank: list[ScoredChunk],
+    post_rerank: list[ScoredChunk],
+) -> list[dict[str, object]]:
+    pre_ids = [item.chunk.chunk_id for item in pre_rerank]
+    changes: list[dict[str, object]] = []
+    for new_rank, item in enumerate(post_rerank, start=1):
+        old_rank = pre_ids.index(item.chunk.chunk_id) + 1
+        if old_rank != new_rank:
+            changes.append(
+                {
+                    "chunk_id": item.chunk.chunk_id,
+                    "from": old_rank,
+                    "to": new_rank,
+                }
+            )
+    return changes
+
+
+def _rerank_chunks(
+    settings: Settings,
+    query: str,
+    fused_chunks: list[ScoredChunk],
+    trace: TraceContext,
+) -> list[ScoredChunk]:
+    rerank_top = settings.retrieval.rerank_top
+    if not fused_chunks or rerank_top <= 0:
+        return fused_chunks
+
+    pre_rerank = fused_chunks
+    reranker = reranker_factory.create(settings)
+
+    with trace.stage(
+        "rerank",
+        method="cross_encoder",
+        provider=reranker.provider_name,
+        input_summary=f"{len(pre_rerank)} candidates, top={rerank_top}",
+    ) as rerank_info:
+        texts = [item.chunk.text for item in pre_rerank]
+        rerank_info["pre_rerank_candidates"] = _candidate_records(pre_rerank)
+        try:
+            rankings = reranker.rerank(query, texts)
+            if not rankings:
+                raise RuntimeError("reranker returned no scores")
+            reranked: list[ScoredChunk] = []
+            for index, score in rankings[:rerank_top]:
+                if index < 0 or index >= len(pre_rerank):
+                    continue
+                chunk = pre_rerank[index]
+                reranked.append(ScoredChunk(chunk=chunk.chunk, score=score))
+            rerank_info["output_summary"] = f"reranked to {len(reranked)} chunks"
+            rerank_info["candidate_count"] = len(reranked)
+            rerank_info["candidates"] = _candidate_records(reranked)
+            rerank_info["rank_changes"] = _rank_changes(pre_rerank, reranked)
+            return reranked
+        except Exception as exc:
+            fallback = pre_rerank[:rerank_top]
+            reason = f"{type(exc).__name__}: {exc}"
+            rerank_info["method"] = "rrf_fallback"
+            rerank_info["output_summary"] = f"fallback to RRF top-{len(fallback)}"
+            rerank_info["error"] = reason
+            rerank_info["fallback_reason"] = reason
+            rerank_info["candidate_count"] = len(fallback)
+            rerank_info["candidates"] = _candidate_records(fallback)
+            return fallback
 
 
 def _run_dense_search(settings: Settings, normalized: str) -> list[ScoredChunk]:
@@ -281,6 +349,8 @@ def ask_question(question: str, settings: Settings) -> AskResult:
             stage_info["candidate_count"] = 1
 
         scored_chunks = _retrieve_chunks(settings, normalized, trace)
+        if settings.retrieval.mode == "rrf":
+            scored_chunks = _rerank_chunks(settings, normalized, scored_chunks, trace)
 
         llm = llm_factory.create(settings)
         template = _load_qa_prompt(settings)

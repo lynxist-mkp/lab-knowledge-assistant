@@ -61,6 +61,7 @@ def test_ask_returns_answer_with_matching_citations_and_query_trace(
         "dense",
         "sparse",
         "fusion",
+        "rerank",
         "generation",
     ]
     fusion_stage = next(stage for stage in query_trace["stages"] if stage["name"] == "fusion")
