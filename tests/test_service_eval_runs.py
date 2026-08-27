@@ -104,27 +104,6 @@ def test_get_ragas_status_marks_unavailable_for_fake_evaluator(test_settings: Se
     assert "未接入" in status.context_precision.label
 
 
-def test_eval_page_renders_latest_ablation_and_ragas_notice(
-    test_settings: Settings,
-    tmp_path: Path,
-) -> None:
-    runs_dir = tmp_path / "runs"
-    test_settings.evaluation.runs = str(runs_dir)
-    _write_run(runs_dir, "20260102T100000Z", dense_hit=0.25, rrf_rerank_hit=0.62)
-
-    client = TestClient(create_app(test_settings))
-    response = client.get("/eval")
-
-    assert response.status_code == 200
-    body = response.text
-    assert "20260102T100000Z" in body
-    assert "Dense 单路" in body
-    assert "RRF + Rerank" in body
-    assert "0.62" in body
-    assert "Faithfulness" in body
-    assert "未接入" in body
-
-
 def test_api_eval_runs_endpoint(test_settings: Settings, tmp_path: Path) -> None:
     runs_dir = tmp_path / "runs"
     test_settings.evaluation.runs = str(runs_dir)

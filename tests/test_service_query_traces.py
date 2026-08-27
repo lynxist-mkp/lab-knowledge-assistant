@@ -191,22 +191,3 @@ def test_api_query_traces_listing(test_settings: Settings, tmp_path: Path) -> No
     assert summaries[0]["refused"] is body["refused"]
     expected_status = "refused" if body["refused"] else "ok"
     assert summaries[0]["status"] == expected_status
-
-
-def test_query_trace_pages_render(test_settings: Settings, tmp_path: Path) -> None:
-    source = _write_minpai_markdown(tmp_path / "matsu.md")
-    client = TestClient(create_app(test_settings))
-    client.post("/ingest", json={"source_path": str(source)})
-    ask = client.post("/ask", json={"question": "妈祖信仰的发源地在哪里？"})
-    trace_id = ask.json()["trace_id"]
-
-    listing = client.get("/query/traces")
-    assert listing.status_code == 200
-    assert "Query 追踪" in listing.text
-    assert trace_id in listing.text
-    assert "妈祖信仰的发源地在哪里？" in listing.text
-
-    detail_page = client.get(f"/query/traces/{trace_id}")
-    assert detail_page.status_code == 200
-    assert "dense" in detail_page.text.lower() or "稠密" in detail_page.text or "嵌入" in detail_page.text
-    assert "stages[]" in detail_page.text or "阶段" in detail_page.text
