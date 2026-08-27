@@ -1,0 +1,19 @@
+{# Shared 福云内容库族蓝白 tokens — both surfaces include this. #}
+:root {
+  color-scheme: light;
+  --color-primary: #037AFF;
+  --color-primary-soft: #1E9FFF;
+  --color-bg: #f5f8fc;
+  --color-panel: #ffffff;
+  --color-text: #212d3f;
+  --color-muted: #677181;
+  --color-border: #e8ebf0;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "PingFang SC", "Helvetica Neue", "Noto Sans SC", sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+}
