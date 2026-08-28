@@ -6,44 +6,87 @@
   <title>{% block title %}福云·文脉助手{% endblock %}</title>
   <style>
     {% include "_tokens.css" %}
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 3.5rem;
+    }
     .shell-header {
       background: var(--color-panel);
       border-bottom: 1px solid var(--color-border);
-      padding: 1rem 1.5rem;
+      padding: 0.85rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .shell-header-brand {
+      display: flex;
+      flex-direction: column;
     }
     .shell-header .brand {
       margin: 0;
       font-size: 1.35rem;
       font-weight: 700;
       color: var(--color-primary);
+      letter-spacing: -0.01em;
     }
     .shell-header .surface {
-      margin: 0.35rem 0 0;
+      margin: 0.2rem 0 0;
       color: var(--color-muted);
-      font-size: 0.95rem;
+      font-size: 0.92rem;
     }
     .shell-main {
+      flex: 1;
       max-width: 960px;
+      width: 100%;
       margin: 0 auto;
-      padding: 1.5rem;
+      padding: 1.5rem 1rem;
     }
     .shell-panel {
       background: var(--color-panel);
       border: 1px solid var(--color-border);
-      border-radius: 8px;
+      border-radius: var(--radius-md, 8px);
       padding: 1.25rem;
+    }
+    .shell-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--color-panel);
+      border-top: 1px solid var(--color-border);
+      padding: 0.65rem 1.5rem;
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--color-muted);
+      z-index: 100;
+      box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.03);
+    }
+    .shell-footer p {
+      margin: 0;
     }
   </style>
   {% block head %}{% endblock %}
 </head>
 <body>
   <header class="shell-header">
-    <p class="brand">福云·文脉助手</p>
-    <p class="surface">{% block surface_label %}{% endblock %}</p>
+    <div class="shell-header-brand">
+      <p class="brand">福云·文脉助手</p>
+      <p class="surface">{% block surface_label %}{% endblock %}</p>
+    </div>
+    {% block header_extra %}{% endblock %}
   </header>
   <main class="shell-main">
     {% block content %}{% endblock %}
   </main>
+  <footer class="shell-footer" role="contentinfo">
+    {% block footer %}
+    <p class="compliance-notice">本系统内容由人工智能生成合成，仅供融媒采编检索参考，不可直接作为播出终审依据。</p>
+    {% endblock %}
+  </footer>
   {% block scripts %}{% endblock %}
 </body>
 </html>

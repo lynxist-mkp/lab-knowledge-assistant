@@ -1,8 +1,1841 @@
 {% extends "_shell.html" %}
 {% block title %}编辑工作台 · 福云·文脉助手{% endblock %}
 {% block surface_label %}编辑工作台{% endblock %}
+
+{% block header_extra %}
+<div class="topbar-domain-control" role="region" aria-label="文化域筛选">
+  <label for="culture-domain-select" class="topbar-label">
+    <span class="label-text">文化域</span>
+  </label>
+  <select id="culture-domain-select" name="culture_domain" class="domain-select" aria-label="选择文化域">
+    <option value="">全部 / 不限</option>
+    <option value="海丝">海丝</option>
+    <option value="朱子">朱子</option>
+    <option value="妈祖">妈祖</option>
+    <option value="船政">船政</option>
+  </select>
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+  /* Workbench Layout & Panels */
+  .workbench-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .topbar-domain-control {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-bg);
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--color-border);
+  }
+  .topbar-label {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+  .domain-select {
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    padding: 0.35rem 0.65rem;
+    font-size: 0.88rem;
+    color: var(--color-text);
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .domain-select:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(3, 122, 255, 0.18);
+  }
+
+  /* Intro Panel */
+  .intro-panel {
+    background: linear-gradient(135deg, #ffffff 0%, var(--color-primary-light, #eaf3ff) 100%);
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-primary);
+    border-radius: var(--radius-md, 8px);
+    padding: 0.9rem 1.25rem;
+  }
+  .intro-text {
+    margin: 0;
+    font-size: 0.92rem;
+    color: var(--color-text);
+    line-height: 1.5;
+  }
+  .intro-subtext {
+    margin: 0.25rem 0 0;
+    font-size: 0.82rem;
+    color: var(--color-muted);
+  }
+
+  /* Ask Form Box */
+  .ask-panel {
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md, 8px);
+    padding: 1.25rem;
+    box-shadow: var(--shadow-sm);
+  }
+  .ask-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+  .ask-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+  .ask-textarea-wrap {
+    position: relative;
+  }
+  .ask-textarea {
+    width: 100%;
+    min-height: 84px;
+    padding: 0.85rem 1rem;
+    font-size: 0.95rem;
+    font-family: inherit;
+    line-height: 1.5;
+    color: var(--color-text);
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md, 8px);
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .ask-textarea:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(3, 122, 255, 0.15);
+  }
+  .ask-textarea::placeholder {
+    color: #9aa5b5;
+  }
+
+  .ask-actions-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .ask-domain-indicator {
+    font-size: 0.84rem;
+    color: var(--color-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .domain-badge-active {
+    background: var(--color-primary-light, #eaf3ff);
+    color: var(--color-primary);
+    border: 1px solid rgba(3, 122, 255, 0.2);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    font-weight: 500;
+  }
+  .ask-button-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .ask-shortcut-hint {
+    font-size: 0.8rem;
+    color: var(--color-muted);
+  }
+  .btn-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    background: var(--color-primary);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-md, 8px);
+    padding: 0.55rem 1.4rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.05s ease, opacity 0.15s ease;
+    box-shadow: 0 2px 4px rgba(3, 122, 255, 0.2);
+  }
+  .btn-submit:hover:not(:disabled) {
+    background: var(--color-primary-soft);
+  }
+  .btn-submit:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .btn-submit:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+
+  /* Error Alert Banner */
+  .alert-banner {
+    background: var(--color-danger-bg, #fdebed);
+    border: 1px solid var(--color-danger);
+    border-radius: var(--radius-md, 8px);
+    padding: 0.85rem 1.15rem;
+    color: #921c26;
+    font-size: 0.9rem;
+    display: none;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  .alert-banner.visible {
+    display: flex;
+  }
+  .alert-content {
+    flex: 1;
+  }
+  .alert-title {
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+  .alert-message {
+    margin: 0;
+  }
+  .alert-trace-id {
+    margin-top: 0.35rem;
+    font-size: 0.82rem;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+
+  /* History Section */
+  .history-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.25rem;
+  }
+  .history-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+  .history-count {
+    font-size: 0.85rem;
+    color: var(--color-muted);
+  }
+
+  /* Empty State */
+  .empty-state {
+    background: var(--color-panel);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md, 8px);
+    padding: 2.25rem 1.5rem;
+    text-align: center;
+  }
+  .empty-icon {
+    font-size: 1.8rem;
+    margin-bottom: 0.5rem;
+    color: var(--color-muted);
+  }
+  .empty-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 0 0 0.4rem;
+  }
+  .empty-desc {
+    font-size: 0.88rem;
+    color: var(--color-muted);
+    margin: 0 0 1.25rem;
+  }
+  .example-prompts {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.6rem;
+  }
+  .prompt-chip {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    padding: 0.35rem 0.9rem;
+    font-size: 0.84rem;
+    color: var(--color-primary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .prompt-chip:hover {
+    background: var(--color-primary-light, #eaf3ff);
+    border-color: var(--color-primary-soft);
+  }
+  .chip-tag {
+    font-size: 0.78rem;
+    color: var(--color-muted);
+    margin-left: 0.25rem;
+  }
+
+  /* QA Cards */
+  .qa-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  .qa-card {
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md, 8px);
+    padding: 1.25rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    transition: box-shadow 0.2s ease;
+  }
+  .qa-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  .qa-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.75rem;
+  }
+  .qa-question-box {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    flex: 1;
+  }
+  .qa-q-badge {
+    background: var(--color-primary);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 0.8rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .qa-question-text {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.4;
+  }
+
+  .qa-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .badge-culture {
+    font-size: 0.78rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+  }
+  .badge-status {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    border-radius: 4px;
+  }
+  .badge-status.answered {
+    background: var(--color-success-bg, #e8f8f2);
+    color: var(--color-success, #00a870);
+    border: 1px solid rgba(0, 168, 112, 0.2);
+  }
+  .badge-status.refused {
+    background: var(--color-warning-bg, #fff7e6);
+    color: #d46b08;
+    border: 1px solid rgba(250, 140, 22, 0.3);
+  }
+  .badge-status.failed {
+    background: var(--color-danger-bg, #fdebed);
+    color: var(--color-danger, #e34d59);
+    border: 1px solid rgba(227, 77, 89, 0.3);
+  }
+  .qa-timestamp {
+    font-size: 0.78rem;
+    color: var(--color-muted);
+  }
+
+  /* Answer Body */
+  .qa-card-body {
+    font-size: 0.95rem;
+    color: var(--color-text);
+    line-height: 1.65;
+  }
+  .qa-card-body p {
+    margin: 0 0 0.75rem;
+  }
+  .qa-card-body p:last-child {
+    margin-bottom: 0;
+  }
+
+  /* Refusal Callout */
+  .refusal-box {
+    background: var(--color-warning-bg, #fff7e6);
+    border: 1px solid rgba(250, 140, 22, 0.35);
+    border-left: 4px solid var(--color-warning, #fa8c16);
+    border-radius: var(--radius-sm, 4px);
+    padding: 0.85rem 1rem;
+    color: #873800;
+  }
+  .refusal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+    font-size: 0.92rem;
+  }
+  .refusal-text {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  /* Citation Markers in Answer */
+  .citation-ref {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-style: normal;
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: var(--color-primary);
+    background: var(--color-primary-light, #eaf3ff);
+    border: 1px solid rgba(3, 122, 255, 0.25);
+    border-radius: 3px;
+    padding: 0 0.35rem;
+    margin: 0 0.15rem;
+    vertical-align: 0.15em;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+  .citation-ref:hover {
+    background: var(--color-primary);
+    color: #ffffff;
+    border-color: var(--color-primary);
+  }
+  .citation-ref:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+  }
+
+  /* Citations Section */
+  .citations-section {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md, 8px);
+    padding: 0.9rem 1.15rem;
+  }
+  .citations-heading {
+    margin: 0 0 0.75rem;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .citations-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+  .citation-item {
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    padding: 0.65rem 0.85rem;
+    transition: border-color 0.15s ease;
+  }
+  .citation-item:hover {
+    border-color: var(--color-primary-soft);
+  }
+  .citation-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+  }
+  .citation-source-info {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+  .citation-num {
+    color: var(--color-primary);
+  }
+  .citation-title-link {
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+  .citation-title-link:hover {
+    text-decoration: underline;
+  }
+  .citation-title-text {
+    color: var(--color-text);
+  }
+  .citation-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .chunk-id-tag {
+    font-size: 0.75rem;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    background: var(--color-bg);
+    color: var(--color-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    padding: 0.1rem 0.4rem;
+  }
+  .btn-view-chunk {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    background: var(--color-primary-light, #eaf3ff);
+    border: 1px solid rgba(3, 122, 255, 0.2);
+    border-radius: 3px;
+    padding: 0.15rem 0.55rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-view-chunk:hover {
+    background: var(--color-primary);
+    color: #ffffff;
+    border-color: var(--color-primary);
+  }
+  .citation-excerpt {
+    margin: 0;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.84rem;
+    color: var(--color-muted);
+    background: var(--color-bg);
+    border-left: 3px solid var(--color-border);
+    border-radius: 0 3px 3px 0;
+    line-height: 1.5;
+  }
+
+  /* Trace Section */
+  .trace-section {
+    border-top: 1px dashed var(--color-border);
+    padding-top: 0.65rem;
+  }
+  .trace-details {
+    font-size: 0.84rem;
+  }
+  .trace-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+    user-select: none;
+    transition: background 0.15s ease;
+    list-style: none;
+  }
+  .trace-summary::-webkit-details-marker {
+    display: none;
+  }
+  .trace-summary:hover {
+    background: var(--color-bg);
+  }
+  .trace-toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--color-primary);
+    font-weight: 600;
+  }
+  .trace-id-badge {
+    font-size: 0.75rem;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    background: var(--color-bg);
+    color: var(--color-muted);
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+  }
+  .trace-panel-body {
+    margin-top: 0.65rem;
+    padding: 0.85rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+  .trace-summary-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.82rem;
+    color: var(--color-text);
+  }
+  .trace-stages-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.5rem;
+  }
+  .trace-stage-item {
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 0.4rem 0.55rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .stage-label {
+    font-size: 0.76rem;
+    color: var(--color-muted);
+  }
+  .stage-time {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text);
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+  .trace-fallback-notice {
+    background: var(--color-warning-bg, #fff7e6);
+    border: 1px solid rgba(250, 140, 22, 0.3);
+    border-radius: 4px;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+    color: #873800;
+  }
+  .fallback-tag {
+    font-weight: 700;
+    margin-right: 0.35rem;
+  }
+  .trace-rank-changes {
+    font-size: 0.8rem;
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 0.4rem 0.65rem;
+  }
+  .rank-changes-title {
+    font-weight: 600;
+    color: var(--color-text);
+  }
+  .rank-changes-list {
+    margin: 0.25rem 0 0;
+    padding-left: 1.25rem;
+    color: var(--color-muted);
+  }
+  .trace-loading-msg {
+    color: var(--color-muted);
+    font-size: 0.82rem;
+    text-align: center;
+    padding: 0.5rem;
+  }
+
+  /* =========================================================
+     #5 Citation Read-Only Drawer & Backdrop
+     ========================================================= */
+  .drawer-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    z-index: 200;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+  }
+  .drawer-backdrop.is-open {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .citation-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 500px;
+    max-width: 92vw;
+    background: var(--color-panel);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+    z-index: 201;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    outline: none;
+  }
+  .citation-drawer.is-open,
+  .citation-drawer[data-open="true"] {
+    transform: translateX(0);
+  }
+
+  .drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    background: #ffffff;
+  }
+  .drawer-header-main {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .drawer-tag {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    background: var(--color-primary-light, #eaf3ff);
+    border: 1px solid rgba(3, 122, 255, 0.25);
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+  }
+  .drawer-title {
+    margin: 0;
+    font-size: 1.08rem;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+  .drawer-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    color: var(--color-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .drawer-close-btn:hover {
+    background: var(--color-bg);
+    color: var(--color-text);
+    border-color: #cbd5e1;
+  }
+  .drawer-close-btn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+  }
+
+  .drawer-meta-bar {
+    padding: 0.75rem 1.25rem;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-size: 0.84rem;
+  }
+  .drawer-meta-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  .meta-label {
+    width: 64px;
+    flex-shrink: 0;
+    color: var(--color-muted);
+    font-size: 0.8rem;
+  }
+  .meta-value-title {
+    font-weight: 600;
+    color: var(--color-text);
+    word-break: break-all;
+  }
+  .meta-value-domain {
+    display: inline-block;
+    background: var(--color-primary-light, #eaf3ff);
+    color: var(--color-primary);
+    border: 1px solid rgba(3, 122, 255, 0.2);
+    padding: 0.05rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .meta-code {
+    font-size: 0.78rem;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    background: var(--color-panel);
+    color: var(--color-muted);
+    border: 1px solid var(--color-border);
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    word-break: break-all;
+  }
+
+  .drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  /* Drawer States */
+  .drawer-state-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 3rem 1.5rem;
+    color: var(--color-muted);
+    font-size: 0.9rem;
+    gap: 0.75rem;
+  }
+  .drawer-loading-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: drawer-spin 0.8s linear infinite;
+  }
+  @keyframes drawer-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .drawer-error {
+    color: var(--color-danger);
+    background: var(--color-danger-bg, #fdebed);
+    border: 1px solid rgba(227, 77, 89, 0.25);
+    border-radius: var(--radius-md, 8px);
+    padding: 1.5rem 1.25rem;
+  }
+  .drawer-error .error-msg {
+    margin: 0;
+    font-weight: 600;
+  }
+  .btn-retry {
+    background: var(--color-panel);
+    border: 1px solid var(--color-danger);
+    color: var(--color-danger);
+    padding: 0.35rem 0.85rem;
+    border-radius: 4px;
+    font-size: 0.84rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-retry:hover {
+    background: var(--color-danger);
+    color: #ffffff;
+  }
+
+  .drawer-content-box {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .drawer-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .drawer-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .section-title {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+  .btn-copy-text {
+    font-size: 0.78rem;
+    color: var(--color-primary);
+    background: transparent;
+    border: 1px solid rgba(3, 122, 255, 0.2);
+    border-radius: 3px;
+    padding: 0.15rem 0.5rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-copy-text:hover {
+    background: var(--color-primary-light, #eaf3ff);
+  }
+
+  .drawer-chunk-text {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    padding: 1rem;
+    font-size: 0.92rem;
+    line-height: 1.7;
+    color: var(--color-text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 55vh;
+    overflow-y: auto;
+    outline: none;
+  }
+  .drawer-chunk-text:focus-visible {
+    border-color: var(--color-primary);
+  }
+
+  .drawer-chunk-meta {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    padding: 0.75rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+  }
+  .meta-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .meta-key {
+    width: 80px;
+    flex-shrink: 0;
+    color: var(--color-muted);
+  }
+  .meta-val {
+    color: var(--color-text);
+    word-break: break-all;
+  }
+
+  .drawer-footer {
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-bg);
+    text-align: center;
+  }
+  .drawer-footer-tip {
+    font-size: 0.78rem;
+    color: var(--color-muted);
+  }
+
+  /* Responsive Adjustments */
+  @media (max-width: 640px) {
+    .shell-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .topbar-domain-control {
+      width: 100%;
+      justify-content: space-between;
+    }
+    .qa-card-header {
+      flex-direction: column;
+    }
+    .qa-badges {
+      width: 100%;
+      justify-content: flex-start;
+    }
+    .ask-actions-bar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .btn-submit {
+      width: 100%;
+    }
+    .citation-drawer {
+      width: 100vw;
+      max-width: 100vw;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<section class="shell-panel">
-  <p>提问主路径将在后续票交付。本页仅为双面路由骨架。</p>
-</section>
+<div class="workbench-container">
+  <!-- Top Intro -->
+  <section class="intro-panel" aria-label="工作台说明">
+    <p class="intro-text">
+      <strong>福云·文脉助手</strong>：面向融媒编辑的知识检索助手。材料按文化域组织，回答必须带出处；库里没有的事实就拒答。
+    </p>
+    <p class="intro-subtext">
+      企业知识层检索支撑 · 单次提问带权威证据 · 不可直接作为播出终审依据
+    </p>
+  </section>
+
+  <!-- Ask Box -->
+  <section class="ask-panel" aria-label="提问表单">
+    <form id="ask-form" class="ask-form" onsubmit="return false;">
+      <label for="question-input" class="ask-label">单次提问</label>
+      <div class="ask-textarea-wrap">
+        <textarea
+          id="question-input"
+          name="question"
+          class="ask-textarea"
+          rows="3"
+          placeholder="请输入您的问题（例如：妈祖信仰的发源地在哪里？），按 Cmd/Ctrl+Enter 快速提交..."
+          required
+          aria-required="true"
+        ></textarea>
+      </div>
+      <div class="ask-actions-bar">
+        <div class="ask-domain-indicator">
+          <span>当前限定文化域：</span>
+          <span id="active-domain-badge" class="domain-badge-active">全部 / 不限</span>
+        </div>
+        <div class="ask-button-group">
+          <span class="ask-shortcut-hint">Cmd/Ctrl + Enter</span>
+          <button type="submit" id="submit-btn" class="btn-submit">
+            <span class="btn-text">提问</span>
+          </button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <!-- Error Banner -->
+  <div id="error-banner" class="alert-banner" role="alert" aria-live="assertive">
+    <div class="alert-content">
+      <div class="alert-title">提问请求未能完成</div>
+      <p id="error-message" class="alert-message"></p>
+      <div id="error-trace-id" class="alert-trace-id"></div>
+    </div>
+  </div>
+
+  <!-- History & Q&A Cards -->
+  <section class="history-section" aria-label="提问记录">
+    <div class="history-header">
+      <h2 class="history-title">提问记录</h2>
+      <span id="history-count" class="history-count">共 0 条</span>
+    </div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="empty-state">
+      <div class="empty-icon" aria-hidden="true">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </div>
+      <h3 class="empty-title">暂无提问记录</h3>
+      <p class="empty-desc">在上方输入框提出问题，文脉助手将检索权威材料并给出带出处回答；若无依据将明确拒答。</p>
+      <div class="example-prompts">
+        <button type="button" class="prompt-chip" data-question="妈祖信仰的发源地在哪里？" data-domain="妈祖">
+          妈祖信仰的发源地在哪里？ <span class="chip-tag">[妈祖]</span>
+        </button>
+        <button type="button" class="prompt-chip" data-question="朱子理学的主要主张是什么？" data-domain="朱子">
+          朱子理学的主要主张是什么？ <span class="chip-tag">[朱子]</span>
+        </button>
+        <button type="button" class="prompt-chip" data-question="海丝文化的核心内涵是什么？" data-domain="海丝">
+          海丝文化的核心内涵是什么？ <span class="chip-tag">[海丝]</span>
+        </button>
+        <button type="button" class="prompt-chip" data-question="船政学堂的历史贡献有哪些？" data-domain="船政">
+          船政学堂的历史贡献有哪些？ <span class="chip-tag">[船政]</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Active Q&A List -->
+    <div id="qa-list" class="qa-list" aria-live="polite"></div>
+  </section>
+</div>
+
+<!-- =========================================================
+     #5 Citation In-Page Read-Only Drawer
+     Landmarks: #citation-drawer, [data-open], #citation-drawer-body,
+     #citation-drawer-text, #citation-drawer-close, #citation-drawer-title
+     ========================================================= -->
+<div id="citation-drawer-backdrop" class="drawer-backdrop" aria-hidden="true"></div>
+
+<aside
+  id="citation-drawer"
+  class="citation-drawer"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="citation-drawer-title"
+  aria-hidden="true"
+  data-open="false"
+  tabindex="-1"
+>
+  <div class="drawer-header">
+    <div class="drawer-header-main">
+      <span class="drawer-tag">只读出处</span>
+      <h2 id="citation-drawer-title" class="drawer-title">出处片段详情</h2>
+    </div>
+    <button
+      type="button"
+      id="citation-drawer-close"
+      class="drawer-close-btn"
+      aria-label="关闭出处抽屉"
+      title="关闭 (Esc)"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  </div>
+
+  <div class="drawer-meta-bar">
+    <div class="drawer-meta-item">
+      <span class="meta-label">文化域</span>
+      <span id="citation-drawer-domain" class="meta-value-domain">-</span>
+    </div>
+    <div class="drawer-meta-item">
+      <span class="meta-label">来源文档</span>
+      <span id="citation-drawer-doc-title" class="meta-value-title">-</span>
+    </div>
+    <div class="drawer-meta-item">
+      <span class="meta-label">片段标识</span>
+      <code id="citation-drawer-chunk-id" class="meta-code">-</code>
+    </div>
+  </div>
+
+  <div id="citation-drawer-body" class="drawer-body">
+    <!-- Loading State -->
+    <div id="citation-drawer-loading" class="drawer-state-box drawer-loading">
+      <div class="drawer-loading-spinner" aria-hidden="true"></div>
+      <p>正在读取知识库出处片段...</p>
+    </div>
+
+    <!-- Error / Not-Found State -->
+    <div id="citation-drawer-error" class="drawer-error" style="display: none;">
+      <p id="citation-drawer-error-msg" class="error-msg">未找到对应出处片段</p>
+      <button type="button" id="citation-drawer-retry" class="btn-retry">重新读取</button>
+    </div>
+
+    <!-- Content State -->
+    <div id="citation-drawer-content" class="drawer-content-box" style="display: none;">
+      <div class="drawer-section">
+        <div class="drawer-section-header">
+          <span class="section-title">片段正文内容</span>
+          <button type="button" id="citation-drawer-copy" class="btn-copy-text" title="复制片段正文">
+            复制正文
+          </button>
+        </div>
+        <div id="citation-drawer-text" class="drawer-chunk-text" tabindex="0"></div>
+      </div>
+
+      <div id="citation-drawer-meta-section" class="drawer-section" style="display: none;">
+        <div class="drawer-section-header">
+          <span class="section-title">附加元数据</span>
+        </div>
+        <div id="citation-drawer-meta" class="drawer-chunk-meta"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="drawer-footer">
+    <span class="drawer-footer-tip">融媒采编只读视图 · 不支持在此修改知识库</span>
+  </div>
+</aside>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  'use strict';
+
+  const form = document.getElementById('ask-form');
+  const questionInput = document.getElementById('question-input');
+  const submitBtn = document.getElementById('submit-btn');
+  const domainSelect = document.getElementById('culture-domain-select');
+  const activeDomainBadge = document.getElementById('active-domain-badge');
+  const errorBanner = document.getElementById('error-banner');
+  const errorMessage = document.getElementById('error-message');
+  const errorTraceId = document.getElementById('error-trace-id');
+  const emptyState = document.getElementById('empty-state');
+  const qaList = document.getElementById('qa-list');
+  const historyCount = document.getElementById('history-count');
+
+  // Drawer Elements
+  const drawerBackdrop = document.getElementById('citation-drawer-backdrop');
+  const drawer = document.getElementById('citation-drawer');
+  const drawerCloseBtn = document.getElementById('citation-drawer-close');
+  const drawerDomain = document.getElementById('citation-drawer-domain');
+  const drawerDocTitle = document.getElementById('citation-drawer-doc-title');
+  const drawerChunkId = document.getElementById('citation-drawer-chunk-id');
+  const drawerLoading = document.getElementById('citation-drawer-loading');
+  const drawerError = document.getElementById('citation-drawer-error');
+  const drawerErrorMsg = document.getElementById('citation-drawer-error-msg');
+  const drawerRetryBtn = document.getElementById('citation-drawer-retry');
+  const drawerContent = document.getElementById('citation-drawer-content');
+  const drawerText = document.getElementById('citation-drawer-text');
+  const drawerMetaSection = document.getElementById('citation-drawer-meta-section');
+  const drawerMeta = document.getElementById('citation-drawer-meta');
+  const drawerCopyBtn = document.getElementById('citation-drawer-copy');
+
+  let historyItems = [];
+  const loadedTraces = new Set();
+  let lastActiveElement = null;
+  let currentDrawerChunkId = null;
+  let currentDrawerFallback = null;
+
+  function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function formatAnswer(text, citations) {
+    if (!text) return '';
+    const escaped = escapeHtml(text);
+    // Replace citation tags [1], [2] with interactive cite badges
+    const withCitations = escaped.replace(/\[(\d+)\]/g, function(match, numStr) {
+      const num = parseInt(numStr, 10);
+      const cite = Array.isArray(citations) ? citations.find(c => c.index === num) : null;
+      const chunkId = cite && cite.chunk_id ? escapeHtml(cite.chunk_id) : '';
+      const title = cite && cite.title ? escapeHtml(cite.title) : ('出处材料 [' + num + ']');
+      if (chunkId) {
+        return `<button type="button" class="citation-ref" data-chunk-id="${chunkId}" data-index="${num}" title="查看出处 [${num}] · ${title}">[${num}]</button>`;
+      }
+      return `<span class="citation-ref" title="出处材料 [${num}]">[${num}]</span>`;
+    });
+
+    return withCitations
+      .split(/\n\n+/)
+      .map(p => '<p>' + p.replace(/\n/g, '<br>') + '</p>')
+      .join('');
+  }
+
+  function updateDomainBadge() {
+    const val = domainSelect.value;
+    if (val) {
+      activeDomainBadge.textContent = val;
+    } else {
+      activeDomainBadge.textContent = '全部 / 不限';
+    }
+  }
+
+  if (domainSelect) {
+    domainSelect.addEventListener('change', updateDomainBadge);
+  }
+
+  // Culture-domain options stay static on the editor surface.
+
+  function showError(msg, traceId) {
+    errorMessage.textContent = msg;
+    if (traceId) {
+      errorTraceId.textContent = 'Trace ID: ' + traceId;
+      errorTraceId.style.display = 'block';
+    } else {
+      errorTraceId.textContent = '';
+      errorTraceId.style.display = 'none';
+    }
+    errorBanner.classList.add('visible');
+  }
+
+  function hideError() {
+    errorBanner.classList.remove('visible');
+    errorMessage.textContent = '';
+    errorTraceId.textContent = '';
+  }
+
+  /* =========================================================
+     Drawer Open / Close / Fetch Flow (#5)
+     ========================================================= */
+  async function openCitationDrawer(chunkId, fallbackInfo) {
+    if (!chunkId) return;
+
+    lastActiveElement = document.activeElement;
+    currentDrawerChunkId = chunkId;
+    currentDrawerFallback = fallbackInfo || {};
+
+    // Initial drawer metadata setup
+    drawerChunkId.textContent = chunkId;
+    drawerDomain.textContent = (fallbackInfo && fallbackInfo.culture_domain) || '-';
+    drawerDocTitle.textContent = (fallbackInfo && fallbackInfo.title) || '出处文档';
+
+    // Show drawer UI
+    drawer.setAttribute('data-open', 'true');
+    drawer.setAttribute('aria-hidden', 'false');
+    drawer.classList.add('is-open');
+    drawerBackdrop.classList.add('is-open');
+    drawerBackdrop.setAttribute('aria-hidden', 'false');
+
+    // Show loading state
+    drawerLoading.style.display = 'flex';
+    drawerError.style.display = 'none';
+    drawerContent.style.display = 'none';
+
+    // Focus close button for accessibility
+    if (drawerCloseBtn) {
+      drawerCloseBtn.focus();
+    }
+
+    try {
+      const res = await fetch('/api/chunks/' + encodeURIComponent(chunkId));
+      if (res.status === 404) {
+        drawerLoading.style.display = 'none';
+        drawerErrorMsg.textContent = '未找到出处片段 (' + escapeHtml(chunkId) + ')，该材料可能已被更新或重构。';
+        drawerError.style.display = 'block';
+        return;
+      }
+      if (!res.ok) {
+        throw new Error('服务响应异常 (HTTP ' + res.status + ')');
+      }
+
+      const detail = await res.json();
+      // Render text and metadata
+      drawerChunkId.textContent = detail.chunk_id || chunkId;
+      drawerDomain.textContent = detail.culture_domain || (fallbackInfo && fallbackInfo.culture_domain) || '未标记';
+      drawerDocTitle.textContent = detail.title || (fallbackInfo && fallbackInfo.title) || '出处文档';
+      drawerText.textContent = detail.text || '（该片段正文内容为空）';
+
+      // Additional metadata if present
+      if (detail.metadata && typeof detail.metadata === 'object' && Object.keys(detail.metadata).length > 0) {
+        let metaHtml = '';
+        for (const [key, val] of Object.entries(detail.metadata)) {
+          if (val != null && val !== '') {
+            metaHtml += `
+              <div class="meta-row">
+                <span class="meta-key">${escapeHtml(key)}:</span>
+                <span class="meta-val">${escapeHtml(String(val))}</span>
+              </div>
+            `;
+          }
+        }
+        if (metaHtml) {
+          drawerMeta.innerHTML = metaHtml;
+          drawerMetaSection.style.display = 'flex';
+        } else {
+          drawerMetaSection.style.display = 'none';
+        }
+      } else {
+        drawerMetaSection.style.display = 'none';
+      }
+
+      drawerLoading.style.display = 'none';
+      drawerContent.style.display = 'flex';
+    } catch (err) {
+      drawerLoading.style.display = 'none';
+      drawerErrorMsg.textContent = '读取片段详情失败: ' + escapeHtml(err.message);
+      drawerError.style.display = 'block';
+    }
+  }
+
+  function closeCitationDrawer() {
+    drawer.setAttribute('data-open', 'false');
+    drawer.setAttribute('aria-hidden', 'true');
+    drawer.classList.remove('is-open');
+    drawerBackdrop.classList.remove('is-open');
+    drawerBackdrop.setAttribute('aria-hidden', 'true');
+
+    if (lastActiveElement && typeof lastActiveElement.focus === 'function') {
+      try {
+        lastActiveElement.focus();
+      } catch (e) {}
+    }
+  }
+
+  if (drawerCloseBtn) {
+    drawerCloseBtn.addEventListener('click', closeCitationDrawer);
+  }
+  if (drawerBackdrop) {
+    drawerBackdrop.addEventListener('click', closeCitationDrawer);
+  }
+  if (drawerRetryBtn) {
+    drawerRetryBtn.addEventListener('click', function() {
+      if (currentDrawerChunkId) {
+        openCitationDrawer(currentDrawerChunkId, currentDrawerFallback);
+      }
+    });
+  }
+  if (drawerCopyBtn) {
+    drawerCopyBtn.addEventListener('click', function() {
+      const text = drawerText.textContent;
+      if (!text) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+          const original = drawerCopyBtn.textContent;
+          drawerCopyBtn.textContent = '已复制!';
+          setTimeout(function() {
+            drawerCopyBtn.textContent = original;
+          }, 1500);
+        });
+      }
+    });
+  }
+
+  // Keyboard accessibility: Escape to close drawer, Tab trap inside open drawer
+  document.addEventListener('keydown', function(e) {
+    if (drawer.getAttribute('data-open') === 'true') {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeCitationDrawer();
+      } else if (e.key === 'Tab') {
+        const focusables = drawer.querySelectorAll('button:not([disabled]), [tabindex="0"], a[href]');
+        if (focusables.length > 0) {
+          const first = focusables[0];
+          const last = focusables[focusables.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    }
+  });
+
+  /* =========================================================
+     Trace Loader
+     ========================================================= */
+  function renderTracePanel(detail) {
+    const totalMs = typeof detail.total_elapsed_ms === 'number' ? detail.total_elapsed_ms.toFixed(1) : '-';
+    let statusLabel = '正常';
+    if (detail.status === 'refused' || detail.refused) {
+      statusLabel = '已拒答';
+    } else if (detail.status === 'failed' || detail.error) {
+      statusLabel = '异常';
+    }
+    const domain = detail.culture_domain || '不限';
+
+    let stagesHtml = '';
+    if (Array.isArray(detail.stage_latencies) && detail.stage_latencies.length > 0) {
+      stagesHtml = `
+        <div class="trace-stages-grid">
+          ${detail.stage_latencies.map(s => `
+            <div class="trace-stage-item">
+              <span class="stage-label">${escapeHtml(s.label)}</span>
+              <span class="stage-time">${typeof s.elapsed_ms === 'number' ? s.elapsed_ms.toFixed(1) : s.elapsed_ms} ms</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    let fallbackHtml = '';
+    if (detail.rerank_fallback_reason) {
+      fallbackHtml = `
+        <div class="trace-fallback-notice">
+          <span class="fallback-tag">精排降级:</span>
+          <span>${escapeHtml(detail.rerank_fallback_reason)}</span>
+        </div>
+      `;
+    }
+
+    let rankChangesHtml = '';
+    if (Array.isArray(detail.rank_changes) && detail.rank_changes.length > 0) {
+      rankChangesHtml = `
+        <div class="trace-rank-changes">
+          <span class="rank-changes-title">精排位次变动：</span>
+          <ul class="rank-changes-list">
+            ${detail.rank_changes.map(rc => `
+              <li>片段 <code>${escapeHtml(rc.chunk_id)}</code>：第 ${rc.from_rank} 位 → 第 ${rc.to_rank} 位</li>
+            `).join('')}
+          </ul>
+        </div>
+      `;
+    }
+
+    let errorHtml = '';
+    if (detail.error) {
+      errorHtml = `
+        <div class="trace-fallback-notice" style="background: var(--color-danger-bg); color: var(--color-danger);">
+          <span class="fallback-tag">错误:</span>
+          <span>${escapeHtml(detail.error)}</span>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="trace-summary-row">
+        <span>链路耗时: <strong>${totalMs} ms</strong></span>
+        <span>链路状态: <strong>${escapeHtml(statusLabel)}</strong></span>
+        <span>文化域: <strong>${escapeHtml(domain)}</strong></span>
+      </div>
+      ${stagesHtml}
+      ${fallbackHtml}
+      ${rankChangesHtml}
+      ${errorHtml}
+    `;
+  }
+
+  async function loadTraceDetails(detailsEl, traceId) {
+    if (loadedTraces.has(traceId)) return;
+    const panel = detailsEl.querySelector('.trace-panel-body');
+    if (!panel) return;
+
+    try {
+      const res = await fetch('/api/traces/' + encodeURIComponent(traceId));
+      if (res.ok) {
+        const data = await res.json();
+        panel.innerHTML = renderTracePanel(data);
+        loadedTraces.add(traceId);
+        return;
+      }
+      // Fallback to summary
+      const sumRes = await fetch('/api/traces/' + encodeURIComponent(traceId) + '/summary');
+      if (sumRes.ok) {
+        const sumData = await sumRes.json();
+        panel.innerHTML = renderTracePanel(sumData);
+        loadedTraces.add(traceId);
+        return;
+      }
+      panel.innerHTML = '<div class="trace-loading-msg">暂无详细 Trace 阶段数据 (ID: ' + escapeHtml(traceId) + ')</div>';
+    } catch (err) {
+      panel.innerHTML = '<div class="trace-loading-msg">获取 Trace 详情失败: ' + escapeHtml(err.message) + '</div>';
+    }
+  }
+
+  /* =========================================================
+     QA Card Creation
+     ========================================================= */
+  function createQaCardElement(item) {
+    const card = document.createElement('article');
+    card.className = 'qa-card';
+    card.id = 'qa-' + item.id;
+
+    const timeStr = item.time || new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    const isRefused = Boolean(item.refused);
+    const hasError = Boolean(item.error);
+
+    let statusClass = 'answered';
+    let statusText = '带出处回答';
+    if (hasError) {
+      statusClass = 'failed';
+      statusText = '提问失败';
+    } else if (isRefused) {
+      statusClass = 'refused';
+      statusText = '已拒答';
+    }
+
+    const domainDisplay = item.culture_domain ? '文化域: ' + escapeHtml(item.culture_domain) : '全部文化域';
+
+    // Citations HTML
+    let citationsHtml = '';
+    const citations = Array.isArray(item.citations) ? item.citations : [];
+    if (citations.length > 0) {
+      citationsHtml = `
+        <div class="citations-section">
+          <div class="citations-heading">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
+            <span>出处材料 (${citations.length} 条)</span>
+          </div>
+          <ol class="citations-list">
+            ${citations.map(c => `
+              <li class="citation-item" data-chunk-id="${escapeHtml(c.chunk_id || '')}" data-title="${escapeHtml(c.title || '')}" data-domain="${escapeHtml(item.culture_domain || '')}">
+                <div class="citation-top-row">
+                  <div class="citation-source-info">
+                    <span class="citation-num">[${c.index}]</span>
+                    ${c.url ? `
+                      <a href="${escapeHtml(c.url)}" class="citation-title-link" target="_blank" rel="noopener noreferrer" title="查看原始链接">${escapeHtml(c.title || '出处文档')}</a>
+                    ` : `
+                      <span class="citation-title-text">${escapeHtml(c.title || '出处文档')}</span>
+                    `}
+                  </div>
+                  <div class="citation-actions">
+                    <span class="chunk-id-tag" title="片段 ID">片段: ${escapeHtml(c.chunk_id || '-')}</span>
+                    <button
+                      type="button"
+                      class="btn-view-chunk"
+                      data-chunk-id="${escapeHtml(c.chunk_id || '')}"
+                      data-title="${escapeHtml(c.title || '')}"
+                      data-domain="${escapeHtml(item.culture_domain || '')}"
+                      aria-label="查看出处片段 ${escapeHtml(c.chunk_id || '')}"
+                    >
+                      查看片段
+                    </button>
+                  </div>
+                </div>
+                ${c.excerpt ? `<blockquote class="citation-excerpt">${escapeHtml(c.excerpt)}</blockquote>` : ''}
+              </li>
+            `).join('')}
+          </ol>
+        </div>
+      `;
+    }
+
+    // Trace HTML
+    let traceHtml = '';
+    if (item.trace_id) {
+      traceHtml = `
+        <div class="trace-section">
+          <details class="trace-details" data-trace-id="${escapeHtml(item.trace_id)}">
+            <summary class="trace-summary">
+              <span class="trace-toggle-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                查看 Trace
+              </span>
+              <code class="trace-id-badge">${escapeHtml(item.trace_id)}</code>
+            </summary>
+            <div class="trace-panel-body">
+              <div class="trace-loading-msg">正在加载 Trace 详情...</div>
+            </div>
+          </details>
+        </div>
+      `;
+    }
+
+    // Body content
+    let bodyContent = '';
+    if (hasError) {
+      bodyContent = `
+        <div class="alert-banner visible" style="margin:0;">
+          <div class="alert-content">
+            <div class="alert-title">生成失败</div>
+            <p class="alert-message">${escapeHtml(item.errorMessage || '知识库检索或生成时发生错误。')}</p>
+          </div>
+        </div>
+      `;
+    } else if (isRefused) {
+      bodyContent = `
+        <div class="refusal-box">
+          <div class="refusal-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span>知识库中无充分依据支撑该问题，系统已明确拒答</span>
+          </div>
+          <p class="refusal-text">${escapeHtml(item.answer || '库中暂无相关事实记录。')}</p>
+        </div>
+      `;
+    } else {
+      bodyContent = `
+        <div class="qa-answer-content">
+          ${formatAnswer(item.answer, citations)}
+        </div>
+      `;
+    }
+
+    card.innerHTML = `
+      <header class="qa-card-header">
+        <div class="qa-question-box">
+          <span class="qa-q-badge">问</span>
+          <h3 class="qa-question-text">${escapeHtml(item.question)}</h3>
+        </div>
+        <div class="qa-badges">
+          <span class="badge-culture">${domainDisplay}</span>
+          <span class="badge-status ${statusClass}">${statusText}</span>
+          <time class="qa-timestamp">${escapeHtml(timeStr)}</time>
+        </div>
+      </header>
+      <div class="qa-card-body">
+        ${bodyContent}
+      </div>
+      ${citationsHtml}
+      ${traceHtml}
+    `;
+
+    // Hook trace toggle
+    const detailsEl = card.querySelector('details.trace-details');
+    if (detailsEl && item.trace_id) {
+      detailsEl.addEventListener('toggle', function() {
+        if (detailsEl.open) {
+          loadTraceDetails(detailsEl, item.trace_id);
+        }
+      });
+    }
+
+    return card;
+  }
+
+  function addHistoryItem(item) {
+    historyItems.unshift(item);
+    if (emptyState) {
+      emptyState.style.display = 'none';
+    }
+    const cardEl = createQaCardElement(item);
+    qaList.insertBefore(cardEl, qaList.firstChild);
+    historyCount.textContent = '共 ' + historyItems.length + ' 条';
+  }
+
+  /* =========================================================
+     Ask Submission Flow (#4)
+     ========================================================= */
+  async function handleAsk() {
+    const question = questionInput.value.trim();
+    if (!question) {
+      questionInput.focus();
+      return;
+    }
+
+    const domain = domainSelect.value || null;
+    hideError();
+
+    // Disable UI
+    submitBtn.disabled = true;
+    const originalText = submitBtn.querySelector('.btn-text').textContent;
+    submitBtn.querySelector('.btn-text').textContent = '提问中...';
+
+    const payload = { question: question };
+    if (domain) {
+      payload.culture_domain = domain;
+    }
+
+    try {
+      const response = await fetch('/ask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        addHistoryItem({
+          id: Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+          question: question,
+          culture_domain: domain,
+          answer: data.answer,
+          citations: data.citations || [],
+          trace_id: data.trace_id,
+          refused: Boolean(data.refused),
+          error: data.error || null,
+          time: new Date().toLocaleTimeString('zh-CN', { hour12: false })
+        });
+        questionInput.value = '';
+      } else {
+        let errData = null;
+        try {
+          errData = await response.json();
+        } catch (e) {}
+
+        const detailMsg = (errData && errData.detail && errData.detail.message)
+          || (errData && typeof errData.detail === 'string' && errData.detail)
+          || ('服务异常 (HTTP ' + response.status + ')');
+        const traceId = (errData && errData.detail && errData.detail.trace_id) || null;
+
+        showError(detailMsg, traceId);
+
+        // Also record to history for traceability
+        addHistoryItem({
+          id: Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+          question: question,
+          culture_domain: domain,
+          answer: '',
+          citations: [],
+          trace_id: traceId,
+          refused: false,
+          error: detailMsg,
+          errorMessage: detailMsg,
+          time: new Date().toLocaleTimeString('zh-CN', { hour12: false })
+        });
+      }
+    } catch (err) {
+      showError('网络请求失败: ' + err.message, null);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.querySelector('.btn-text').textContent = originalText;
+    }
+  }
+
+  // Form submit & Keyboard shortcut (Cmd/Ctrl + Enter)
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    handleAsk();
+  });
+
+  questionInput.addEventListener('keydown', function(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleAsk();
+    }
+  });
+
+  // Example Prompt Chips
+  document.querySelectorAll('.prompt-chip').forEach(function(chip) {
+    chip.addEventListener('click', function() {
+      const q = chip.getAttribute('data-question');
+      const d = chip.getAttribute('data-domain');
+      if (q) questionInput.value = q;
+      if (d && domainSelect) {
+        domainSelect.value = d;
+        updateDomainBadge();
+      }
+      questionInput.focus();
+    });
+  });
+
+  // Delegated click handler for citation interactions (#5)
+  qaList.addEventListener('click', function(e) {
+    // 1. Click on citation marker in answer text
+    const refEl = e.target.closest('.citation-ref');
+    if (refEl) {
+      const chunkId = refEl.getAttribute('data-chunk-id');
+      if (chunkId) {
+        e.preventDefault();
+        openCitationDrawer(chunkId);
+        return;
+      }
+    }
+
+    // 2. Click on "查看片段" button
+    const btnEl = e.target.closest('.btn-view-chunk');
+    if (btnEl) {
+      const chunkId = btnEl.getAttribute('data-chunk-id');
+      const title = btnEl.getAttribute('data-title');
+      const domain = btnEl.getAttribute('data-domain');
+      if (chunkId) {
+        e.preventDefault();
+        openCitationDrawer(chunkId, { title: title, culture_domain: domain });
+        return;
+      }
+    }
+
+    // 3. Click on citation item row (if not clicked on an external link)
+    const itemEl = e.target.closest('.citation-item');
+    if (itemEl && !e.target.closest('a') && !e.target.closest('button')) {
+      const chunkId = itemEl.getAttribute('data-chunk-id');
+      if (chunkId) {
+        const title = itemEl.getAttribute('data-title');
+        const domain = itemEl.getAttribute('data-domain');
+        openCitationDrawer(chunkId, { title: title, culture_domain: domain });
+      }
+    }
+  });
+
+})();
+</script>
 {% endblock %}
