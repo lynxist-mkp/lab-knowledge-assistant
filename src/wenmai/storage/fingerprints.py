@@ -90,5 +90,12 @@ class FingerprintStore:
         )
         self._conn.commit()
 
+    def delete_by_source_path(self, source_path: str) -> None:
+        self._conn.execute(
+            "DELETE FROM ingestion_fingerprints WHERE source_path = ?",
+            (source_path,),
+        )
+        self._conn.commit()
+
     def close(self) -> None:
         self._conn.close()

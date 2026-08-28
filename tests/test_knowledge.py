@@ -266,3 +266,34 @@ def test_commit_rebuild_failure_preserves_previous_document(
         source_path=source, sha256="old-sha", document_id="old-doc"
     )
     assert plan.status == "skipped"
+
+
+def test_commit_rebuild_delete_failure_restores_fingerprint(
+    test_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    source = "/tmp/rebuild-delete-fail.md"
+    _commit(knowledge, "old-doc", "旧版保留", source_path=source, sha256="old-sha")
+
+    def fail_delete(_document_id: str) -> None:
+        raise RuntimeError("simulated previous delete failure")
+
+    monkeypatch.setattr(knowledge, "delete_document", fail_delete)
+
+    with pytest.raises(RuntimeError, match="simulated previous delete failure"):
+        knowledge.commit_document(
+            source_path=source,
+            sha256="new-sha",
+            document_id="new-doc",
+            status="rebuilt",
+            chunks=[_chunk("new-doc:0000", "new-doc", "新版未生效")],
+            previous_document_id="old-doc",
+        )
+
+    assert knowledge.get_by_document_id("old-doc")
+    assert knowledge.get_by_document_id("new-doc") == []
+    plan = knowledge.plan_document(
+        source_path=source, sha256="old-sha", document_id="old-doc"
+    )
+    assert plan.status == "skipped"

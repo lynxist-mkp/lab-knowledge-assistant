@@ -18,7 +18,7 @@ from wenmai.knowledge.browse import (
 )
 from wenmai.models import Chunk, ScoredChunk
 from wenmai.storage.document_images import DocumentImages
-from wenmai.storage.fingerprints import FingerprintStore
+from wenmai.storage.fingerprints import FingerprintRecord, FingerprintStore
 
 IngestStatus = Literal["ingested", "skipped", "rebuilt"]
 
@@ -87,6 +87,7 @@ class Knowledge:
         """Atomically replace previous doc (if any), upsert chunks, record fingerprint."""
         if status == "skipped":
             raise ValueError("cannot commit a skipped ingest")
+        previous_fingerprint = self._fingerprints.get_by_source_path(source_path)
         result = self._upsert_chunks(chunks)
         try:
             self._fingerprints.upsert(
@@ -100,6 +101,7 @@ class Knowledge:
             return result
         except Exception:
             self._compensate_document_write(document_id)
+            self._restore_fingerprint(previous_fingerprint, source_path)
             raise
 
     def delete_document(self, document_id: str) -> None:
@@ -127,20 +129,17 @@ class Knowledge:
         embed_elapsed_ms = (time.perf_counter() - started) * 1000
 
         started = time.perf_counter()
+        self._store.upsert(chunks)
         try:
-            self._store.upsert(chunks)
+            self._bm25.upsert(chunks)
+            self._bm25.save()
+        except Exception:
+            self._store.delete_by_document_id(document_id)
+            self._bm25.delete_by_document_id(document_id)
             try:
-                self._bm25.upsert(chunks)
                 self._bm25.save()
             except Exception:
-                self._store.delete_by_document_id(document_id)
-                self._bm25.delete_by_document_id(document_id)
-                try:
-                    self._bm25.save()
-                except Exception:
-                    pass
-                raise
-        except Exception:
+                pass
             raise
         upsert_elapsed_ms = (time.perf_counter() - started) * 1000
 
@@ -161,6 +160,21 @@ class Knowledge:
         except Exception:
             pass
         self._images.delete_for_document(document_id)
+
+    def _restore_fingerprint(
+        self,
+        previous: FingerprintRecord | None,
+        source_path: str,
+    ) -> None:
+        if previous is not None:
+            self._fingerprints.upsert(
+                source_path=previous.source_path,
+                sha256=previous.sha256,
+                document_id=previous.document_id,
+                status=previous.status,
+            )
+            return
+        self._fingerprints.delete_by_source_path(source_path)
 
     def dense_search(
         self,
