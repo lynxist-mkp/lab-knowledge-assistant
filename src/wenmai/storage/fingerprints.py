@@ -24,7 +24,7 @@ def _now() -> str:
 class FingerprintStore:
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
-        self._conn = sqlite3.connect(db_path)
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute(
             """
@@ -80,6 +80,13 @@ class FingerprintStore:
                 updated_at = excluded.updated_at
             """,
             (source_path, sha256, document_id, status, _now()),
+        )
+        self._conn.commit()
+
+    def delete_by_document_id(self, document_id: str) -> None:
+        self._conn.execute(
+            "DELETE FROM ingestion_fingerprints WHERE document_id = ?",
+            (document_id,),
         )
         self._conn.commit()
 
