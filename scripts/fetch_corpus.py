@@ -72,9 +72,20 @@ class RobotsChecker:
 
         robots_url = f"{urlparse(url).scheme}://{host}/robots.txt"
         try:
-            response = http_get(self._client, robots_url, timeout=30.0)
+            response = self._client.get(robots_url, timeout=30.0, follow_redirects=True)
         except httpx.HTTPError as exc:
             status = RobotsStatus(host, False, None, f"robots.txt 请求失败: {exc}")
+            self._cache[host] = status
+            return status
+
+        if response.status_code == 404:
+            # 不少政府站未部署 robots.txt；404 视为无额外限制，允许抓取公开页面。
+            status = RobotsStatus(
+                host,
+                True,
+                True,
+                "robots.txt 不存在（HTTP 404），按公开页面默认允许",
+            )
             self._cache[host] = status
             return status
 
@@ -176,6 +187,7 @@ def wikipedia_api_url(article_url: str) -> str:
         "action": "query",
         "prop": "extracts",
         "explaintext": "1",
+        "redirects": "1",
         "titles": title,
         "format": "json",
     }
@@ -183,27 +195,73 @@ def wikipedia_api_url(article_url: str) -> str:
     return f"https://{host}/w/api.php?{query}"
 
 
-def fetch_wikipedia_markdown(article_url: str, client: httpx.Client) -> str:
-    api_url = wikipedia_api_url(article_url)
-    response = http_get(client, api_url, timeout=60.0)
+def wikipedia_opensearch_title(query: str, client: httpx.Client) -> str | None:
+    response = client.get(
+        "https://zh.wikipedia.org/w/api.php",
+        params={
+            "action": "opensearch",
+            "search": query,
+            "limit": 1,
+            "namespace": 0,
+            "format": "json",
+        },
+        timeout=30.0,
+    )
     response.raise_for_status()
     payload = response.json()
-    pages = payload.get("query", {}).get("pages", {})
+    titles = payload[1] if len(payload) > 1 else []
+    return titles[0] if titles else None
+
+
+def wikipedia_extract(title: str, client: httpx.Client) -> tuple[str, str] | None:
+    response = client.get(
+        "https://zh.wikipedia.org/w/api.php",
+        params={
+            "action": "query",
+            "prop": "extracts",
+            "explaintext": "1",
+            "redirects": "1",
+            "titles": title,
+            "format": "json",
+        },
+        timeout=60.0,
+    )
+    response.raise_for_status()
+    pages = response.json().get("query", {}).get("pages", {})
     if not pages:
-        raise ValueError("维基 API 未返回页面")
+        return None
     page = next(iter(pages.values()))
     if "missing" in page:
-        raise ValueError(f"维基条目不存在: {article_url}")
+        return None
     extract = (page.get("extract") or "").strip()
     if not extract:
-        raise ValueError("维基正文为空")
-    title = page.get("title", wikipedia_title_from_url(article_url))
-    return f"# {title}\n\n{extract}"
+        return None
+    resolved_title = page.get("title", title)
+    return resolved_title, extract
 
 
-def fetch_markdown(url: str, client: httpx.Client) -> str:
+def fetch_wikipedia_markdown(
+    article_url: str,
+    client: httpx.Client,
+    *,
+    search_hint: str | None = None,
+) -> str:
+    """Resolve article via MediaWiki API; opensearch when URL title is stale."""
+    title = wikipedia_title_from_url(article_url)
+    resolved = wikipedia_extract(title, client)
+    if resolved is None and search_hint:
+        alt = wikipedia_opensearch_title(search_hint, client)
+        if alt:
+            resolved = wikipedia_extract(alt, client)
+    if resolved is None:
+        raise ValueError(f"维基条目不存在或正文为空: {article_url}")
+    resolved_title, extract = resolved
+    return f"# {resolved_title}\n\n{extract}"
+
+
+def fetch_markdown(url: str, client: httpx.Client, *, search_hint: str | None = None) -> str:
     if is_wikipedia(url):
-        return fetch_wikipedia_markdown(url, client)
+        return fetch_wikipedia_markdown(url, client, search_hint=search_hint)
     response = http_get(client, url, timeout=60.0)
     response.raise_for_status()
     content_type = response.headers.get("content-type", "").lower()
@@ -291,7 +349,7 @@ def run(
                 continue
 
             try:
-                body = fetch_markdown(url, client)
+                body = fetch_markdown(url, client, search_hint=item.get("title"))
                 if not body:
                     raise ValueError("正文为空")
                 write_item(output_path, item, body, retrieved_at)
