@@ -161,9 +161,7 @@ def ingest_source(
             for index, text in enumerate(texts)
         ]
 
-        chunks = prepare_chunks(
-            chunks, settings, trace, images=knowledge.images
-        )
+        chunks = prepare_chunks(chunks, settings, trace)
 
         _set_trace_summary(
             trace,

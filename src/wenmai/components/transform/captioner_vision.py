@@ -6,7 +6,7 @@ from pathlib import Path
 
 from wenmai.components.transform.base import BaseTransform
 from wenmai.config import Settings
-from wenmai.factories import llm as llm_factory
+from wenmai.factories import multimodal as multimodal_factory
 from wenmai.factories.transform import registry
 from wenmai.models import Chunk
 from wenmai.storage.images import ImageStore
@@ -31,7 +31,7 @@ class VisionCaptioner(BaseTransform):
 
     def __init__(self, settings: Settings, **kwargs: object) -> None:
         self._settings = settings
-        self._vision = llm_factory.create_vision(settings)
+        self._vision = multimodal_factory.create(settings)
         self._template = _load_prompt(settings)
         self._image_store = ImageStore(settings)
 
