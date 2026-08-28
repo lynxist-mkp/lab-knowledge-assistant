@@ -1,29 +1,20 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from pathlib import Path
 
-from wenmai.components.paddleocr.adapter import choose_pdf_route
 from wenmai.config import Settings
-from wenmai.factories import bm25 as bm25_factory
-from wenmai.factories import embedding as embedding_factory
 from wenmai.factories import splitter as splitter_factory
-from wenmai.factories import transform as transform_factory
-from wenmai.factories import vector_store as vector_store_factory
-from wenmai.ingestion.loaders import load_source
+from wenmai.ingestion.loaders import SourceLoadError, load_source
+from wenmai.ingestion.prepare import prepare_chunks
+from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import Chunk, IngestResult
-from wenmai.storage.cleanup import delete_document_from_stores
-from wenmai.storage.fingerprints import FingerprintStore
-from wenmai.storage.paths import store_path
-from wenmai.tracing.context import StageRecord, TraceContext
-from wenmai.tracing.writer import JsonlTraceWriter
-
-_IMAGE_PLACEHOLDER = re.compile(r"\[IMAGE:\s*[a-f0-9]+\s*\]")
+from wenmai.storage.document_images import IMAGE_PLACEHOLDER_RE
+from wenmai.tracing import StageRecord, TraceContext, save_trace
 
 
 def _chunks_with_images(chunks: list[Chunk]) -> int:
-    return sum(1 for chunk in chunks if _IMAGE_PLACEHOLDER.search(chunk.text))
+    return sum(1 for chunk in chunks if IMAGE_PLACEHOLDER_RE.search(chunk.text))
 
 
 def _set_trace_summary(
@@ -48,17 +39,17 @@ def _set_trace_summary(
     )
 
 
-def ingest_markdown(
+def ingest_source(
     source_path: Path,
     settings: Settings,
     *,
     pdf_load_mode: str | None = None,
     on_stage: Callable[[StageRecord], None] | None = None,
+    knowledge: Knowledge | None = None,
 ) -> IngestResult:
     trace = TraceContext(trace_type="ingestion")
     trace._on_stage = on_stage
-    writer = JsonlTraceWriter(store_path(settings, "traces"))
-    fingerprint_store = FingerprintStore.from_settings(settings)
+    knowledge = knowledge or create_knowledge(settings)
     chunks: list[Chunk] = []
     status = "ingested"
     document_id = ""
@@ -71,47 +62,48 @@ def ingest_markdown(
             provider="pending",
             input_summary=str(source_path),
         ) as load_info:
-            if source_path.suffix.lower() == ".pdf":
-                route = choose_pdf_route(
+            try:
+                document = load_source(
                     source_path,
-                    settings.pdf_load,
-                    override_mode=pdf_load_mode,
+                    settings,
+                    pdf_load_mode=pdf_load_mode,
+                    images=knowledge.images,
                 )
-                if route == "markitdown":
-                    load_info["method"] = "markitdown"
-                    load_info["provider"] = "markitdown"
-                else:
-                    load_info["method"] = "paddleocr-vl"
-                    load_info["provider"] = "mlx-vlm-server"
-            document = load_source(source_path, settings, pdf_load_mode=pdf_load_mode)
+            except SourceLoadError as exc:
+                load_info["method"] = exc.load_method
+                load_info["provider"] = exc.load_provider
+                if exc.__cause__ is not None:
+                    raise exc.__cause__ from exc
+                raise
             document_id = document.document_id
             document_title = document.title
             document_source_path = document.source_path
             load_info["output_summary"] = document.title
             load_info["candidate_count"] = 1
-            load_method = document.load_method or (
+            load_info["method"] = document.load_method or (
                 source_path.suffix.lower().lstrip(".") or "unknown"
             )
-            load_provider = document.load_provider or "file"
-            load_info["method"] = load_method
-            load_info["provider"] = load_provider
+            load_info["provider"] = document.load_provider or "file"
 
-        previous = fingerprint_store.get_by_source_path(document.source_path)
         with trace.stage(
             "integrity",
             method="sha256",
-            provider="sqlite",
+            provider="knowledge",
             input_summary=document.document_id[:12],
         ) as integrity_info:
-            if previous and previous.sha256 == document.document_id:
-                status = "skipped"
+            prepared = knowledge.plan_document(
+                source_path=document.source_path,
+                sha256=document.document_id,
+                document_id=document.document_id,
+            )
+            status = prepared.status
+            if status == "skipped":
                 integrity_info["output_summary"] = "skipped: unchanged sha256"
                 integrity_info["candidate_count"] = 0
-            elif previous:
-                status = "rebuilt"
-                delete_document_from_stores(settings, previous.document_id)
+            elif status == "rebuilt":
+                prev = prepared.previous_document_id or ""
                 integrity_info["output_summary"] = (
-                    f"rebuilt: replaced {previous.document_id[:12]}..."
+                    f"rebuilt: will replace {prev[:12]}..." if prev else "rebuilt"
                 )
                 integrity_info["candidate_count"] = 1
             else:
@@ -169,7 +161,9 @@ def ingest_markdown(
             for index, text in enumerate(texts)
         ]
 
-        chunks = transform_factory.run_registered(chunks, settings, trace)
+        chunks = prepare_chunks(
+            chunks, settings, trace, images=knowledge.images
+        )
 
         _set_trace_summary(
             trace,
@@ -181,43 +175,34 @@ def ingest_markdown(
             chunks_with_images=_chunks_with_images(chunks),
         )
 
-        embedder = embedding_factory.create(settings)
-        with trace.stage(
-            "embed",
-            method=embedder.provider_name,
-            provider=embedder.provider_name,
-            input_summary=f"{len(chunks)} chunks",
-        ) as embed_info:
-            vectors = embedder.embed_documents([chunk.text for chunk in chunks])
-            for chunk, vector in zip(chunks, vectors, strict=True):
-                chunk.embedding = vector
-            embed_info["candidate_count"] = len(chunks)
-            embed_info["output_summary"] = f"dim={embedder.dimension}"
-
-        store = vector_store_factory.create(settings)
-        with trace.stage(
-            "upsert",
-            method=store.provider_name,
-            provider=store.provider_name,
-            input_summary=f"{len(chunks)} chunks",
-        ) as upsert_info:
-            store.upsert(chunks)
-            bm25_index = bm25_factory.create(settings)
-            bm25_index.upsert(chunks)
-            bm25_index.save()
-            upsert_info["candidate_count"] = len(chunks)
-            upsert_info["output_summary"] = f"upserted {len(chunks)}"
-
-        fingerprint_store.upsert(
+        upserted = knowledge.commit_document(
             source_path=document.source_path,
             sha256=document.document_id,
             document_id=document.document_id,
             status=status,
+            chunks=chunks,
+            previous_document_id=prepared.previous_document_id,
+        )
+        trace.record_stage(
+            name="embed",
+            method=upserted.embed_provider,
+            provider=upserted.embed_provider,
+            elapsed_ms=upserted.embed_elapsed_ms,
+            input_summary=f"{len(chunks)} chunks",
+            output_summary=f"dim={upserted.embed_dimension}",
+            candidate_count=upserted.chunk_count,
+        )
+        trace.record_stage(
+            name="upsert",
+            method=upserted.upsert_provider,
+            provider=upserted.upsert_provider,
+            elapsed_ms=upserted.upsert_elapsed_ms,
+            input_summary=f"{len(chunks)} chunks",
+            output_summary=f"upserted {upserted.chunk_count}",
+            candidate_count=upserted.chunk_count,
         )
     finally:
-        trace.close()
-        writer.write(trace)
-        fingerprint_store.close()
+        save_trace(settings, trace)
 
     return IngestResult(
         document_id=document.document_id,

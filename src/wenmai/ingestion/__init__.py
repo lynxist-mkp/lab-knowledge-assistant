@@ -1,3 +1,9 @@
-from wenmai.ingestion.loaders import LoadedDocument, load_markdown, load_source
+"""文档解析：path → LoadedDocument。入库只经 load_source。"""
 
-__all__ = ["LoadedDocument", "load_markdown", "load_source"]
+from wenmai.ingestion.loaders import LoadedDocument, SourceLoadError, load_source
+
+__all__ = [
+    "LoadedDocument",
+    "SourceLoadError",
+    "load_source",
+]

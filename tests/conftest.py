@@ -24,20 +24,16 @@ def test_settings(tmp_path: Path) -> Settings:
         "prompts": raw["paths"]["prompts"],
     }
     raw["observability"] = {"trace_file": str(tmp_path / "traces.jsonl")}
-    raw["providers"]["llm"] = "fake"
-    raw["providers"]["vision"] = "fake"
+    raw["providers"]["multimodal"] = "fake"
     raw["providers"]["embedding"] = "fake"
     raw["providers"]["reranker"] = "fake"
     raw["providers"]["splitter"] = "recursive_zh"
     raw["providers"]["vector_store"] = "chroma"
-    raw["providers"]["evaluator"] = "fake"
     raw["transform"]["stages"] = ["refiner", "enricher"]
     raw["fakes"] = {
-        "llm": "ok",
-        "vision": "ok",
+        "multimodal": "ok",
         "embedding": "ok",
         "reranker": "ok",
-        "evaluator": "ok",
         "splitter": "ok",
         "vector_store": "ok",
     }

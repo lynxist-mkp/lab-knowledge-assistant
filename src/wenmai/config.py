@@ -49,9 +49,6 @@ class Chunking:
 
 @dataclass
 class TransformConfig:
-    refiner: str
-    enricher: str
-    captioner: str
     domains: list[str]
     enricher_prompt: str
     captioner_prompt: str
@@ -81,17 +78,15 @@ class Bm25:
 
 @dataclass
 class Providers:
-    llm: str
-    llm_model: str
-    vision: str
-    vision_model: str
+    multimodal: str
+    multimodal_model: str
     embedding: str
     embedding_model: str
     reranker: str
     reranker_model: str
     splitter: str
     vector_store: str
-    evaluator: str
+    caption_model: str = ""
 
 
 @dataclass
@@ -184,10 +179,10 @@ class Settings:
             product=_build(Product, raw["product"]),
             paths=_build(Paths, raw["paths"]),
             chunking=_build(Chunking, raw["chunking"]),
-            transform=_build(TransformConfig, raw["transform"]),
+            transform=_build(TransformConfig, _normalize_transform(raw["transform"])),
             retrieval=_build(Retrieval, raw["retrieval"]),
             bm25=_build(Bm25, raw["bm25"]),
-            providers=_build(Providers, raw["providers"]),
+            providers=_build(Providers, _normalize_providers(raw["providers"])),
             server=_build(Server, raw["server"]),
             observability=_build(Observability, raw["observability"]),
             evaluation=_build(Evaluation, raw["evaluation"]),
@@ -207,4 +202,66 @@ class Settings:
         return cls.from_dict(raw, root=settings_path.parent)
 
     def fake_behavior(self, name: str) -> str:
-        return self.fakes.get(name, "ok")
+        if name in self.fakes:
+            return self.fakes[name]
+        aliases = {
+            "multimodal": ("llm",),
+            "caption": ("vision", "multimodal", "llm"),
+        }
+        for alt in aliases.get(name, ()):
+            if alt in self.fakes:
+                return self.fakes[alt]
+        return "ok"
+
+
+def _normalize_transform(raw: dict[str, Any]) -> dict[str, Any]:
+    """Drop legacy registry-name fields that prepare_chunks never reads."""
+    payload = dict(raw)
+    for key in ("refiner", "enricher", "captioner"):
+        payload.pop(key, None)
+    return payload
+
+
+def _normalize_providers(raw: dict[str, Any]) -> dict[str, Any]:
+    """Accept multimodal keys, or legacy llm+vision when they match."""
+    payload = dict(raw)
+    if "multimodal" in payload:
+        multimodal = str(payload["multimodal"])
+        model = str(payload.get("multimodal_model") or payload.get("llm_model") or "")
+        caption = str(payload.get("caption_model") or payload.get("vision_model") or "")
+    else:
+        llm = str(payload.get("llm") or "")
+        vision = str(payload.get("vision") or "")
+        if not llm:
+            raise ValueError("providers.multimodal (or legacy providers.llm) is required")
+        if vision and vision != llm:
+            raise ValueError(
+                "providers.llm and providers.vision must match; "
+                f"got llm={llm!r} vision={vision!r}. "
+                "Use providers.multimodal instead."
+            )
+        multimodal = llm
+        model = str(payload.get("llm_model") or "")
+        caption = str(payload.get("vision_model") or "")
+    cleaned = {
+        key: value
+        for key, value in payload.items()
+        if key
+        not in {
+            "llm",
+            "vision",
+            "llm_model",
+            "vision_model",
+            "multimodal",
+            "multimodal_model",
+            "caption_model",
+            "evaluator",
+        }
+    }
+    cleaned["multimodal"] = multimodal
+    cleaned["multimodal_model"] = model
+    if caption and caption != model:
+        cleaned["caption_model"] = caption
+    else:
+        cleaned["caption_model"] = ""
+    return cleaned

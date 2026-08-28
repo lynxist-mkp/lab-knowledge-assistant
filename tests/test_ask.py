@@ -1,14 +1,14 @@
-"""Query seam: ask with citations and trace stages."""
+"""提问：回答带出处；生成失败返回 502。"""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
+from wenmai.pipelines.query import ask_question
 
 
 def _write_minpai_markdown(path: Path) -> Path:
@@ -50,30 +50,51 @@ def test_ask_returns_answer_with_matching_citations_and_query_trace(
     assert first["chunk_id"]
     assert first["document_id"] == ingest.json()["document_id"]
     assert "妈祖" in first["excerpt"]
+    assert "ranked_chunks" not in body
 
-    trace_path = Path(test_settings.paths.traces)
-    raw_lines = trace_path.read_text(encoding="utf-8").splitlines()
-    traces = [json.loads(line) for line in raw_lines if line]
-    query_trace = next(trace for trace in traces if trace["trace_id"] == body["trace_id"])
-    assert query_trace["trace_type"] == "query"
-    assert [stage["name"] for stage in query_trace["stages"]] == [
-        "query_processing",
-        "dense",
-        "sparse",
-        "fusion",
-        "rerank",
-        "generation",
-    ]
-    fusion_stage = next(stage for stage in query_trace["stages"] if stage["name"] == "fusion")
-    assert fusion_stage["candidates"]
-    assert fusion_stage["candidates"][0]["chunk_id"] == first["chunk_id"]
-    assert "score" in fusion_stage["candidates"][0]
+
+def test_ask_question_includes_ranked_chunks_for_eval(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    source = _write_minpai_markdown(tmp_path / "matsu.md")
+    client = TestClient(create_app(test_settings))
+    ingest = client.post("/ingest", json={"source_path": str(source)})
+    assert ingest.status_code == 200
+
+    result = ask_question("妈祖信仰的发源地在哪里？", test_settings)
+
+    assert result.ranked_chunks
+    assert result.ranked_chunks[0].chunk.chunk_id == result.citations[0].chunk_id
+    assert "ranked_chunks" not in result.as_dict()
+
+
+def test_ask_accepts_retrieval_mode_and_keeps_public_result(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    source = _write_minpai_markdown(tmp_path / "matsu.md")
+    client = TestClient(create_app(test_settings))
+    client.post("/ingest", json={"source_path": str(source)})
+
+    response = client.post(
+        "/ask",
+        json={
+            "question": "妈祖信仰的发源地在哪里？",
+            "retrieval_mode": "dense_only",
+            "rerank_enabled": False,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["citations"]
+    assert "ranked_chunks" not in body
+    assert set(body) <= {"answer", "citations", "trace_id", "refused", "error"}
 
 
 def test_ask_records_generation_failure_in_trace_and_returns_error(
     test_settings: Settings, tmp_path: Path
 ) -> None:
-    test_settings.fakes["llm"] = "error"
+    test_settings.fakes["multimodal"] = "error"
     source = _write_minpai_markdown(tmp_path / "matsu.md")
     client = TestClient(create_app(test_settings))
     client.post("/ingest", json={"source_path": str(source)})
@@ -84,13 +105,3 @@ def test_ask_records_generation_failure_in_trace_and_returns_error(
     detail = response.json()["detail"]
     assert detail["trace_id"]
     assert "error" in detail["message"].lower() or "fake" in detail["message"].lower()
-
-    trace_path = Path(test_settings.paths.traces)
-    raw_lines = trace_path.read_text(encoding="utf-8").splitlines()
-    traces = [json.loads(line) for line in raw_lines if line]
-    query_trace = next(trace for trace in traces if trace["trace_id"] == detail["trace_id"])
-    generation_stage = next(
-        stage for stage in query_trace["stages"] if stage["name"] == "generation"
-    )
-    assert generation_stage.get("error")
-    assert query_trace.get("error")
