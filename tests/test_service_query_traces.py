@@ -76,8 +76,20 @@ def _save_sample_query(
         method="llm",
         provider="fake",
         elapsed_ms=180.0,
-        output_summary="refusal" if refused else "42 chars",
+        output_summary="unrelated summary text",
     )
+    if refused:
+        trace.metadata["outcome"] = {
+            "refused": True,
+            "refusal_reason": "model_refused",
+            "citation_count": 2,
+        }
+    else:
+        trace.metadata["outcome"] = {
+            "refused": False,
+            "refusal_reason": None,
+            "citation_count": 1,
+        }
     if error:
         trace.error = error
     save_trace(settings, trace)
@@ -110,7 +122,36 @@ def test_query_summary_marks_refusal_and_fallback(test_settings: Settings) -> No
     summary = list_query_summaries(test_settings)[0]
     assert summary.status == "refused"
     assert summary.refused is True
+    assert summary.refusal_reason == "model_refused"
     assert summary.rerank_fallback is True
+
+
+def test_query_summary_ignores_generation_output_summary_for_refusal(
+    test_settings: Settings,
+) -> None:
+    trace = TraceContext(
+        trace_type="query",
+        metadata={
+            "question": "测试问题",
+            "outcome": {
+                "refused": True,
+                "refusal_reason": "insufficient_evidence",
+                "citation_count": 0,
+            },
+        },
+    )
+    trace.record_stage(
+        "generation",
+        method="llm",
+        provider="fake",
+        elapsed_ms=1.0,
+        output_summary="42 chars",
+    )
+    save_trace(test_settings, trace)
+
+    summary = list_query_summaries(test_settings)[0]
+    assert summary.refused is True
+    assert summary.refusal_reason == "insufficient_evidence"
 
 
 def test_query_summary_marks_failed_on_error(test_settings: Settings) -> None:

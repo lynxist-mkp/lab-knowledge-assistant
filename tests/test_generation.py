@@ -73,24 +73,33 @@ def test_generate_refusal_returns_all_retrieved_citations(
     result = generate("船政学堂是什么时候创办的？", chunks, test_settings)
 
     assert result.refused is True
+    assert result.refusal_reason == "model_refused"
     assert result.output_summary == "refusal"
     assert len(result.citations) == 2
     assert [citation.index for citation in result.citations] == [1, 2]
 
 
-def test_generate_empty_chunks_yields_no_citations(
+def test_generate_zero_chunks_short_circuits_without_llm(
     test_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        "wenmai.factories.multimodal.create",
-        lambda settings: _StubLLM("暂无相关内容[1]。"),
-    )
+    llm_called = False
+
+    def _fail_if_called(settings: Settings) -> _StubLLM:
+        nonlocal llm_called
+        llm_called = True
+        return _StubLLM("不应调用 LLM")
+
+    monkeypatch.setattr("wenmai.factories.multimodal.create", _fail_if_called)
 
     result = generate("任意问题", [], test_settings)
 
-    assert result.refused is False
+    assert llm_called is False
+    assert result.refused is True
+    assert result.refusal_reason == "insufficient_evidence"
     assert result.citations == []
     assert result.candidate_count == 0
+    assert result.answer.startswith("拒答：")
+    assert result.provider_name == "local"
 
 
 def test_generate_ignores_out_of_range_citation_indices(

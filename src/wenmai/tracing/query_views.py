@@ -16,6 +16,7 @@ class QueryTraceSummary:
     culture_domain: str | None
     status: str
     refused: bool
+    refusal_reason: str | None
     rerank_fallback: bool
     error: str | None
 
@@ -30,6 +31,7 @@ class QueryTraceSummary:
             "culture_domain": self.culture_domain,
             "status": self.status,
             "refused": self.refused,
+            "refusal_reason": self.refusal_reason,
             "rerank_fallback": self.rerank_fallback,
             "error": self.error,
         }
@@ -120,11 +122,21 @@ def _culture_domain(record: dict[str, Any]) -> str | None:
     return None
 
 
+def _outcome(record: dict[str, Any]) -> dict[str, Any]:
+    metadata = record.get("metadata") or {}
+    outcome = metadata.get("outcome")
+    return outcome if isinstance(outcome, dict) else {}
+
+
 def _is_refusal(record: dict[str, Any]) -> bool:
-    generation = _stage_by_name(record, "generation")
-    if generation is None:
-        return False
-    return generation.get("output_summary") == "refusal"
+    return bool(_outcome(record).get("refused"))
+
+
+def _refusal_reason(record: dict[str, Any]) -> str | None:
+    reason = _outcome(record).get("refusal_reason")
+    if isinstance(reason, str) and reason:
+        return reason
+    return None
 
 
 def _is_rerank_fallback(record: dict[str, Any]) -> bool:
@@ -221,6 +233,7 @@ def summarize_query_trace(record: dict[str, Any]) -> QueryTraceSummary:
         culture_domain=_culture_domain(record),
         status=status,
         refused=refused,
+        refusal_reason=_refusal_reason(record),
         rerank_fallback=rerank_fallback,
         error=error if isinstance(error, str) else None,
     )
