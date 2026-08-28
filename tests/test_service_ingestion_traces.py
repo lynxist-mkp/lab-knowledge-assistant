@@ -125,25 +125,6 @@ def test_api_ingestion_traces_and_detail_after_ingest(
     assert summary.json()["status"] == "ingested"
 
 
-def test_ingestion_pages_render(test_settings: Settings, tmp_path: Path) -> None:
-    source = _write_markdown(tmp_path / "doc.md")
-    client = TestClient(create_app(test_settings))
-    ingest = client.post("/ingest", json={"source_path": str(source)})
-    trace_id = ingest.json()["trace_id"]
-
-    manage = client.get("/ingestion")
-    assert manage.status_code == 200
-    assert "Ingestion 管理" in manage.text
-
-    listing = client.get("/ingestion/traces")
-    assert listing.status_code == 200
-    assert trace_id in listing.text
-
-    detail_page = client.get(f"/ingestion/traces/{trace_id}")
-    assert detail_page.status_code == 200
-    assert "stages[]" in detail_page.text
-
-
 def test_api_ingestion_run_streams_stage_events(test_settings: Settings, tmp_path: Path) -> None:
     source = _write_markdown(tmp_path / "doc.md")
     client = TestClient(create_app(test_settings))

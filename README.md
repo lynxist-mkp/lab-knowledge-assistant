@@ -8,7 +8,7 @@
 
 - 文本 + 图转文 + 本地 `bge-m3` Dense + jieba BM25 + **RRF（已默认）** + Cross-Encoder 精排 + 文化域过滤（#16、#19 ✅）
 - 生成：本地 Gemma MLX（`mlx_vlm.server` :8120），回答带引用，无依据则拒答
-- 服务与监测：FastAPI + Jinja2 六页 — **总览 / 数据浏览 / Ingestion 管理 / Ingestion 追踪 / Query 追踪 / 评估面板** 均已可用
+- 服务与监测：FastAPI + Jinja2；**编辑工作台**（`/`）与**运维看板**（`/ops`）双面骨架已挂上（内容库族蓝白 token）；旧六页根路径 HTML 已废除。提问主路径与运维子页按 #4–#7 续做。
 - 评测：黄金集 50 条（#25 ✅）；Hit@5/MRR + 四组消融（#26 ✅，`scripts/run_eval_ablation.py`）；Ragas collections（#27 ✅，缺钥降级）
 - 音频（Dolphin 转写）放在文本、图、监测、评测都完成之后（#31）
 
@@ -29,7 +29,7 @@ uv pip install -e ".[dev]"
 
 密钥与 MLX 服务见 `settings.yaml` 与 `docs/adr/`。开发期测试走 fake provider，不加载真实模型。
 
-**本机生成/图转文默认 Gemma MLX**（`providers.llm` / `providers.vision` = `mlx_gemma`）。首次 ask 或 caption 前建议先起服务（需 Terminal.app + Metal）：
+**本机生成/图转文默认 Gemma MLX**（`providers.multimodal` = `mlx_gemma`）。首次 ask 或 caption 前建议先起服务（需 Terminal.app + Metal）：
 
 ```bash
 ./scripts/start_gemma_mlx.sh

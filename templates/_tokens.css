@@ -1,0 +1,33 @@
+{# Shared 福云内容库族蓝白 tokens — both surfaces include this. #}
+:root {
+  color-scheme: light;
+  --color-primary: #037AFF;
+  --color-primary-soft: #1E9FFF;
+  --color-primary-dark: #0056b3;
+  --color-primary-light: #eaf3ff;
+  --color-bg: #f5f8fc;
+  --color-panel: #ffffff;
+  --color-text: #212d3f;
+  --color-muted: #677181;
+  --color-border: #e8ebf0;
+  --color-border-focus: #037AFF;
+  --color-success: #00a870;
+  --color-success-bg: #e8f8f2;
+  --color-warning: #fa8c16;
+  --color-warning-bg: #fff7e6;
+  --color-danger: #e34d59;
+  --color-danger-bg: #fdebed;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(3, 122, 255, 0.08);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "PingFang SC", "Helvetica Neue", "Noto Sans SC", sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+}

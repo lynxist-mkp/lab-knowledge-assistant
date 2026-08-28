@@ -1,4 +1,4 @@
-"""Ingestion management and trace pages."""
+"""Ingestion management API (HTML pages retired in #3)."""
 
 from __future__ import annotations
 
@@ -23,19 +23,7 @@ title: 湄洲妈祖祖庙简介
     return path
 
 
-def test_ingestion_pages_render(test_settings: Settings) -> None:
-    client = TestClient(create_app(test_settings))
-
-    management = client.get("/ingestion")
-    assert management.status_code == 200
-    assert "Ingestion 管理" in management.text
-
-    listing = client.get("/ingestion/traces")
-    assert listing.status_code == 200
-    assert "Ingestion 追踪" in listing.text
-
-
-def test_ingestion_trace_list_and_detail_after_ingest(
+def test_ingestion_trace_list_and_summary_after_ingest(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     source = _write_markdown(tmp_path / "matsu.md")
@@ -51,11 +39,6 @@ def test_ingestion_trace_list_and_detail_after_ingest(
     assert items[0]["trace_id"] == trace_id
     assert items[0]["status"] == "ingested"
     assert items[0]["chunk_count"] >= 1
-
-    detail_page = client.get(f"/ingestion/traces/{trace_id}")
-    assert detail_page.status_code == 200
-    assert trace_id in detail_page.text
-    assert "stages[]" in detail_page.text
 
     summary = client.get(f"/api/traces/{trace_id}/summary")
     assert summary.status_code == 200
