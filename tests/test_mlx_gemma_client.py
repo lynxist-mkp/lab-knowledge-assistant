@@ -26,7 +26,7 @@ def test_generate_text_posts_chat_completion_and_touches_server() -> None:
     mock_manager = MagicMock()
 
     with (
-        patch("wenmai.components.gemma.client.get_gemma_server_manager", return_value=mock_manager),
+        patch("wenmai.components.gemma.client.get_mlx_vlm_manager", return_value=mock_manager),
         patch("httpx.post", return_value=mock_response) as post,
     ):
         text = GemmaMlxClient(settings).generate_text("妈祖信仰的发源地在哪里？")
@@ -59,7 +59,7 @@ def test_caption_image_sends_image_url_and_prompt() -> None:
     mock_manager = MagicMock()
 
     with (
-        patch("wenmai.components.gemma.client.get_gemma_server_manager", return_value=mock_manager),
+        patch("wenmai.components.gemma.client.get_mlx_vlm_manager", return_value=mock_manager),
         patch("httpx.post", return_value=mock_response) as post,
     ):
         text = GemmaMlxClient(settings).caption_image(image_path, "描述颜色")
@@ -72,25 +72,23 @@ def test_caption_image_sends_image_url_and_prompt() -> None:
     assert content[1]["text"] == "描述颜色"
 
 
-def test_mlx_gemma_llm_and_vision_providers_use_client() -> None:
-    from wenmai.factories import llm as llm_factory
+def test_mlx_gemma_multimodal_provider_uses_client() -> None:
+    from wenmai.factories import multimodal as multimodal_factory
 
     settings = _settings()
-    settings.fakes["llm"] = "ok"
-    settings.fakes["vision"] = "ok"
+    settings.fakes["multimodal"] = "ok"
     mock_client = MagicMock()
     mock_client.provider_name = "mlx_gemma"
     mock_client.generate_text.return_value = '{"title":"t"}'
     mock_client.caption_image.return_value = "图说明"
 
-    with patch("wenmai.components.llm.mlx_gemma.GemmaMlxClient", return_value=mock_client):
-        llm = llm_factory.create(settings)
-        assert llm.provider_name == "mlx_gemma"
-        assert llm.generate("test") == '{"title":"t"}'
+    with patch(
+        "wenmai.components.multimodal.mlx_gemma.GemmaMlxClient", return_value=mock_client
+    ):
+        provider = multimodal_factory.create(settings)
+        assert provider.provider_name == "mlx_gemma"
+        assert provider.generate("test") == '{"title":"t"}'
         mock_client.generate_text.assert_called_once()
-
-    with patch("wenmai.components.vision.mlx_gemma.GemmaMlxClient", return_value=mock_client):
-        vision = llm_factory.create_vision(settings)
         image = Path(__file__).resolve().parent / "_fixtures" / "probe.png"
-        assert vision.caption(image, "prompt") == "图说明"
+        assert provider.caption(image, "prompt") == "图说明"
         mock_client.caption_image.assert_called_once()

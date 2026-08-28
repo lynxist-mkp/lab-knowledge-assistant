@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Run golden-set ablation batch: Hit@5, MRR, refusal accuracy for each configured group."""
+"""Run one golden-set eval: Hit@5, MRR, refusal accuracy for each configured group."""
 
 from __future__ import annotations
 
 from wenmai.config import Settings
-from wenmai.eval.runner import run_ablation_batch
+from wenmai.eval import run_eval
 
 
 def main() -> None:
     settings = Settings.load()
-    output_path = run_ablation_batch(settings)
-    print(f"ablation run written to {output_path}")
+    run = run_eval(settings)
+    print(
+        f"eval run {run.timestamp} items={run.item_count} failed={run.failed_count}"
+    )
 
 
 if __name__ == "__main__":

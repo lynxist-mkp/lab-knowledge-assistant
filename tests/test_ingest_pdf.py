@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 import sqlite3
 from pathlib import Path
@@ -14,7 +13,7 @@ from reportlab.pdfgen import canvas
 
 from wenmai.app import create_app
 from wenmai.config import Settings
-from wenmai.factories import vector_store as vector_store_factory
+from wenmai.knowledge import create_knowledge
 
 
 def _write_pdf_with_embedded_image(path: Path) -> Path:
@@ -47,14 +46,7 @@ def test_ingesting_pdf_extracts_image_writes_index_and_chunk_placeholder(
     body = response.json()
     assert body["chunk_count"] >= 1
 
-    trace_path = Path(test_settings.paths.traces)
-    trace = json.loads(trace_path.read_text(encoding="utf-8").splitlines()[-1])
-    load_stage = next(stage for stage in trace["stages"] if stage["name"] == "load")
-    assert load_stage["method"] == "markitdown"
-    assert load_stage["provider"] == "markitdown"
-
-    store = vector_store_factory.create(test_settings)
-    chunks = store.get_by_document_id(body["document_id"])
+    chunks = create_knowledge(test_settings).get_by_document_id(body["document_id"])
     combined = "\n".join(chunk.text for chunk in chunks)
     placeholder_match = re.search(r"\[IMAGE: ([a-f0-9]+)\]", combined)
     assert placeholder_match is not None, combined

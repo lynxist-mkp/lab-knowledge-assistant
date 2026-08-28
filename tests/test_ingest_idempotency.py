@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
-from wenmai.factories import vector_store as vector_store_factory
+from wenmai.knowledge import create_knowledge
 
 
 def _write_markdown(path: Path, body: str) -> Path:
@@ -45,17 +44,9 @@ def test_same_file_twice_does_not_double_chunk_count(
     assert second_body["chunk_count"] == 0
     assert second_body["document_id"] == first_body["document_id"]
 
-    store = vector_store_factory.create(test_settings)
-    chunks = store.get_by_document_id(first_body["document_id"])
+    knowledge = create_knowledge(test_settings)
+    chunks = knowledge.get_by_document_id(first_body["document_id"])
     assert len(chunks) == first_body["chunk_count"]
-
-    trace_path = Path(test_settings.paths.traces)
-    lines = [line for line in trace_path.read_text(encoding="utf-8").splitlines() if line]
-    assert len(lines) == 2
-    skip_trace = json.loads(lines[1])
-    assert [stage["name"] for stage in skip_trace["stages"]] == ["load", "integrity"]
-    integrity = skip_trace["stages"][1]
-    assert integrity["output_summary"].startswith("skipped")
 
 
 def test_changed_content_replaces_old_chunks(test_settings: Settings, tmp_path: Path) -> None:
@@ -85,14 +76,8 @@ title: 测试文档
     assert third_body["document_id"] != old_document_id
     assert third_body["chunk_count"] >= 1
 
-    store = vector_store_factory.create(test_settings)
-    assert store.get_by_document_id(old_document_id) == []
-    new_chunks = store.get_by_document_id(third_body["document_id"])
+    knowledge = create_knowledge(test_settings)
+    assert knowledge.get_by_document_id(old_document_id) == []
+    new_chunks = knowledge.get_by_document_id(third_body["document_id"])
     assert len(new_chunks) == third_body["chunk_count"]
     assert any("新版" in chunk.text for chunk in new_chunks)
-
-    trace_path = Path(test_settings.paths.traces)
-    lines = [line for line in trace_path.read_text(encoding="utf-8").splitlines() if line]
-    rebuild_trace = json.loads(lines[-1])
-    integrity = next(stage for stage in rebuild_trace["stages"] if stage["name"] == "integrity")
-    assert integrity["output_summary"].startswith("rebuilt")

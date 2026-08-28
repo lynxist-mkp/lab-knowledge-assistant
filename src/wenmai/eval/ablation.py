@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any
 
 from wenmai.config import Settings
@@ -29,16 +29,6 @@ def resolve_ablation(group: str) -> AblationSpec:
     return spec
 
 
-def apply_ablation(settings: Settings, group: str) -> Settings:
-    spec = resolve_ablation(group)
-    retrieval = replace(
-        settings.retrieval,
-        mode=spec.mode,
-        rerank_enabled=spec.rerank_enabled,
-    )
-    return replace(settings, retrieval=retrieval)
-
-
 def config_snapshot(settings: Settings, group: str) -> dict[str, Any]:
     spec = resolve_ablation(group)
     return {
@@ -55,7 +45,8 @@ def config_snapshot(settings: Settings, group: str) -> dict[str, Any]:
         "providers": {
             "embedding": settings.providers.embedding,
             "reranker": settings.providers.reranker,
-            "llm": settings.providers.llm,
+            "llm": settings.providers.multimodal,
+            "multimodal": settings.providers.multimodal,
         },
     }
 

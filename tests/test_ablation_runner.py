@@ -1,15 +1,16 @@
-"""Ablation runner writes run artifact with four group metrics."""
+"""Golden-set eval: run, list, dashboard through one interface."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
-from wenmai.eval.runner import run_ablation_batch
+from wenmai.eval import get_eval_dashboard, list_eval_runs, run_eval
+from wenmai.pipelines.query import ask_question
 
 
 def _write_jsonl(path: Path, lines: list[str]) -> Path:
@@ -33,7 +34,7 @@ title: {title}
     return path
 
 
-def test_run_ablation_batch_writes_four_groups(test_settings: Settings, tmp_path: Path) -> None:
+def _prepare_eval(test_settings: Settings, tmp_path: Path) -> None:
     golden = _write_jsonl(
         tmp_path / "golden.jsonl",
         [
@@ -51,28 +52,101 @@ def test_run_ablation_batch_writes_four_groups(test_settings: Settings, tmp_path
     test_settings.evaluation.golden_set = str(golden)
     test_settings.evaluation.runs = str(tmp_path / "runs")
     test_settings.evaluation.ablations = ["dense_only", "sparse_only", "rrf", "rrf_rerank"]
-
     client = TestClient(create_app(test_settings))
     ingest = client.post("/ingest", json={"source_path": str(source)})
     assert ingest.status_code == 200
 
-    output_path = run_ablation_batch(test_settings)
-    artifact = json.loads(output_path.read_text(encoding="utf-8"))
 
-    assert artifact["item_count"] == 2
-    assert set(artifact["groups"].keys()) == {
-        "dense_only",
-        "sparse_only",
-        "rrf",
-        "rrf_rerank",
-    }
-    for group_name, group_data in artifact["groups"].items():
-        metrics = group_data["metrics"]
-        assert "hit_at_5" in metrics
-        assert "mrr" in metrics
-        assert "refusal_accuracy" in metrics
-        assert "citation_coverage" in metrics
-        assert metrics["answerable_count"] == 1
-        assert metrics["unanswerable_count"] == 1
-        config = group_data["config"]
-        assert config["ablation_group"] == group_name
+def test_run_eval_round_trip_typed_views(
+    test_settings: Settings,
+    tmp_path: Path,
+    without_ragas_judge_key: None,
+) -> None:
+    _prepare_eval(test_settings, tmp_path)
+
+    run = run_eval(test_settings)
+    listed = list_eval_runs(test_settings)
+
+    assert listed[0].timestamp == run.timestamp
+    assert listed[0].item_count == 2
+    assert listed[0].failed_count == 0
+    assert listed[0].failures == []
+    labels = [listed[0].groups[name].label for name in test_settings.evaluation.ablations]
+    assert labels == ["Dense 单路", "Sparse 单路", "RRF 融合", "RRF + Rerank"]
+    metrics = listed[0].groups["rrf_rerank"].metrics
+    assert metrics.answerable_count == 1
+    assert metrics.unanswerable_count == 1
+
+    dashboard = get_eval_dashboard(test_settings)
+    assert dashboard.latest_run is not None
+    assert dashboard.latest_run.timestamp == run.timestamp
+    assert dashboard.ragas.faithfulness.status == "unavailable"
+
+
+def test_eval_retries_failed_item_then_succeeds(
+    test_settings: Settings,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _prepare_eval(test_settings, tmp_path)
+    real_ask = ask_question
+    seen = {"n": 0}
+
+    def flaky(question: str, settings: Settings, **kwargs: object):
+        if "发源地" in question and kwargs.get("retrieval_mode") == "dense_only":
+            seen["n"] += 1
+            if seen["n"] == 1:
+                raise RuntimeError("generation failed")
+        return real_ask(question, settings, **kwargs)
+
+    monkeypatch.setattr("wenmai.eval.runner.ask_question", flaky)
+
+    run = run_eval(test_settings)
+
+    assert seen["n"] == 2
+    assert run.failed_count == 0
+    assert list_eval_runs(test_settings)[0].failed_count == 0
+
+
+def test_eval_keeps_failure_after_retries(
+    test_settings: Settings,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _prepare_eval(test_settings, tmp_path)
+    real_ask = ask_question
+    seen = {"n": 0}
+
+    def always_fail_dense(question: str, settings: Settings, **kwargs: object):
+        if "发源地" in question and kwargs.get("retrieval_mode") == "dense_only":
+            seen["n"] += 1
+            raise RuntimeError("generation failed")
+        return real_ask(question, settings, **kwargs)
+
+    monkeypatch.setattr("wenmai.eval.runner.ask_question", always_fail_dense)
+
+    run = run_eval(test_settings)
+
+    assert seen["n"] == 4
+    assert run.failed_count == 1
+    assert run.failures[0].item_id == "g001"
+    assert run.failures[0].group == "dense_only"
+    assert run.failures[0].group_label == "Dense 单路"
+    listed = list_eval_runs(test_settings)[0]
+    assert listed.failed_count == 1
+    assert listed.failures[0].item_id == "g001"
+
+
+def test_post_eval_runs_returns_typed_run(test_settings: Settings, tmp_path: Path) -> None:
+    _prepare_eval(test_settings, tmp_path)
+    client = TestClient(create_app(test_settings))
+
+    response = client.post("/api/eval/runs")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["item_count"] == 2
+    assert body["failed_count"] == 0
+    assert body["groups"]["rrf_rerank"]["label"] == "RRF + Rerank"
+    assert "hit_at_5" in body["groups"]["rrf_rerank"]["metrics"]
+    assert "stages" not in body

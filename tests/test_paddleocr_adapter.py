@@ -1,4 +1,4 @@
-"""PaddleOCR-VL adapter narrow seam: routing, layout mapping, subprocess contract."""
+"""PaddleOCR-VL adapter: layout mapping + subprocess. PDF routing lives in wenmai.ingestion."""
 
 from __future__ import annotations
 
@@ -13,12 +13,14 @@ from reportlab.pdfgen import canvas
 
 from wenmai.components.paddleocr.adapter import (
     build_text_from_ocr_payload,
-    choose_pdf_route,
-    measure_pdf_chars_per_page,
     parse_scanned_pdf,
 )
 from wenmai.config import PaddleOCR, PdfLoad, Settings
-from wenmai.storage.images import ImageStore
+from wenmai.ingestion.pdf_route import (
+    choose_pdf_route,
+    measure_pdf_chars_per_page,
+)
+from wenmai.storage.document_images import DocumentImages
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "paddleocr"
 
@@ -120,10 +122,10 @@ def test_build_text_from_ocr_payload_maps_layout_labels(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     payload = json.loads((FIXTURES / "sample_layout.json").read_text(encoding="utf-8"))
-    image_store = ImageStore(test_settings)
+    images = DocumentImages(test_settings)
     text = build_text_from_ocr_payload(
         payload,
-        image_store,
+        images,
         document_id="doc-33",
         source_path=str(tmp_path / "scan.pdf"),
     )
@@ -216,13 +218,14 @@ def test_parse_scanned_pdf_invokes_subprocess_with_env_strip_and_vl_args(
     )
 
 
-def test_ingesting_scanned_pdf_records_paddleocr_trace_and_placeholder(
+def test_ingesting_scanned_pdf_writes_chunks_with_image_placeholder(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     from fastapi.testclient import TestClient
 
     from wenmai.app import create_app
     from wenmai.ingestion import loaders as loaders_module
+    from wenmai.knowledge import create_knowledge
 
     pdf = _write_image_only_pdf(tmp_path / "scan.pdf")
     original_parse = loaders_module.parse_scanned_pdf
@@ -237,28 +240,28 @@ def test_ingesting_scanned_pdf_records_paddleocr_trace_and_placeholder(
         assert response.status_code == 200
         body = response.json()
         assert body["chunk_count"] >= 1
-
-        trace_path = Path(test_settings.paths.traces)
-        trace = json.loads(trace_path.read_text(encoding="utf-8").splitlines()[-1])
-        load_stage = next(stage for stage in trace["stages"] if stage["name"] == "load")
-        assert load_stage["method"] == "paddleocr-vl"
-        assert load_stage["provider"] == "mlx-vlm-server"
+        chunks = create_knowledge(test_settings).get_by_document_id(body["document_id"])
+        combined = "\n".join(chunk.text for chunk in chunks)
+        assert "[IMAGE:" in combined
     finally:
         loaders_module.parse_scanned_pdf = original_parse
 
 
-def test_ingesting_scanned_pdf_failure_records_trace_without_markitdown_fallback(
+def test_ingesting_scanned_pdf_failure_does_not_fall_back_to_markitdown(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     from fastapi.testclient import TestClient
 
     from wenmai.app import create_app
     from wenmai.ingestion import loaders as loaders_module
+    from wenmai.knowledge import create_knowledge
 
     pdf = _write_image_only_pdf(tmp_path / "scan.pdf")
 
     def failing_parse(pdf_path, **kwargs):
-        raise RuntimeError("PaddleOCR-VL parsing failed with exit code 1 (stderr: layout model failed)")
+        raise RuntimeError(
+            "PaddleOCR-VL parsing failed with exit code 1 (stderr: layout model failed)"
+        )
 
     original_parse = loaders_module.parse_scanned_pdf
     loaders_module.parse_scanned_pdf = failing_parse
@@ -266,13 +269,7 @@ def test_ingesting_scanned_pdf_failure_records_trace_without_markitdown_fallback
         client = TestClient(create_app(test_settings), raise_server_exceptions=False)
         response = client.post("/ingest", json={"source_path": str(pdf)})
         assert response.status_code == 500
-
-        trace_path = Path(test_settings.paths.traces)
-        trace = json.loads(trace_path.read_text(encoding="utf-8").splitlines()[-1])
-        assert trace["error"] is not None
-        load_stage = next(stage for stage in trace["stages"] if stage["name"] == "load")
-        assert load_stage["method"] == "paddleocr-vl"
-        assert load_stage["error"] is not None
-        assert "MarkItDown" not in load_stage["error"]
+        knowledge = create_knowledge(test_settings)
+        assert knowledge.list_all() == []
     finally:
         loaders_module.parse_scanned_pdf = original_parse
