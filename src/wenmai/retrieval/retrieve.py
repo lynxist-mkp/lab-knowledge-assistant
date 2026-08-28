@@ -4,57 +4,21 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field
-from typing import Any
 
 from wenmai.config import Settings
 from wenmai.factories import reranker as reranker_factory
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import ScoredChunk
 from wenmai.retrieval.rrf import reciprocal_rank_fusion
+from wenmai.tracing.context import StageRecord
 
 _RETRIEVAL_MODES = frozenset({"rrf", "dense_only", "sparse_only"})
 
 
 @dataclass(frozen=True)
-class RetrievalStage:
-    name: str
-    method: str
-    provider: str
-    elapsed_ms: float
-    input_summary: str = ""
-    output_summary: str = ""
-    candidate_count: int | None = None
-    error: str | None = None
-    candidates: list[dict[str, Any]] | None = None
-    dense_candidates: list[dict[str, Any]] | None = None
-    sparse_candidates: list[dict[str, Any]] | None = None
-    pre_rerank_candidates: list[dict[str, Any]] | None = None
-    fallback_reason: str | None = None
-    rank_changes: list[dict[str, Any]] | None = None
-
-    def as_record_kwargs(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "method": self.method,
-            "provider": self.provider,
-            "elapsed_ms": self.elapsed_ms,
-            "input_summary": self.input_summary,
-            "output_summary": self.output_summary,
-            "candidate_count": self.candidate_count,
-            "error": self.error,
-            "candidates": self.candidates,
-            "dense_candidates": self.dense_candidates,
-            "sparse_candidates": self.sparse_candidates,
-            "pre_rerank_candidates": self.pre_rerank_candidates,
-            "fallback_reason": self.fallback_reason,
-            "rank_changes": self.rank_changes,
-        }
-
-
-@dataclass(frozen=True)
 class RetrievalResult:
     chunks: list[ScoredChunk]
-    stages: list[RetrievalStage] = field(default_factory=list)
+    stages: list[StageRecord] = field(default_factory=list)
 
 
 def retrieve(
@@ -157,8 +121,8 @@ def _dense_stage(
     scored_chunks: list[ScoredChunk],
     elapsed_ms: float,
     culture_domain: str | None,
-) -> RetrievalStage:
-    return RetrievalStage(
+) -> StageRecord:
+    return StageRecord(
         name="dense",
         method="vector_query",
         provider=knowledge.dense_provider,
@@ -175,8 +139,8 @@ def _sparse_stage(
     scored_chunks: list[ScoredChunk],
     elapsed_ms: float,
     culture_domain: str | None,
-) -> RetrievalStage:
-    return RetrievalStage(
+) -> StageRecord:
+    return StageRecord(
         name="sparse",
         method="bm25",
         provider="local",
@@ -193,7 +157,7 @@ def _dense_only(
     settings: Settings,
     question: str,
     culture_domain: str | None,
-) -> tuple[list[ScoredChunk], list[RetrievalStage]]:
+) -> tuple[list[ScoredChunk], list[StageRecord]]:
     chunks, elapsed_ms = _timed_dense(knowledge, settings, question, culture_domain)
     return chunks, [_dense_stage(knowledge, settings, chunks, elapsed_ms, culture_domain)]
 
@@ -203,7 +167,7 @@ def _sparse_only(
     settings: Settings,
     question: str,
     culture_domain: str | None,
-) -> tuple[list[ScoredChunk], list[RetrievalStage]]:
+) -> tuple[list[ScoredChunk], list[StageRecord]]:
     chunks, elapsed_ms = _timed_sparse(knowledge, settings, question, culture_domain)
     return chunks, [_sparse_stage(settings, chunks, elapsed_ms, culture_domain)]
 
@@ -213,7 +177,7 @@ def _fused(
     settings: Settings,
     question: str,
     culture_domain: str | None,
-) -> tuple[list[ScoredChunk], list[RetrievalStage]]:
+) -> tuple[list[ScoredChunk], list[StageRecord]]:
     with ThreadPoolExecutor(max_workers=2) as executor:
         dense_future = executor.submit(
             _timed_dense, knowledge, settings, question, culture_domain
@@ -242,7 +206,7 @@ def _fused(
         if chunk_id in chunk_by_id
     ]
     fusion_ms = (time.perf_counter() - started) * 1000
-    fusion = RetrievalStage(
+    fusion = StageRecord(
         name="fusion",
         method="rrf",
         provider="local",
@@ -330,7 +294,7 @@ def _rerank_chunks(
     settings: Settings,
     query: str,
     fused_chunks: list[ScoredChunk],
-) -> tuple[list[ScoredChunk], RetrievalStage | None]:
+) -> tuple[list[ScoredChunk], StageRecord | None]:
     rerank_top = settings.retrieval.rerank_top
     if not fused_chunks or rerank_top <= 0:
         return fused_chunks, None
@@ -351,7 +315,7 @@ def _rerank_chunks(
         if not reranked:
             raise RuntimeError("reranker produced no usable candidates")
         elapsed_ms = (time.perf_counter() - started) * 1000
-        return reranked, RetrievalStage(
+        return reranked, StageRecord(
             name="rerank",
             method="cross_encoder",
             provider=reranker.provider_name,
@@ -367,7 +331,7 @@ def _rerank_chunks(
         elapsed_ms = (time.perf_counter() - started) * 1000
         fallback = pre_rerank[:rerank_top]
         reason = f"{type(exc).__name__}: {exc}"
-        return fallback, RetrievalStage(
+        return fallback, StageRecord(
             name="rerank",
             method="rrf_fallback",
             provider=reranker.provider_name,

@@ -50,7 +50,7 @@ def ask_question(
             knowledge=knowledge,
         )
         for stage in retrieved.stages:
-            trace.record_stage(**stage.as_record_kwargs())
+            trace.append_stage(stage)
         scored_chunks = retrieved.chunks
 
         with trace.stage(

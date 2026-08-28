@@ -113,6 +113,11 @@ class TraceContext:
         if self._on_stage is not None:
             self._on_stage(record)
 
+    def append_stage(self, record: StageRecord) -> None:
+        self.stages.append(record)
+        if self._on_stage is not None:
+            self._on_stage(record)
+
     def close(self) -> None:
         self.finished_at = _now()
         self.total_elapsed_ms = (time.perf_counter() - self._wall_start) * 1000
