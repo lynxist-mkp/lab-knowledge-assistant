@@ -678,17 +678,19 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(15, 23, 42, 0.4);
+    background: rgba(15, 23, 42, 0.45);
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
     z-index: 200;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+    transition: opacity 0.22s ease, visibility 0.22s ease;
   }
   .drawer-backdrop.is-open {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
   }
 
   .citation-drawer {
@@ -699,17 +701,21 @@
     width: 500px;
     max-width: 92vw;
     background: var(--color-panel);
-    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+    box-shadow: -6px 0 28px rgba(15, 23, 42, 0.14), -1px 0 4px rgba(15, 23, 42, 0.04);
     z-index: 201;
     display: flex;
     flex-direction: column;
     transform: translateX(100%);
-    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.25s ease;
     outline: none;
   }
   .citation-drawer.is-open,
   .citation-drawer[data-open="true"] {
     transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
   }
 
   .drawer-header {
@@ -719,6 +725,7 @@
     padding: 1rem 1.25rem;
     border-bottom: 1px solid var(--color-border);
     background: #ffffff;
+    flex-shrink: 0;
   }
   .drawer-header-main {
     display: flex;
@@ -733,6 +740,7 @@
     border: 1px solid rgba(3, 122, 255, 0.25);
     padding: 0.15rem 0.45rem;
     border-radius: 4px;
+    letter-spacing: 0.02em;
   }
   .drawer-title {
     margin: 0;
@@ -771,6 +779,7 @@
     flex-direction: column;
     gap: 0.4rem;
     font-size: 0.84rem;
+    flex-shrink: 0;
   }
   .drawer-meta-item {
     display: flex;
@@ -782,6 +791,7 @@
     flex-shrink: 0;
     color: var(--color-muted);
     font-size: 0.8rem;
+    font-weight: 500;
   }
   .meta-value-title {
     font-weight: 600;
@@ -793,7 +803,7 @@
     background: var(--color-primary-light, #eaf3ff);
     color: var(--color-primary);
     border: 1px solid rgba(3, 122, 255, 0.2);
-    padding: 0.05rem 0.4rem;
+    padding: 0.05rem 0.45rem;
     border-radius: 3px;
     font-size: 0.78rem;
     font-weight: 600;
@@ -831,8 +841,8 @@
     gap: 0.75rem;
   }
   .drawer-loading-spinner {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     border: 3px solid var(--color-border);
     border-top-color: var(--color-primary);
     border-radius: 50%;
@@ -843,29 +853,40 @@
   }
 
   .drawer-error {
-    color: var(--color-danger);
+    color: #921c26;
     background: var(--color-danger-bg, #fdebed);
-    border: 1px solid rgba(227, 77, 89, 0.25);
+    border: 1px solid var(--color-danger);
     border-radius: var(--radius-md, 8px);
-    padding: 1.5rem 1.25rem;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
   }
   .drawer-error .error-msg {
     margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.5;
     font-weight: 600;
   }
   .btn-retry {
-    background: var(--color-panel);
+    background: #ffffff;
     border: 1px solid var(--color-danger);
     color: var(--color-danger);
     padding: 0.35rem 0.85rem;
-    border-radius: 4px;
+    border-radius: var(--radius-sm, 4px);
     font-size: 0.84rem;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.15s ease;
   }
   .btn-retry:hover {
     background: var(--color-danger);
     color: #ffffff;
+  }
+  .btn-retry:focus-visible {
+    outline: 2px solid var(--color-danger);
+    outline-offset: 1px;
   }
 
   .drawer-content-box {
@@ -891,16 +912,22 @@
   }
   .btn-copy-text {
     font-size: 0.78rem;
+    font-weight: 600;
     color: var(--color-primary);
     background: transparent;
-    border: 1px solid rgba(3, 122, 255, 0.2);
+    border: 1px solid rgba(3, 122, 255, 0.25);
     border-radius: 3px;
-    padding: 0.15rem 0.5rem;
+    padding: 0.2rem 0.6rem;
     cursor: pointer;
     transition: all 0.15s ease;
   }
   .btn-copy-text:hover {
     background: var(--color-primary-light, #eaf3ff);
+    border-color: var(--color-primary);
+  }
+  .btn-copy-text:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
   }
 
   .drawer-chunk-text {
@@ -919,6 +946,7 @@
   }
   .drawer-chunk-text:focus-visible {
     border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(3, 122, 255, 0.15);
   }
 
   .drawer-chunk-meta {
@@ -950,10 +978,31 @@
     border-top: 1px solid var(--color-border);
     background: var(--color-bg);
     text-align: center;
+    flex-shrink: 0;
   }
   .drawer-footer-tip {
     font-size: 0.78rem;
     color: var(--color-muted);
+  }
+
+  /* Accessibility: Prefers reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .drawer-backdrop,
+    .citation-drawer,
+    .btn-submit,
+    .btn-view-chunk,
+    .prompt-chip,
+    .citation-ref,
+    .btn-copy-text,
+    .btn-retry,
+    .drawer-close-btn {
+      transition: none !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+    .drawer-loading-spinner {
+      animation: none !important;
+    }
   }
 
   /* Responsive Adjustments */
@@ -1094,6 +1143,7 @@
   aria-hidden="true"
   data-open="false"
   tabindex="-1"
+  inert
 >
   <div class="drawer-header">
     <div class="drawer-header-main">
@@ -1137,13 +1187,13 @@
     </div>
 
     <!-- Error / Not-Found State -->
-    <div id="citation-drawer-error" class="drawer-error" style="display: none;">
+    <div id="citation-drawer-error" class="drawer-error" style="display: none;" hidden>
       <p id="citation-drawer-error-msg" class="error-msg">未找到对应出处片段</p>
       <button type="button" id="citation-drawer-retry" class="btn-retry">重新读取</button>
     </div>
 
     <!-- Content State -->
-    <div id="citation-drawer-content" class="drawer-content-box" style="display: none;">
+    <div id="citation-drawer-content" class="drawer-content-box" style="display: none;" hidden>
       <div class="drawer-section">
         <div class="drawer-section-header">
           <span class="section-title">片段正文内容</span>
@@ -1151,10 +1201,10 @@
             复制正文
           </button>
         </div>
-        <div id="citation-drawer-text" class="drawer-chunk-text" tabindex="0"></div>
+        <div id="citation-drawer-text" class="drawer-chunk-text" tabindex="0" aria-label="片段正文内容"></div>
       </div>
 
-      <div id="citation-drawer-meta-section" class="drawer-section" style="display: none;">
+      <div id="citation-drawer-meta-section" class="drawer-section" style="display: none;" hidden>
         <div class="drawer-section-header">
           <span class="section-title">附加元数据</span>
         </div>
@@ -1208,6 +1258,67 @@
   let lastActiveElement = null;
   let currentDrawerChunkId = null;
   let currentDrawerFallback = null;
+  let previousBodyOverflow = '';
+  let previousBodyPaddingRight = '';
+
+  function lockScroll() {
+    const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
+    previousBodyOverflow = document.body.style.overflow;
+    previousBodyPaddingRight = document.body.style.paddingRight;
+    document.body.style.overflow = 'hidden';
+    if (scrollBarWidth > 0) {
+      document.body.style.paddingRight = scrollBarWidth + 'px';
+    }
+  }
+
+  function unlockScroll() {
+    document.body.style.overflow = previousBodyOverflow;
+    document.body.style.paddingRight = previousBodyPaddingRight;
+  }
+
+  function setDrawerState(state) {
+    if (state === 'loading') {
+      drawerLoading.style.display = 'flex';
+      drawerLoading.removeAttribute('hidden');
+      drawerError.style.display = 'none';
+      drawerError.setAttribute('hidden', '');
+      drawerContent.style.display = 'none';
+      drawerContent.setAttribute('hidden', '');
+    } else if (state === 'error') {
+      drawerLoading.style.display = 'none';
+      drawerLoading.setAttribute('hidden', '');
+      drawerError.style.display = 'flex';
+      drawerError.removeAttribute('hidden');
+      drawerContent.style.display = 'none';
+      drawerContent.setAttribute('hidden', '');
+    } else if (state === 'content') {
+      drawerLoading.style.display = 'none';
+      drawerLoading.setAttribute('hidden', '');
+      drawerError.style.display = 'none';
+      drawerError.setAttribute('hidden', '');
+      drawerContent.style.display = 'flex';
+      drawerContent.removeAttribute('hidden');
+    } else {
+      drawerLoading.style.display = 'none';
+      drawerLoading.setAttribute('hidden', '');
+      drawerError.style.display = 'none';
+      drawerError.setAttribute('hidden', '');
+      drawerContent.style.display = 'none';
+      drawerContent.setAttribute('hidden', '');
+    }
+  }
+
+  function getVisibleFocusables(container) {
+    const candidates = container.querySelectorAll(
+      'button:not([disabled]), [tabindex="0"]:not([tabindex="-1"]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+    );
+    return Array.from(candidates).filter(function(el) {
+      if (el.hasAttribute('hidden') || el.closest('[hidden]')) return false;
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+    });
+  }
 
   function escapeHtml(str) {
     if (str == null) return '';
@@ -1217,6 +1328,21 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function fallbackCopyText(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand('copy');
+    } catch (e) {}
+    document.body.removeChild(ta);
   }
 
   function formatAnswer(text, citations) {
@@ -1288,17 +1414,18 @@
     drawerDomain.textContent = (fallbackInfo && fallbackInfo.culture_domain) || '-';
     drawerDocTitle.textContent = (fallbackInfo && fallbackInfo.title) || '出处文档';
 
-    // Show drawer UI
+    // Show drawer UI & lock scroll
     drawer.setAttribute('data-open', 'true');
     drawer.setAttribute('aria-hidden', 'false');
+    drawer.removeAttribute('inert');
     drawer.classList.add('is-open');
     drawerBackdrop.classList.add('is-open');
     drawerBackdrop.setAttribute('aria-hidden', 'false');
 
+    lockScroll();
+
     // Show loading state
-    drawerLoading.style.display = 'flex';
-    drawerError.style.display = 'none';
-    drawerContent.style.display = 'none';
+    setDrawerState('loading');
 
     // Focus close button for accessibility
     if (drawerCloseBtn) {
@@ -1308,9 +1435,8 @@
     try {
       const res = await fetch('/api/chunks/' + encodeURIComponent(chunkId));
       if (res.status === 404) {
-        drawerLoading.style.display = 'none';
-        drawerErrorMsg.textContent = '未找到出处片段 (' + escapeHtml(chunkId) + ')，该材料可能已被更新或重构。';
-        drawerError.style.display = 'block';
+        drawerErrorMsg.textContent = '未找到出处片段 (' + chunkId + ')，该材料可能已被更新或重构。';
+        setDrawerState('error');
         return;
       }
       if (!res.ok) {
@@ -1340,28 +1466,32 @@
         if (metaHtml) {
           drawerMeta.innerHTML = metaHtml;
           drawerMetaSection.style.display = 'flex';
+          drawerMetaSection.removeAttribute('hidden');
         } else {
           drawerMetaSection.style.display = 'none';
+          drawerMetaSection.setAttribute('hidden', '');
         }
       } else {
         drawerMetaSection.style.display = 'none';
+        drawerMetaSection.setAttribute('hidden', '');
       }
 
-      drawerLoading.style.display = 'none';
-      drawerContent.style.display = 'flex';
+      setDrawerState('content');
     } catch (err) {
-      drawerLoading.style.display = 'none';
-      drawerErrorMsg.textContent = '读取片段详情失败: ' + escapeHtml(err.message);
-      drawerError.style.display = 'block';
+      drawerErrorMsg.textContent = '读取片段详情失败: ' + err.message;
+      setDrawerState('error');
     }
   }
 
   function closeCitationDrawer() {
     drawer.setAttribute('data-open', 'false');
     drawer.setAttribute('aria-hidden', 'true');
+    drawer.setAttribute('inert', '');
     drawer.classList.remove('is-open');
     drawerBackdrop.classList.remove('is-open');
     drawerBackdrop.setAttribute('aria-hidden', 'true');
+
+    unlockScroll();
 
     if (lastActiveElement && typeof lastActiveElement.focus === 'function') {
       try {
@@ -1387,14 +1517,22 @@
     drawerCopyBtn.addEventListener('click', function() {
       const text = drawerText.textContent;
       if (!text) return;
+      const original = drawerCopyBtn.textContent;
+      const showCopied = function() {
+        drawerCopyBtn.textContent = '已复制!';
+        setTimeout(function() {
+          drawerCopyBtn.textContent = original;
+        }, 1500);
+      };
+
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function() {
-          const original = drawerCopyBtn.textContent;
-          drawerCopyBtn.textContent = '已复制!';
-          setTimeout(function() {
-            drawerCopyBtn.textContent = original;
-          }, 1500);
+        navigator.clipboard.writeText(text).then(showCopied).catch(function() {
+          fallbackCopyText(text);
+          showCopied();
         });
+      } else {
+        fallbackCopyText(text);
+        showCopied();
       }
     });
   }
@@ -1406,14 +1544,21 @@
         e.preventDefault();
         closeCitationDrawer();
       } else if (e.key === 'Tab') {
-        const focusables = drawer.querySelectorAll('button:not([disabled]), [tabindex="0"], a[href]');
-        if (focusables.length > 0) {
-          const first = focusables[0];
-          const last = focusables[focusables.length - 1];
-          if (e.shiftKey && document.activeElement === first) {
+        const focusables = getVisibleFocusables(drawer);
+        if (focusables.length === 0) {
+          e.preventDefault();
+          drawer.focus();
+          return;
+        }
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first || !drawer.contains(document.activeElement)) {
             e.preventDefault();
             last.focus();
-          } else if (!e.shiftKey && document.activeElement === last) {
+          }
+        } else {
+          if (document.activeElement === last || !drawer.contains(document.activeElement)) {
             e.preventDefault();
             first.focus();
           }
@@ -1421,6 +1566,10 @@
       }
     }
   });
+
+  // Expose on window for testing/inspection
+  window.openCitationDrawer = openCitationDrawer;
+  window.closeCitationDrawer = closeCitationDrawer;
 
   /* =========================================================
      Trace Loader

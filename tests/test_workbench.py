@@ -135,10 +135,60 @@ def test_workbench_ask_flow_uses_ask_endpoint(test_settings: Settings) -> None:
     assert "拒答" in html or "已拒答" in html or "refused" in html
 
 
+def test_workbench_citation_drawer_js_wiring(test_settings: Settings) -> None:
+    """#5: workbench page JS wires in-page drawer — not ops / 库览 navigation."""
+    client = TestClient(create_app(test_settings))
+    html = _workbench_html(client)
+
+    # Open / close drawer functions defined in page script
+    assert "openCitationDrawer" in html
+    assert "closeCitationDrawer" in html
+    assert "async function openCitationDrawer" in html or "function openCitationDrawer" in html
+    assert "function closeCitationDrawer" in html
+
+    # Drawer fetch path: /api/chunks/ + encodeURIComponent (not ops or browse)
+    assert "/api/chunks/" in html
+    assert "encodeURIComponent" in html
+    assert "fetch('/api/chunks/' + encodeURIComponent" in html or (
+        "fetch('/api/chunks/'" in html and "encodeURIComponent(chunkId)" in html
+    )
+    assert "fetch('/ops" not in html
+    assert 'fetch("/ops' not in html
+    assert "fetch('/api/browse" not in html
+    assert 'fetch("/api/browse' not in html
+
+    # data-open toggled true on open, false on close
+    assert "setAttribute('data-open', 'true')" in html
+    assert "setAttribute('data-open', 'false')" in html
+
+    # Click hooks for citation affordances (delegated on qa-list)
+    assert "closest('.citation-ref')" in html
+    assert "closest('.btn-view-chunk')" in html
+    assert "closest('.citation-item')" in html
+    assert "openCitationDrawer(chunkId" in html
+
+    # Close on Escape, backdrop click, and #citation-drawer-close
+    assert "e.key === 'Escape'" in html
+    assert "closeCitationDrawer()" in html
+    assert "drawerBackdrop.addEventListener('click', closeCitationDrawer)" in html
+    assert "drawerCloseBtn.addEventListener('click', closeCitationDrawer)" in html
+    assert "id=\"citation-drawer-close\"" in html
+    assert "id=\"citation-drawer-backdrop\"" in html
+
+    # 404 / not-found error path surfaces citation-drawer-error + 未找到
+    assert "id=\"citation-drawer-error\"" in html
+    assert "res.status === 404" in html
+    assert "未找到" in html
+
+    # Editor shell stays isolated — no full 库览 / ops chrome
+    assert "库览" not in html
+    assert "/ops" not in html
+
+
 def test_workbench_chunk_api_returns_fragment_text(
     test_settings: Settings, tmp_path: Path
 ) -> None:
-    """#5: drawer data path — GET /api/chunks/{chunk_id} returns fragment text."""
+    """#5: drawer data path — GET /api/chunks/{chunk_id} returns fragment JSON contract."""
     source = _write_markdown(
         tmp_path / "mazu.md",
         culture_domain="妈祖",
@@ -162,6 +212,7 @@ def test_workbench_chunk_api_returns_fragment_text(
     body = response.json()
     assert body["chunk_id"] == chunk_id
     assert body["culture_domain"] == "妈祖"
+    assert body["title"] == "妈祖简介"
     assert "湄洲岛" in body["text"]
 
     missing = client.get("/api/chunks/nonexistent-chunk-id")
