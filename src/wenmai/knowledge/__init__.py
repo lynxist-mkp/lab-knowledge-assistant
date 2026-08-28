@@ -4,6 +4,7 @@ from wenmai.knowledge.browse import (
     DocumentSummary,
     OverviewStats,
 )
+from wenmai.knowledge.search import SearchMode, SearchResult
 from wenmai.knowledge.store import (
     Knowledge,
     PrepareResult,
@@ -18,6 +19,8 @@ __all__ = [
     "Knowledge",
     "OverviewStats",
     "PrepareResult",
+    "SearchMode",
+    "SearchResult",
     "UpsertResult",
     "create_knowledge",
 ]

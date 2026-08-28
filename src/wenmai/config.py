@@ -30,6 +30,7 @@ class Paths:
     chroma: str
     bm25: str
     ingestion_history: str
+    catalog: str
     images: str
     image_index: str
     traces: str
@@ -53,6 +54,9 @@ class TransformConfig:
     enricher_prompt: str
     captioner_prompt: str
     stages: list[str] = field(default_factory=list)
+    refiner: str = "rule"
+    enricher: str = "llm"
+    captioner: str = "vision"
     refiner_min_ratio: float = 0.5
 
 
@@ -265,10 +269,11 @@ def _build_evaluation(raw: dict[str, Any]) -> Evaluation:
 
 
 def _normalize_transform(raw: dict[str, Any]) -> dict[str, Any]:
-    """Drop legacy registry-name fields that prepare_chunks never reads."""
+    """Restore provider keys used by the transform registry."""
     payload = dict(raw)
-    for key in ("refiner", "enricher", "captioner"):
-        payload.pop(key, None)
+    payload.setdefault("refiner", "rule")
+    payload.setdefault("enricher", "llm")
+    payload.setdefault("captioner", "vision")
     return payload
 
 

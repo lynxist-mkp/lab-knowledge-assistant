@@ -1800,6 +1800,13 @@
       .replace(/'/g, '&#039;');
   }
 
+  function formatRefusalReason(reason) {
+    if (!reason) return '-';
+    if (reason === 'insufficient_evidence') return '证据不足';
+    if (reason === 'model_refused') return '模型拒答';
+    return escapeHtml(reason);
+  }
+
   /* =========================================================
      Tab Switching Logic
      ========================================================= */
@@ -2479,6 +2486,10 @@
             <div class="result-item">
               <span class="result-key">是否拒答</span>
               <span class="result-val">${detail.refused ? '<span style="color:var(--color-warning);">是 (Refused)</span>' : '否'}</span>
+            </div>
+            <div class="result-item">
+              <span class="result-key">拒答原因</span>
+              <span class="result-val">${formatRefusalReason(detail.refusal_reason)}</span>
             </div>
             <div class="result-item">
               <span class="result-key">精排回退</span>

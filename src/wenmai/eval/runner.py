@@ -14,11 +14,13 @@ from wenmai.eval.metrics import (
     citation_coverage,
     corpus_doc_ids_from_chunks,
     refusal_accuracy,
+    retrieval_item_snapshot,
 )
 from wenmai.eval.views import EvalRunView, FailedEvalItem, parse_eval_run
 from wenmai.knowledge import Knowledge, create_knowledge
-from wenmai.models import AskResult
-from wenmai.pipelines.query import ask_question
+from wenmai.models import AskResult, ScoredChunk
+from wenmai.pipelines.query import ask_question, normalize_question
+from wenmai.retrieval import retrieve
 
 FAILURE_RETRIES = 3
 
@@ -30,59 +32,106 @@ def _runs_dir(settings: Settings) -> Path:
     return path
 
 
+def _ablation_kwargs(group: str) -> dict[str, str | bool]:
+    spec = resolve_ablation(group)
+    return {
+        "retrieval_mode": spec.mode,
+        "rerank_enabled": spec.rerank_enabled,
+    }
+
+
+def _retrieve_item(
+    item: GoldItem,
+    settings: Settings,
+    group: str,
+    knowledge: Knowledge,
+) -> list[ScoredChunk] | None:
+    kwargs = _ablation_kwargs(group)
+    try:
+        result = retrieve(
+            normalize_question(item.question),
+            settings,
+            retrieval_mode=str(kwargs["retrieval_mode"]),
+            rerank_enabled=bool(kwargs["rerank_enabled"]),
+            knowledge=knowledge,
+        )
+        return result.chunks
+    except Exception:
+        return None
+
+
 def _ask_item(
     item: GoldItem,
     settings: Settings,
     group: str,
     knowledge: Knowledge,
-) -> AskResult:
-    spec = resolve_ablation(group)
-    return ask_question(
-        item.question,
-        settings,
-        retrieval_mode=spec.mode,
-        rerank_enabled=spec.rerank_enabled,
-        knowledge=knowledge,
-    )
-
-
-def _try_ask(
-    item: GoldItem,
-    settings: Settings,
-    group: str,
-    knowledge: Knowledge,
 ) -> AskResult | None:
+    kwargs = _ablation_kwargs(group)
     try:
-        return _ask_item(item, settings, group, knowledge)
+        return ask_question(
+            item.question,
+            settings,
+            retrieval_mode=str(kwargs["retrieval_mode"]),
+            rerank_enabled=bool(kwargs["rerank_enabled"]),
+            knowledge=knowledge,
+            record_trace=False,
+        )
     except Exception:
         return None
 
 
 def _metrics_payload(
     items: list[GoldItem],
-    results_by_id: dict[str, AskResult],
+    ranked_by_id: dict[str, list[str]],
+    generation_by_id: dict[str, AskResult],
 ) -> dict[str, Any]:
-    scored_items: list[GoldItem] = []
+    hit_items: list[GoldItem] = []
     ranked_per_item: list[list[str]] = []
+    for item in items:
+        ranked = ranked_by_id.get(item.id)
+        if ranked is None:
+            continue
+        hit_items.append(item)
+        ranked_per_item.append(ranked)
+
+    gen_items: list[GoldItem] = []
     refused_flags: list[bool] = []
     citation_counts: list[int] = []
     for item in items:
-        result = results_by_id.get(item.id)
+        result = generation_by_id.get(item.id)
         if result is None:
             continue
-        scored_items.append(item)
-        ranked_per_item.append(corpus_doc_ids_from_chunks(result.ranked_chunks))
+        gen_items.append(item)
         refused_flags.append(result.refused)
         citation_counts.append(len(result.citations))
 
     return group_metrics_payload(
-        hit_at_5=aggregate_hit_at_5(scored_items, ranked_per_item),
-        mrr=aggregate_mrr(scored_items, ranked_per_item),
-        refusal_accuracy=refusal_accuracy(scored_items, refused_flags),
-        citation_coverage=citation_coverage(scored_items, refused_flags, citation_counts),
+        hit_at_5=aggregate_hit_at_5(hit_items, ranked_per_item),
+        mrr=aggregate_mrr(hit_items, ranked_per_item),
+        refusal_accuracy=refusal_accuracy(gen_items, refused_flags),
+        citation_coverage=citation_coverage(gen_items, refused_flags, citation_counts),
         answerable_count=sum(1 for item in items if item.answerable),
         unanswerable_count=sum(1 for item in items if not item.answerable),
     )
+
+
+def _item_snapshots(
+    items: list[GoldItem],
+    ranked_chunks_by_id: dict[str, list[ScoredChunk]],
+    generation_by_id: dict[str, AskResult],
+) -> dict[str, dict[str, Any]]:
+    snapshots: dict[str, dict[str, Any]] = {}
+    for item in items:
+        chunks = ranked_chunks_by_id.get(item.id)
+        if chunks is None:
+            continue
+        payload: dict[str, Any] = {"retrieval": retrieval_item_snapshot(chunks)}
+        result = generation_by_id.get(item.id)
+        if result is not None:
+            payload["refused"] = result.refused
+            payload["citation_count"] = len(result.citations)
+        snapshots[item.id] = payload
+    return snapshots
 
 
 def run_eval(
@@ -93,7 +142,8 @@ def run_eval(
     items = load_golden_set_from_settings(settings)
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     groups = list(settings.evaluation.ablations)
-    results: dict[str, dict[str, AskResult]] = {name: {} for name in groups}
+    ranked_chunks: dict[str, dict[str, list[ScoredChunk]]] = {name: {} for name in groups}
+    generation_results: dict[str, dict[str, AskResult]] = {name: {} for name in groups}
     resolved_knowledge = knowledge or create_knowledge(settings)
 
     pending: list[tuple[str, GoldItem]] = [
@@ -101,22 +151,32 @@ def run_eval(
     ]
     still: list[tuple[str, GoldItem]] = []
     for group, item in pending:
-        result = _try_ask(item, settings, group, resolved_knowledge)
-        if result is None:
+        chunks = _retrieve_item(item, settings, group, resolved_knowledge)
+        result = _ask_item(item, settings, group, resolved_knowledge)
+        if chunks is not None:
+            ranked_chunks[group][item.id] = chunks
+        if result is not None:
+            generation_results[group][item.id] = result
+        if chunks is None or result is None:
             still.append((group, item))
-        else:
-            results[group][item.id] = result
 
     for _ in range(FAILURE_RETRIES):
         if not still:
             break
         nxt: list[tuple[str, GoldItem]] = []
         for group, item in still:
-            result = _try_ask(item, settings, group, resolved_knowledge)
+            chunks = ranked_chunks[group].get(item.id)
+            if chunks is None:
+                chunks = _retrieve_item(item, settings, group, resolved_knowledge)
+                if chunks is not None:
+                    ranked_chunks[group][item.id] = chunks
+            result = generation_results[group].get(item.id)
             if result is None:
+                result = _ask_item(item, settings, group, resolved_knowledge)
+                if result is not None:
+                    generation_results[group][item.id] = result
+            if chunks is None or result is None:
                 nxt.append((group, item))
-            else:
-                results[group][item.id] = result
         still = nxt
 
     failures = [
@@ -131,7 +191,15 @@ def run_eval(
         "groups": {
             name: {
                 "config": config_snapshot(settings, name),
-                "metrics": _metrics_payload(items, results[name]),
+                "metrics": _metrics_payload(
+                    items,
+                    {
+                        item_id: corpus_doc_ids_from_chunks(chunks)
+                        for item_id, chunks in ranked_chunks[name].items()
+                    },
+                    generation_results[name],
+                ),
+                "items": _item_snapshots(items, ranked_chunks[name], generation_results[name]),
             }
             for name in groups
         },

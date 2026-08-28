@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,9 @@ from fastapi.testclient import TestClient
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.eval import get_eval_dashboard, list_eval_runs, run_eval
+from wenmai.generation import GenerationError
 from wenmai.pipelines.query import ask_question
+from wenmai.tracing.store import read_trace_records
 
 
 def _write_jsonl(path: Path, lines: list[str]) -> Path:
@@ -150,3 +153,59 @@ def test_post_eval_runs_returns_typed_run(test_settings: Settings, tmp_path: Pat
     assert body["groups"]["rrf_rerank"]["label"] == "RRF + Rerank"
     assert "hit_at_5" in body["groups"]["rrf_rerank"]["metrics"]
     assert "stages" not in body
+
+
+def test_run_eval_does_not_write_query_traces(
+    test_settings: Settings,
+    tmp_path: Path,
+    without_ragas_judge_key: None,
+) -> None:
+    _prepare_eval(test_settings, tmp_path)
+    before = read_trace_records(test_settings)
+    query_before = [record for record in before if record.get("trace_type") == "query"]
+
+    run_eval(test_settings)
+
+    after = read_trace_records(test_settings)
+    query_after = [record for record in after if record.get("trace_type") == "query"]
+    assert query_after == query_before
+
+
+def test_run_eval_artifact_contains_retrieval_snapshots(
+    test_settings: Settings,
+    tmp_path: Path,
+    without_ragas_judge_key: None,
+) -> None:
+    _prepare_eval(test_settings, tmp_path)
+
+    run = run_eval(test_settings)
+    artifact_path = Path(test_settings.evaluation.runs) / f"{run.timestamp}.json"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    items = artifact["groups"]["rrf_rerank"]["items"]
+
+    assert "g001" in items
+    assert "matsu-intro" in items["g001"]["retrieval"]["ranked_doc_ids"]
+    assert items["g001"]["retrieval"]["ranked_chunks"]
+    assert items["g001"]["retrieval"]["ranked_chunks"][0]["chunk_id"]
+
+
+def test_run_eval_hit_at_5_survives_generation_failure(
+    test_settings: Settings,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _prepare_eval(test_settings, tmp_path)
+
+    def fail_generate(*_args: object, **_kwargs: object) -> object:
+        raise GenerationError("fake provider failed", provider_name="fake")
+
+    monkeypatch.setattr("wenmai.pipelines.query.generate", fail_generate)
+
+    run = run_eval(test_settings)
+
+    assert run.failed_count > 0
+    artifact_path = Path(test_settings.evaluation.runs) / f"{run.timestamp}.json"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    metrics = artifact["groups"]["rrf_rerank"]["metrics"]
+    assert metrics["hit_at_5"] == 1.0
+    assert metrics["mrr"] == 1.0

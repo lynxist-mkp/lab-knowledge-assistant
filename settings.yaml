@@ -8,6 +8,7 @@ paths:
   chroma: "data/db/chroma"
   bm25: "data/db/bm25"
   ingestion_history: "data/db/ingestion_history.db"
+  catalog: "data/db/catalog.json"
   images: "data/images"
   image_index: "data/db/image_index.db"
   traces: "logs/traces.jsonl"

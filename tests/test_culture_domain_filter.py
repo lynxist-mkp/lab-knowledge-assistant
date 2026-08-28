@@ -17,8 +17,12 @@ _SHIP_CHUNK_ID = "doc-ship:0000"
 
 def _seed_cross_domain_chunks(settings: Settings) -> None:
     knowledge = create_knowledge(settings)
-    knowledge.upsert(
-        [
+    knowledge.commit_document(
+        source_path="/tmp/doc-haisi.md",
+        sha256="doc-haisi",
+        document_id="doc-haisi",
+        status="ingested",
+        chunks=[
             Chunk(
                 chunk_id=_HAISI_CHUNK_ID,
                 document_id="doc-haisi",
@@ -29,6 +33,14 @@ def _seed_cross_domain_chunks(settings: Settings) -> None:
                     "culture_domain": "海丝",
                 },
             ),
+        ],
+    )
+    knowledge.commit_document(
+        source_path="/tmp/doc-ship.md",
+        sha256="doc-ship",
+        document_id="doc-ship",
+        status="ingested",
+        chunks=[
             Chunk(
                 chunk_id=_SHIP_CHUNK_ID,
                 document_id="doc-ship",
@@ -39,7 +51,7 @@ def _seed_cross_domain_chunks(settings: Settings) -> None:
                     "culture_domain": "船政",
                 },
             ),
-        ]
+        ],
     )
 
 

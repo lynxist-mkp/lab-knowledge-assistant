@@ -142,3 +142,16 @@ def overview_from_chunks(chunks: list[Chunk], settings: Settings) -> OverviewSta
         chunk_count=len(chunks),
         avg_query_latency_ms=average_query_latency_ms(settings),
     )
+
+
+def overview_from_catalog(
+    *,
+    document_count: int,
+    chunk_count: int,
+    settings: Settings,
+) -> OverviewStats:
+    return OverviewStats(
+        document_count=document_count,
+        chunk_count=chunk_count,
+        avg_query_latency_ms=average_query_latency_ms(settings),
+    )

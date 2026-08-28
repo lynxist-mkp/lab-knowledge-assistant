@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
@@ -23,16 +25,41 @@ def _chunk(chunk_id: str, document_id: str, text: str, culture_domain: str = "")
     )
 
 
-def test_upsert_makes_dense_and_sparse_searchable(test_settings: Settings) -> None:
-    knowledge = create_knowledge(test_settings)
-    result = knowledge.upsert(
-        [
-            _chunk("doc-a:0000", "doc-a", "船政学堂创办于马尾，是近代海军摇篮。"),
-            _chunk("doc-b:0000", "doc-b", "湄洲祖庙是妈祖信仰的中心。"),
-        ]
+def _commit(
+    knowledge,
+    document_id: str,
+    text: str,
+    *,
+    source_path: str | None = None,
+    sha256: str | None = None,
+    chunk_id: str | None = None,
+    culture_domain: str = "",
+    status: str = "ingested",
+    previous_document_id: str | None = None,
+):
+    return knowledge.commit_document(
+        source_path=source_path or f"/tmp/{document_id}.md",
+        sha256=sha256 or document_id,
+        document_id=document_id,
+        status=status,
+        chunks=[
+            _chunk(
+                chunk_id or f"{document_id}:0000",
+                document_id,
+                text,
+                culture_domain,
+            )
+        ],
+        previous_document_id=previous_document_id,
     )
-    assert result.chunk_count == 2
-    assert result.embed_dimension > 0
+
+
+def test_commit_makes_dense_and_sparse_searchable(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    result_a = _commit(knowledge, "doc-a", "船政学堂创办于马尾，是近代海军摇篮。")
+    _commit(knowledge, "doc-b", "湄洲祖庙是妈祖信仰的中心。")
+    assert result_a.chunk_count == 1
+    assert result_a.embed_dimension > 0
 
     dense = knowledge.dense_search("船政学堂在哪里", top_k=2)
     dense_ids = {item.chunk.chunk_id for item in dense}
@@ -48,12 +75,8 @@ def test_upsert_makes_dense_and_sparse_searchable(test_settings: Settings) -> No
 
 def test_sparse_ranks_more_relevant_chunk_higher(test_settings: Settings) -> None:
     knowledge = create_knowledge(test_settings)
-    knowledge.upsert(
-        [
-            _chunk("doc-a:0000", "doc-a", "船政学堂船政学堂是近代海军摇篮。"),
-            _chunk("doc-b:0000", "doc-b", "船政学堂曾在马尾设立分校，后来迁往别处。"),
-        ]
-    )
+    _commit(knowledge, "doc-a", "船政学堂船政学堂是近代海军摇篮。")
+    _commit(knowledge, "doc-b", "船政学堂曾在马尾设立分校，后来迁往别处。")
     hits = knowledge.sparse_search("船政学堂", top_k=2)
     assert len(hits) == 2
     assert hits[0].chunk.chunk_id == "doc-a:0000"
@@ -62,12 +85,8 @@ def test_sparse_ranks_more_relevant_chunk_higher(test_settings: Settings) -> Non
 
 def test_delete_document_removes_search_hits_and_images(test_settings: Settings) -> None:
     knowledge = create_knowledge(test_settings)
-    knowledge.upsert(
-        [
-            _chunk("doc-a:0000", "doc-a", "船政学堂简介"),
-            _chunk("doc-b:0000", "doc-b", "湄洲祖庙简介"),
-        ]
-    )
+    _commit(knowledge, "doc-a", "船政学堂简介")
+    _commit(knowledge, "doc-b", "湄洲祖庙简介")
     images = knowledge.images
     placeholder = images.attach(
         document_id="doc-a",
@@ -152,13 +171,189 @@ def test_delete_clears_fingerprint_so_reingest_is_not_skipped(
 
 def test_culture_domain_filter_hides_other_domain(test_settings: Settings) -> None:
     knowledge = create_knowledge(test_settings)
-    knowledge.upsert(
-        [
-            _chunk("doc-haisi:0000", "doc-haisi", "通商口岸是海丝贸易节点。", "海丝"),
-            _chunk("doc-ship:0000", "doc-ship", "通商口岸支撑了船政物资进口。", "船政"),
-        ]
-    )
+    _commit(knowledge, "doc-haisi", "通商口岸是海丝贸易节点。", culture_domain="海丝")
+    _commit(knowledge, "doc-ship", "通商口岸支撑了船政物资进口。", culture_domain="船政")
     hits = knowledge.sparse_search("通商口岸", top_k=5, culture_domain="海丝")
     ids = {item.chunk.chunk_id for item in hits}
     assert "doc-haisi:0000" in ids
     assert "doc-ship:0000" not in ids
+
+
+def test_catalog_updates_on_commit_and_delete(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-a", "船政学堂简介", culture_domain="船政")
+    _commit(knowledge, "doc-b", "湄洲祖庙简介", culture_domain="妈祖")
+
+    overview = knowledge.overview()
+    assert overview.document_count == 2
+    assert overview.chunk_count == 2
+
+    groups = knowledge.browse_by_culture_domain()
+    by_domain = {group.culture_domain: group for group in groups}
+    assert by_domain["船政"].document_count == 1
+    assert by_domain["妈祖"].chunk_count == 1
+
+    knowledge.delete_document("doc-a")
+    overview = knowledge.overview()
+    assert overview.document_count == 1
+    assert overview.chunk_count == 1
+
+
+def test_browse_and_overview_use_catalog_not_list_all(
+    test_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-a", "船政学堂简介", culture_domain="船政")
+
+    def fail_list_all() -> list[Chunk]:
+        raise AssertionError("browse/overview should not scan list_all()")
+
+    monkeypatch.setattr(knowledge._store, "list_all", fail_list_all)
+
+    assert knowledge.overview().document_count == 1
+    assert knowledge.browse_by_culture_domain()
+
+
+def test_search_modes_match_direct_retrieval(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-a", "船政学堂创办于马尾，是近代海军摇篮。")
+    _commit(knowledge, "doc-b", "湄洲祖庙是妈祖信仰的中心。")
+
+    dense = knowledge.search("船政学堂在哪里", mode="dense_only")
+    sparse = knowledge.search("船政学堂", mode="sparse_only")
+    fused = knowledge.search("船政学堂", mode="rrf")
+
+    assert dense.chunks
+    assert sparse.chunks[0].chunk.chunk_id == "doc-a:0000"
+    assert fused.chunks
+    assert fused.dense_chunks
+    assert fused.sparse_chunks
+
+
+def test_search_unknown_mode_raises(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    with pytest.raises(ValueError, match="unknown search mode"):
+        knowledge.search("妈祖", mode="clip")
+
+
+def test_commit_rolls_back_dense_on_sparse_write_failure(
+    test_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    doc_id = "rollback-doc"
+    source = "/tmp/rollback.md"
+
+    def fail_bm25_upsert(*_args, **_kwargs) -> None:
+        raise RuntimeError("simulated sparse write failure")
+
+    monkeypatch.setattr(knowledge._bm25, "upsert", fail_bm25_upsert)
+
+    with pytest.raises(RuntimeError, match="simulated sparse write failure"):
+        knowledge.commit_document(
+            source_path=source,
+            sha256=doc_id,
+            document_id=doc_id,
+            status="ingested",
+            chunks=[_chunk("rollback-doc:0000", doc_id, "会回滚的内容")],
+        )
+
+    assert knowledge.get_by_document_id(doc_id) == []
+    assert knowledge.overview().document_count == 0
+    sparse = knowledge.sparse_search("回滚", top_k=5)
+    assert all(item.chunk.document_id != doc_id for item in sparse)
+    plan = knowledge.plan_document(
+        source_path=source, sha256=doc_id, document_id=doc_id
+    )
+    assert plan.status == "ingested"
+
+
+def test_commit_rolls_back_on_sparse_save_failure(
+    test_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    doc_id = "save-fail-doc"
+    source = "/tmp/save-fail.md"
+
+    def fail_save() -> None:
+        raise RuntimeError("simulated sparse save failure")
+
+    monkeypatch.setattr(knowledge._bm25, "save", fail_save)
+
+    with pytest.raises(RuntimeError, match="simulated sparse save failure"):
+        knowledge.commit_document(
+            source_path=source,
+            sha256=doc_id,
+            document_id=doc_id,
+            status="ingested",
+            chunks=[_chunk("save-fail-doc:0000", doc_id, "保存失败应回滚")],
+        )
+
+    assert knowledge.get_by_document_id(doc_id) == []
+    assert knowledge.overview().document_count == 0
+    sparse = knowledge.sparse_search("回滚", top_k=5)
+    assert all(item.chunk.document_id != doc_id for item in sparse)
+
+
+def test_commit_rebuild_failure_preserves_previous_document(
+    test_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    source = "/tmp/rebuild-fail.md"
+    _commit(knowledge, "old-doc", "旧版保留", source_path=source, sha256="old-sha")
+
+    def fail_after_upsert(*_args, **_kwargs) -> None:
+        raise RuntimeError("simulated fingerprint failure")
+
+    monkeypatch.setattr(knowledge._fingerprints, "upsert", fail_after_upsert)
+
+    with pytest.raises(RuntimeError, match="simulated fingerprint failure"):
+        knowledge.commit_document(
+            source_path=source,
+            sha256="new-sha",
+            document_id="new-doc",
+            status="rebuilt",
+            chunks=[_chunk("new-doc:0000", "new-doc", "新版未生效")],
+            previous_document_id="old-doc",
+        )
+
+    assert knowledge.get_by_document_id("old-doc")
+    assert knowledge.get_by_document_id("new-doc") == []
+    plan = knowledge.plan_document(
+        source_path=source, sha256="old-sha", document_id="old-doc"
+    )
+    assert plan.status == "skipped"
+
+
+def test_commit_rebuild_delete_failure_restores_fingerprint(
+    test_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    source = "/tmp/rebuild-delete-fail.md"
+    _commit(knowledge, "old-doc", "旧版保留", source_path=source, sha256="old-sha")
+
+    def fail_delete(_document_id: str) -> None:
+        raise RuntimeError("simulated previous delete failure")
+
+    monkeypatch.setattr(knowledge, "delete_document", fail_delete)
+
+    with pytest.raises(RuntimeError, match="simulated previous delete failure"):
+        knowledge.commit_document(
+            source_path=source,
+            sha256="new-sha",
+            document_id="new-doc",
+            status="rebuilt",
+            chunks=[_chunk("new-doc:0000", "new-doc", "新版未生效")],
+            previous_document_id="old-doc",
+        )
+
+    assert knowledge.get_by_document_id("old-doc")
+    assert knowledge.get_by_document_id("new-doc") == []
+    plan = knowledge.plan_document(
+        source_path=source, sha256="old-sha", document_id="old-doc"
+    )
+    assert plan.status == "skipped"

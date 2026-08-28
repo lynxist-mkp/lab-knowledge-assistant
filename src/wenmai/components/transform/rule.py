@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import re
 
+from wenmai.components.transform.base import BaseTransform
 from wenmai.config import Settings
+from wenmai.factories.transform import registry
 from wenmai.models import Chunk
 from wenmai.tracing.context import TraceContext
 
@@ -83,7 +85,10 @@ def clean_chunk_text(text: str) -> str:
     return _collapse_whitespace(cleaned)
 
 
-class RuleRefiner:
+@registry.register("refiner.rule")
+class RuleRefiner(BaseTransform):
+    name = "refiner"
+
     def __init__(self, settings: Settings, **kwargs: object) -> None:
         self._min_ratio = settings.transform.refiner_min_ratio
 

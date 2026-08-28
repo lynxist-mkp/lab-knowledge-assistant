@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from wenmai.eval.golden import GoldItem, corpus_id_from_source_path
 from wenmai.models import ScoredChunk
 
@@ -12,6 +14,21 @@ def corpus_doc_ids_from_chunks(scored_chunks: list[ScoredChunk]) -> list[str]:
         if source_path:
             ids.append(corpus_id_from_source_path(str(source_path)))
     return ids
+
+
+def retrieval_item_snapshot(scored_chunks: list[ScoredChunk]) -> dict[str, Any]:
+    """Debug payload for eval artifacts: corpus doc ids and ranked chunk summaries."""
+    return {
+        "ranked_doc_ids": corpus_doc_ids_from_chunks(scored_chunks),
+        "ranked_chunks": [
+            {
+                "chunk_id": item.chunk.chunk_id,
+                "document_id": item.chunk.document_id,
+                "score": round(item.score, 6),
+            }
+            for item in scored_chunks
+        ],
+    }
 
 
 def unique_corpus_doc_ids(ranked_doc_ids: list[str], top_k: int = 5) -> list[str]:
