@@ -95,24 +95,37 @@ def test_overview_avg_query_latency_from_traces(test_settings: Settings) -> None
 
 
 def test_browse_groups_documents_by_culture_domain(test_settings: Settings) -> None:
-    create_knowledge(test_settings).upsert(
-        [
+    knowledge = create_knowledge(test_settings)
+    knowledge.commit_document(
+        source_path="/tmp/doc-matsu.md",
+        sha256="doc-matsu",
+        document_id="doc-matsu",
+        status="ingested",
+        chunks=[
             Chunk(
                 chunk_id="matsu-001",
                 document_id="doc-matsu",
                 text="妈祖信仰发源于湄洲岛。",
                 metadata={"title": "妈祖简介", "culture_domain": "妈祖", "document_id": "doc-matsu"},
             ),
+        ],
+    )
+    knowledge.commit_document(
+        source_path="/tmp/doc-zhuzi.md",
+        sha256="doc-zhuzi",
+        document_id="doc-zhuzi",
+        status="ingested",
+        chunks=[
             Chunk(
                 chunk_id="zhuzi-001",
                 document_id="doc-zhuzi",
                 text="朱熹是理学集大成者。",
                 metadata={"title": "朱子理学", "culture_domain": "朱子", "document_id": "doc-zhuzi"},
             ),
-        ]
+        ],
     )
 
-    groups = create_knowledge(test_settings).browse_by_culture_domain()
+    groups = knowledge.browse_by_culture_domain()
     by_domain = {group.culture_domain: group for group in groups}
 
     assert set(by_domain) == {"妈祖", "朱子"}

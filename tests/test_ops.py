@@ -173,8 +173,12 @@ def test_ops_browse_api_contract(test_settings: Settings) -> None:
     from wenmai.models import Chunk
 
     app = create_app(test_settings)
-    app.state.knowledge.upsert(
-        [
+    app.state.knowledge.commit_document(
+        source_path="/tmp/doc-haisi.md",
+        sha256="doc-haisi",
+        document_id="doc-haisi",
+        status="ingested",
+        chunks=[
             Chunk(
                 chunk_id="doc-haisi:0000",
                 document_id="doc-haisi",
@@ -185,6 +189,14 @@ def test_ops_browse_api_contract(test_settings: Settings) -> None:
                     "culture_domain": "海丝",
                 },
             ),
+        ],
+    )
+    app.state.knowledge.commit_document(
+        source_path="/tmp/doc-mazu.md",
+        sha256="doc-mazu",
+        document_id="doc-mazu",
+        status="ingested",
+        chunks=[
             Chunk(
                 chunk_id="doc-mazu:0000",
                 document_id="doc-mazu",
@@ -195,7 +207,7 @@ def test_ops_browse_api_contract(test_settings: Settings) -> None:
                     "culture_domain": "妈祖",
                 },
             ),
-        ]
+        ],
     )
 
     client = TestClient(app)
