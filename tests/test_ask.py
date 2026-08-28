@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.pipelines.query import ask_question
-from wenmai.tracing.store import get_trace_record
+from wenmai.tracing.store import get_trace_record, read_trace_records
 
 
 def _write_minpai_markdown(path: Path) -> Path:
@@ -154,3 +154,33 @@ def test_ask_writes_trace_outcome_metadata(
     assert outcome["refused"] is body["refused"]
     assert outcome["refusal_reason"] == "model_refused"
     assert outcome["citation_count"] == len(body["citations"])
+
+
+def test_ask_question_record_trace_false_skips_trace_write(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    source = _write_minpai_markdown(tmp_path / "matsu.md")
+    client = TestClient(create_app(test_settings))
+    client.post("/ingest", json={"source_path": str(source)})
+
+    query_traces = [
+        record
+        for record in read_trace_records(test_settings)
+        if record.get("trace_type") == "query"
+    ]
+    before = len(query_traces)
+    result = ask_question(
+        "妈祖信仰的发源地在哪里？",
+        test_settings,
+        record_trace=False,
+    )
+    after = len(
+        [
+            record
+            for record in read_trace_records(test_settings)
+            if record.get("trace_type") == "query"
+        ]
+    )
+
+    assert result.trace_id
+    assert after == before

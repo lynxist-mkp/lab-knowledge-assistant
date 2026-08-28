@@ -9,10 +9,10 @@ from wenmai.models import AskResult
 from wenmai.retrieval import retrieve
 from wenmai.tracing import TraceContext, save_trace
 
-__all__ = ["QueryGenerationError", "ask_question"]
+__all__ = ["QueryGenerationError", "ask_question", "normalize_question"]
 
 
-def _normalize_question(question: str) -> str:
+def normalize_question(question: str) -> str:
     collapsed = re.sub(r"\s+", " ", question.strip())
     return collapsed
 
@@ -25,9 +25,10 @@ def ask_question(
     retrieval_mode: str | None = None,
     rerank_enabled: bool | None = None,
     knowledge: Knowledge | None = None,
+    record_trace: bool = True,
 ) -> AskResult:
     trace = TraceContext(trace_type="query", metadata={"question": question})
-    normalized = _normalize_question(question)
+    normalized = normalize_question(question)
 
     try:
         with trace.stage(
@@ -85,4 +86,5 @@ def ask_question(
             ranked_chunks=scored_chunks,
         )
     finally:
-        save_trace(settings, trace)
+        if record_trace:
+            save_trace(settings, trace)
