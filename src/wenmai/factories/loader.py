@@ -7,6 +7,7 @@ _COMPONENT_PACKAGES = (
     "wenmai.components.embedding",
     "wenmai.components.evaluator",
     "wenmai.components.llm",
+    "wenmai.components.multimodal",
     "wenmai.components.reranker",
     "wenmai.components.splitter",
     "wenmai.components.transform",

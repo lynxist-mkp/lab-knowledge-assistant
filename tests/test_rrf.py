@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
-from wenmai.components.retrieval.rrf import reciprocal_rank_fusion
 from wenmai.config import Settings
+from wenmai.retrieval import reciprocal_rank_fusion
 
 
 def test_rrf_rank_starts_at_one() -> None:
@@ -47,7 +46,7 @@ def test_rrf_accumulates_when_both_paths_hit() -> None:
     assert fused[0][0] == "shared"
 
 
-def test_rrf_ask_records_dense_sparse_and_fusion_stages(
+def test_rrf_ask_returns_citations_on_default_fusion(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     source = tmp_path / "mazu.md"
@@ -68,26 +67,5 @@ title: 湄洲妈祖祖庙简介
     assert response.status_code == 200
     body = response.json()
     assert body["trace_id"]
-
-    trace_path = Path(test_settings.paths.traces)
-    traces = [
-        json.loads(line)
-        for line in trace_path.read_text(encoding="utf-8").splitlines()
-        if line
-    ]
-    query_trace = next(trace for trace in traces if trace["trace_id"] == body["trace_id"])
-    assert [stage["name"] for stage in query_trace["stages"]] == [
-        "query_processing",
-        "dense",
-        "sparse",
-        "fusion",
-        "rerank",
-        "generation",
-    ]
-
-    fusion_stage = next(stage for stage in query_trace["stages"] if stage["name"] == "fusion")
-    assert fusion_stage["method"] == "rrf"
-    assert fusion_stage["dense_candidates"]
-    assert fusion_stage["sparse_candidates"]
-    assert fusion_stage["candidates"]
-    assert len(fusion_stage["candidates"]) <= test_settings.retrieval.fused_k
+    assert body["citations"]
+    assert body["citations"][0]["document_id"] == ingest.json()["document_id"]

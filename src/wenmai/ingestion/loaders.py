@@ -13,13 +13,20 @@ from markitdown import MarkItDown
 
 from wenmai.components.paddleocr import (
     build_text_from_ocr_payload,
-    choose_pdf_route,
     parse_scanned_pdf,
 )
 from wenmai.config import Settings
-from wenmai.storage.images import ImageStore
+from wenmai.ingestion.pdf_route import choose_pdf_route, validate_pdf_load_mode
+from wenmai.storage.document_images import DocumentImages
 
-_IMAGE_PLACEHOLDER = "[IMAGE: {image_id}]"
+
+class SourceLoadError(Exception):
+    """Load failed after the route was already chosen; Trace can still label the stage."""
+
+    def __init__(self, message: str, *, load_method: str, load_provider: str) -> None:
+        super().__init__(message)
+        self.load_method = load_method
+        self.load_provider = load_provider
 
 
 @dataclass
@@ -40,12 +47,14 @@ def load_source(
     settings: Settings,
     *,
     pdf_load_mode: str | None = None,
+    images: DocumentImages | None = None,
 ) -> LoadedDocument:
+    validate_pdf_load_mode(pdf_load_mode)
     suffix = path.suffix.lower()
     if suffix == ".md":
         return load_markdown(path)
     if suffix == ".pdf":
-        return load_pdf(path, settings, pdf_load_mode=pdf_load_mode)
+        return load_pdf(path, settings, pdf_load_mode=pdf_load_mode, images=images)
     raise ValueError(f"unsupported source type: {path.suffix}")
 
 
@@ -88,21 +97,40 @@ def load_pdf(
     settings: Settings,
     *,
     pdf_load_mode: str | None = None,
+    images: DocumentImages | None = None,
 ) -> LoadedDocument:
     route = choose_pdf_route(path, settings.pdf_load, override_mode=pdf_load_mode)
     if route == "markitdown":
-        return _load_pdf_markitdown(path, settings)
-    return _load_pdf_paddleocr(path, settings)
+        method, provider = "markitdown", "markitdown"
+        loader = _load_pdf_markitdown
+    else:
+        method, provider = "paddleocr-vl", "mlx-vlm-server"
+        loader = _load_pdf_paddleocr
+    try:
+        return loader(path, settings, images=images)
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise SourceLoadError(
+            str(exc),
+            load_method=method,
+            load_provider=provider,
+        ) from exc
 
 
-def _load_pdf_markitdown(path: Path, settings: Settings) -> LoadedDocument:
+def _load_pdf_markitdown(
+    path: Path,
+    settings: Settings,
+    *,
+    images: DocumentImages | None = None,
+) -> LoadedDocument:
     raw_bytes = path.read_bytes()
     document_id = hashlib.sha256(raw_bytes).hexdigest()
     source_path = str(path)
 
     markdown = MarkItDown().convert(str(path)).text_content.strip()
-    image_store = ImageStore(settings)
-    page_placeholders = _extract_pdf_images(path, image_store, document_id, source_path)
+    doc_images = images or DocumentImages(settings)
+    page_placeholders = _extract_pdf_images(path, doc_images, document_id, source_path)
     text = _inject_image_placeholders(markdown, page_placeholders)
 
     return LoadedDocument(
@@ -118,16 +146,21 @@ def _load_pdf_markitdown(path: Path, settings: Settings) -> LoadedDocument:
     )
 
 
-def _load_pdf_paddleocr(path: Path, settings: Settings) -> LoadedDocument:
+def _load_pdf_paddleocr(
+    path: Path,
+    settings: Settings,
+    *,
+    images: DocumentImages | None = None,
+) -> LoadedDocument:
     raw_bytes = path.read_bytes()
     document_id = hashlib.sha256(raw_bytes).hexdigest()
     source_path = str(path)
 
     payload = parse_scanned_pdf(path, config=settings.paddleocr)
-    image_store = ImageStore(settings)
+    doc_images = images or DocumentImages(settings)
     text = build_text_from_ocr_payload(
         payload,
-        image_store,
+        doc_images,
         document_id=document_id,
         source_path=source_path,
     )
@@ -152,7 +185,7 @@ def _first_heading(text: str) -> str | None:
 
 def _extract_pdf_images(
     path: Path,
-    image_store: ImageStore,
+    images: DocumentImages,
     document_id: str,
     source_path: str,
 ) -> dict[int, list[str]]:
@@ -166,16 +199,14 @@ def _extract_pdf_images(
                 pil_image = image_obj.get_bitmap().to_pil()
                 buffer = io.BytesIO()
                 pil_image.save(buffer, format="PNG")
-                image_id = image_store.save(
+                placeholder = images.attach(
                     document_id=document_id,
                     source_path=source_path,
                     page=page_number,
                     image_bytes=buffer.getvalue(),
                     mime_type="image/png",
                 )
-                placeholders_by_page.setdefault(page_number, []).append(
-                    _IMAGE_PLACEHOLDER.format(image_id=image_id)
-                )
+                placeholders_by_page.setdefault(page_number, []).append(placeholder)
     finally:
         pdf.close()
     return placeholders_by_page

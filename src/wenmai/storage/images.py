@@ -1,12 +1,30 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
 from wenmai.config import Settings
 from wenmai.storage.paths import store_path
+
+_IMAGE_PLACEHOLDER_TEMPLATE = "[IMAGE: {image_id}]"
+IMAGE_PLACEHOLDER_RE = re.compile(r"\[IMAGE:\s*([a-f0-9]+)\s*\]")
+
+
+def format_image_placeholder(image_id: str) -> str:
+    return _IMAGE_PLACEHOLDER_TEMPLATE.format(image_id=image_id)
+
+
+def find_image_ids(text: str) -> list[str]:
+    return IMAGE_PLACEHOLDER_RE.findall(text)
+
+
+def replace_image_placeholder(text: str, image_id: str, replacement: str) -> str:
+    pattern = re.compile(rf"\[IMAGE:\s*{re.escape(image_id)}\s*\]")
+    return pattern.sub(replacement, text)
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS images (

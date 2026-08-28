@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import sys
 
-from wenmai.components.evaluator.ragas_collections import build_ragas_judge_llm
+from wenmai.components.evaluator.ragas_probe import build_ragas_judge_llm
 from wenmai.config import Settings
 
 _SAMPLE = {
@@ -19,8 +19,11 @@ _SAMPLE = {
 
 def main() -> int:
     settings = Settings.load()
-    judge = settings.ragas_judge
-    print(f"judge model={judge.model!r} base_url={judge.base_url!r} api_key_env={judge.api_key_env!r}")
+    judge = settings.evaluation.ragas_judge
+    print(
+        f"judge provider={judge.provider!r} model={judge.model!r} "
+        f"base_url={judge.base_url!r} api_key_env={judge.api_key_env!r}"
+    )
 
     try:
         faithfulness, context_precision = build_ragas_judge_llm(settings)

@@ -69,12 +69,9 @@ evaluation:
   golden_set: "data/eval/golden.jsonl"
   runs: "data/eval/runs"
   ablations: ["dense_only", "sparse_only", "rrf", "rrf_rerank"]
-
-# Ragas LLM-as-judge（Faithfulness / Context Precision）；密钥只走环境变量
-ragas_judge:
-  model: "deepseek-chat"
-  base_url: "https://api.deepseek.com"
-  api_key_env: "DEEPSEEK_API_KEY"
+  # Ragas LLM-as-judge（Faithfulness / Context Precision）；密钥只走环境变量
+  ragas_judge:
+    provider: zhipu
 
 dolphin:
   python: "/Users/linkslinks/project/fjgd/音频清洗/tools/envs/dolphin-env/bin/python"

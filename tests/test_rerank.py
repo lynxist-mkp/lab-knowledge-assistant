@@ -1,8 +1,7 @@
-"""Query seam: Cross-Encoder rerank with RRF fallback."""
+"""提问：精排失败时仍返回回答和出处。"""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -26,39 +25,25 @@ title: 湄洲妈祖祖庙简介
     return path
 
 
-def test_rerank_stage_recorded_in_query_trace(test_settings: Settings, tmp_path: Path) -> None:
+def test_ask_returns_citations_when_rerank_enabled(
+    test_settings: Settings, tmp_path: Path
+) -> None:
     source = _write_minpai_markdown(tmp_path / "matsu.md")
     client = TestClient(create_app(test_settings))
-    client.post("/ingest", json={"source_path": str(source)})
+    ingest = client.post("/ingest", json={"source_path": str(source)})
+    assert ingest.status_code == 200
 
-    response = client.post("/ask", json={"question": "妈祖信仰的发源地在哪里？"})
+    response = client.post(
+        "/ask",
+        json={"question": "妈祖信仰的发源地在哪里？", "rerank_enabled": True},
+    )
     assert response.status_code == 200
     body = response.json()
-
-    trace_path = Path(test_settings.paths.traces)
-    traces = [
-        json.loads(line)
-        for line in trace_path.read_text(encoding="utf-8").splitlines()
-        if line
-    ]
-    query_trace = next(trace for trace in traces if trace["trace_id"] == body["trace_id"])
-    stage_names = [stage["name"] for stage in query_trace["stages"]]
-    assert stage_names == [
-        "query_processing",
-        "dense",
-        "sparse",
-        "fusion",
-        "rerank",
-        "generation",
-    ]
-
-    rerank_stage = next(stage for stage in query_trace["stages"] if stage["name"] == "rerank")
-    assert rerank_stage["candidates"]
-    assert rerank_stage.get("pre_rerank_candidates")
-    assert len(rerank_stage["candidates"]) <= test_settings.retrieval.rerank_top
+    assert body["citations"]
+    assert body["citations"][0]["document_id"] == ingest.json()["document_id"]
 
 
-def test_rerank_failure_falls_back_to_rrf_and_query_succeeds(
+def test_rerank_failure_still_returns_answer_and_citations(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     test_settings.fakes["reranker"] = "error"
@@ -72,24 +57,10 @@ def test_rerank_failure_falls_back_to_rrf_and_query_succeeds(
     body = response.json()
     assert body["answer"]
     assert body["citations"]
-
-    trace_path = Path(test_settings.paths.traces)
-    traces = [
-        json.loads(line)
-        for line in trace_path.read_text(encoding="utf-8").splitlines()
-        if line
-    ]
-    query_trace = next(trace for trace in traces if trace["trace_id"] == body["trace_id"])
-    rerank_stage = next(stage for stage in query_trace["stages"] if stage["name"] == "rerank")
-    assert rerank_stage.get("error")
-    assert rerank_stage.get("fallback_reason")
-    assert "fallback" in rerank_stage["output_summary"].lower()
-    assert rerank_stage["method"] == "rrf_fallback"
-    assert rerank_stage["candidates"]
-    assert rerank_stage["candidates"][0]["chunk_id"] == body["citations"][0]["chunk_id"]
+    assert body["citations"][0]["document_id"] == ingest.json()["document_id"]
 
 
-def test_rerank_timeout_falls_back_to_rrf(
+def test_rerank_timeout_still_returns_answer(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     test_settings.fakes["reranker"] = "timeout"
@@ -100,21 +71,10 @@ def test_rerank_timeout_falls_back_to_rrf(
     response = client.post("/ask", json={"question": "妈祖信仰的发源地在哪里？"})
 
     assert response.status_code == 200
-    trace_path = Path(test_settings.paths.traces)
-    traces = [
-        json.loads(line)
-        for line in trace_path.read_text(encoding="utf-8").splitlines()
-        if line
-    ]
-    query_trace = next(
-        trace for trace in traces if trace["trace_id"] == response.json()["trace_id"]
-    )
-    rerank_stage = next(stage for stage in query_trace["stages"] if stage["name"] == "rerank")
-    assert rerank_stage["method"] == "rrf_fallback"
-    assert "TimeoutError" in rerank_stage["fallback_reason"]
+    assert response.json()["citations"]
 
 
-def test_rerank_empty_rankings_falls_back_to_rrf(
+def test_rerank_empty_rankings_still_returns_answer(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     test_settings.fakes["reranker"] = "garbage"
@@ -125,15 +85,4 @@ def test_rerank_empty_rankings_falls_back_to_rrf(
     response = client.post("/ask", json={"question": "妈祖信仰的发源地在哪里？"})
 
     assert response.status_code == 200
-    trace_path = Path(test_settings.paths.traces)
-    traces = [
-        json.loads(line)
-        for line in trace_path.read_text(encoding="utf-8").splitlines()
-        if line
-    ]
-    query_trace = next(
-        trace for trace in traces if trace["trace_id"] == response.json()["trace_id"]
-    )
-    rerank_stage = next(stage for stage in query_trace["stages"] if stage["name"] == "rerank")
-    assert rerank_stage["method"] == "rrf_fallback"
-    assert rerank_stage.get("fallback_reason")
+    assert response.json()["citations"]

@@ -1,48 +1,36 @@
 from __future__ import annotations
 
-import base64
 from pathlib import Path
 
-import httpx
-
-from wenmai.components.gemma.mlx_server import get_gemma_server_manager
+from wenmai.components.chat_completions.client import (
+    build_text_messages,
+    build_vision_messages,
+    extract_message_content,
+    post_chat_completion,
+)
+from wenmai.components.mlx.server import MlxVlmProcessConfig, get_mlx_vlm_manager
 from wenmai.config import Settings
 
 _DEFAULT_TIMEOUT = 120.0
-_MIME_BY_SUFFIX = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".webp": "image/webp",
-    ".gif": "image/gif",
-}
-
-
-def _guess_mime(path: Path) -> str:
-    return _MIME_BY_SUFFIX.get(path.suffix.lower(), "image/png")
-
-
-def _extract_message_content(payload: dict[str, object]) -> str:
-    choices = payload.get("choices") or []
-    if not choices:
-        raise RuntimeError("mlx_vlm response missing choices")
-    first = choices[0]
-    if not isinstance(first, dict):
-        raise RuntimeError("mlx_vlm response choice is not an object")
-    message = first.get("message") or {}
-    if not isinstance(message, dict):
-        raise RuntimeError("mlx_vlm response missing message")
-    content = message.get("content")
-    if not isinstance(content, str) or not content.strip():
-        raise RuntimeError("mlx_vlm response missing message content")
-    return content.strip()
 
 
 class GemmaMlxClient:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, model: str | None = None) -> None:
         self._settings = settings
         self._config = settings.gemma
-        self._manager = get_gemma_server_manager(self._config)
+        self._model = model or self._config.model
+        self._manager = get_mlx_vlm_manager(
+            MlxVlmProcessConfig(
+                mlx_python=self._config.mlx_python,
+                server_port=self._config.server_port,
+                server_url=self._config.server_url,
+                model=self._config.model,
+                resolve_script=self._config.resolve_script,
+                idle_timeout_seconds=self._config.idle_timeout_seconds,
+                reuse_healthy=True,
+                ready_timeout_seconds=180.0,
+            )
+        )
         self._chat_url = self._config.server_url.rstrip("/") + "/v1/chat/completions"
 
     @property
@@ -52,47 +40,29 @@ class GemmaMlxClient:
     def generate_text(self, prompt: str, *, max_tokens: int = 512) -> str:
         self._manager.ensure_running()
         try:
-            response = httpx.post(
-                self._chat_url,
-                json={
-                    "model": self._config.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": max_tokens,
-                    "temperature": 0.0,
-                },
+            payload = post_chat_completion(
+                url=self._chat_url,
+                model=self._model,
+                messages=build_text_messages(prompt),
+                max_tokens=max_tokens,
+                temperature=0.0,
                 timeout=_DEFAULT_TIMEOUT,
             )
-            response.raise_for_status()
-            return _extract_message_content(response.json())
+            return extract_message_content(payload, error_prefix="mlx_vlm")
         finally:
             self._manager.touch()
 
     def caption_image(self, image_path: Path, prompt: str, *, max_tokens: int = 256) -> str:
-        image_bytes = image_path.read_bytes()
-        mime = _guess_mime(image_path)
-        encoded = base64.b64encode(image_bytes).decode("ascii")
-        data_url = f"data:{mime};base64,{encoded}"
         self._manager.ensure_running()
         try:
-            response = httpx.post(
-                self._chat_url,
-                json={
-                    "model": self._config.model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "image_url", "image_url": {"url": data_url}},
-                                {"type": "text", "text": prompt},
-                            ],
-                        }
-                    ],
-                    "max_tokens": max_tokens,
-                    "temperature": 0.0,
-                },
+            payload = post_chat_completion(
+                url=self._chat_url,
+                model=self._model,
+                messages=build_vision_messages(prompt, image_path),
+                max_tokens=max_tokens,
+                temperature=0.0,
                 timeout=_DEFAULT_TIMEOUT,
             )
-            response.raise_for_status()
-            return _extract_message_content(response.json())
+            return extract_message_content(payload, error_prefix="mlx_vlm")
         finally:
             self._manager.touch()

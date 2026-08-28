@@ -48,6 +48,7 @@ class AskResult:
     trace_id: str
     refused: bool = False
     error: str | None = None
+    ranked_chunks: list[ScoredChunk] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {

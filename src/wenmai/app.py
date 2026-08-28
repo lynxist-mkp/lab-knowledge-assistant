@@ -4,6 +4,7 @@ import asyncio
 import json
 import threading
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -11,19 +12,17 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from wenmai.config import Settings
-from wenmai.factories.loader import ensure_providers
-from wenmai.pipelines.ingestion import ingest_markdown
-from wenmai.pipelines.query import QueryGenerationError
-from wenmai.services.ask import ask as ask_service
-from wenmai.services.browse import browse_by_culture_domain, get_chunk_detail
-from wenmai.services.ingestion_traces import (
-    list_degradations,
-    summarize_ingestion_trace,
+from wenmai.pipelines.ingestion import ingest_source
+from wenmai.pipelines.query import QueryGenerationError, ask_question
+from wenmai.runtime import create_runtime
+from wenmai.eval import list_eval_runs, run_eval
+from wenmai.tracing import (
+    get_trace_detail,
+    get_trace_summary,
+    list_ingestion_summaries,
+    list_query_summaries,
+    list_trace_degradations,
 )
-from wenmai.services.query_traces import summarize_query_trace
-from wenmai.services.eval_runs import list_eval_runs
-from wenmai.services.stats import get_overview_stats
-from wenmai.services.traces import get_trace_by_id, read_traces_by_type
 
 
 class IngestRequest(BaseModel):
@@ -34,6 +33,8 @@ class IngestRequest(BaseModel):
 class AskRequest(BaseModel):
     question: str = Field(min_length=1)
     culture_domain: str | None = None
+    retrieval_mode: Literal["rrf", "dense_only", "sparse_only"] | None = None
+    rerank_enabled: bool | None = None
 
 
 def _templates_dir(settings: Settings) -> Path:
@@ -44,10 +45,11 @@ def _templates_dir(settings: Settings) -> Path:
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    ensure_providers()
-    resolved = settings or Settings.load()
+    runtime = create_runtime(settings)
+    resolved = runtime.settings
     app = FastAPI(title=resolved.product.name)
     app.state.settings = resolved
+    app.state.knowledge = runtime.knowledge
     templates = Jinja2Templates(directory=str(_templates_dir(resolved)))
 
     @app.post("/ingest")
@@ -55,17 +57,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         path = Path(request.source_path)
         if not path.is_file():
             raise HTTPException(status_code=404, detail="source file not found")
-        result = ingest_markdown(path, resolved, pdf_load_mode=request.pdf_load_mode)
+        try:
+            result = ingest_source(
+                path,
+                resolved,
+                pdf_load_mode=request.pdf_load_mode,
+                knowledge=app.state.knowledge,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         return result.as_dict()
 
     @app.post("/ask")
     def ask(request: AskRequest) -> dict[str, object]:
         try:
-            result = ask_service(
+            result = ask_question(
                 request.question,
                 resolved,
                 culture_domain=request.culture_domain,
+                retrieval_mode=request.retrieval_mode,
+                rerank_enabled=request.rerank_enabled,
+                knowledge=app.state.knowledge,
             )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except QueryGenerationError as exc:
             raise HTTPException(
                 status_code=502,
@@ -75,49 +90,50 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/stats/overview")
     def api_overview_stats() -> dict[str, object]:
-        return get_overview_stats(resolved).as_dict()
+        return app.state.knowledge.overview().as_dict()
 
     @app.get("/api/browse")
     def api_browse() -> list[dict[str, object]]:
-        return [group.as_dict() for group in browse_by_culture_domain(resolved)]
+        return [
+            group.as_dict()
+            for group in app.state.knowledge.browse_by_culture_domain()
+        ]
 
     @app.get("/api/chunks/{chunk_id}")
     def api_chunk_detail(chunk_id: str) -> dict[str, object]:
-        detail = get_chunk_detail(resolved, chunk_id)
+        detail = app.state.knowledge.chunk_detail(chunk_id)
         if detail is None:
             raise HTTPException(status_code=404, detail="chunk not found")
         return detail
 
     @app.get("/api/traces/ingestion")
     def api_ingestion_traces() -> list[dict[str, object]]:
-        traces = read_traces_by_type(resolved, "ingestion")
-        return [summarize_ingestion_trace(trace).as_dict() for trace in reversed(traces)]
+        return [item.as_dict() for item in list_ingestion_summaries(resolved)]
 
     @app.get("/api/traces/query")
     def api_query_traces() -> list[dict[str, object]]:
-        traces = read_traces_by_type(resolved, "query")
-        return [summarize_query_trace(trace).as_dict() for trace in reversed(traces)]
+        return [item.as_dict() for item in list_query_summaries(resolved)]
 
     @app.get("/api/traces/{trace_id}")
     def api_trace_detail(trace_id: str) -> dict[str, object]:
-        trace = get_trace_by_id(resolved, trace_id)
-        if trace is None:
+        detail = get_trace_detail(resolved, trace_id)
+        if detail is None:
             raise HTTPException(status_code=404, detail="trace not found")
-        return trace
+        return detail.as_dict()
 
     @app.get("/api/traces/{trace_id}/summary")
     def api_trace_summary(trace_id: str) -> dict[str, object]:
-        trace = get_trace_by_id(resolved, trace_id)
-        if trace is None:
+        summary = get_trace_summary(resolved, trace_id)
+        if summary is None:
             raise HTTPException(status_code=404, detail="trace not found")
-        return summarize_ingestion_trace(trace).as_dict()
+        return summary.as_dict()
 
     @app.get("/api/traces/{trace_id}/degradations")
     def api_trace_degradations(trace_id: str) -> list[dict[str, str]]:
-        trace = get_trace_by_id(resolved, trace_id)
-        if trace is None:
+        degradations = list_trace_degradations(resolved, trace_id)
+        if degradations is None:
             raise HTTPException(status_code=404, detail="trace not found")
-        return [item.as_dict() for item in list_degradations(trace)]
+        return [item.as_dict() for item in degradations]
 
     @app.post("/api/ingestion/run")
     async def api_ingestion_run(request: IngestRequest) -> StreamingResponse:
@@ -135,11 +151,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             def run_ingest() -> None:
                 try:
-                    result = ingest_markdown(
+                    result = ingest_source(
                         path,
                         resolved,
                         pdf_load_mode=request.pdf_load_mode,
                         on_stage=on_stage,
+                        knowledge=app.state.knowledge,
                     )
                     loop.call_soon_threadsafe(
                         queue.put_nowait,
@@ -175,6 +192,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def api_eval_runs() -> list[dict[str, object]]:
         return [run.as_dict() for run in list_eval_runs(resolved)]
 
+    @app.post("/api/eval/runs")
+    def api_post_eval_runs() -> dict[str, object]:
+        return run_eval(resolved).as_dict()
 
     return app
 

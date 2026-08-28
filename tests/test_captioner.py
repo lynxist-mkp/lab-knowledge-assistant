@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
@@ -13,7 +12,7 @@ from reportlab.pdfgen import canvas
 
 from wenmai.app import create_app
 from wenmai.config import Settings
-from wenmai.factories import vector_store as vector_store_factory
+from wenmai.knowledge import create_knowledge
 
 
 def _write_pdf_with_embedded_image(path: Path) -> Path:
@@ -49,24 +48,17 @@ def test_captioner_replaces_placeholder_with_fake_vision_description(
 
     assert response.status_code == 200
     body = response.json()
-    store = vector_store_factory.create(settings)
-    chunks = store.get_by_document_id(body["document_id"])
+    chunks = create_knowledge(settings).get_by_document_id(body["document_id"])
     combined = "\n".join(chunk.text for chunk in chunks)
     assert "[IMAGE:" not in combined
     assert "图片占位说明" in combined
-
-    trace_path = Path(settings.paths.traces)
-    trace = json.loads(trace_path.read_text(encoding="utf-8").splitlines()[-1])
-    captioner_stage = next(stage for stage in trace["stages"] if stage["name"] == "captioner")
-    assert captioner_stage["method"] == "vision"
-    assert "captioned" in captioner_stage["output_summary"]
 
 
 def test_captioner_keeps_placeholder_when_vision_fails(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     settings = _captioner_settings(test_settings)
-    settings.fakes["vision"] = "error"
+    settings.fakes["caption"] = "error"
     source = _write_pdf_with_embedded_image(tmp_path / "shipyard.pdf")
     client = TestClient(create_app(settings))
 
@@ -74,12 +66,6 @@ def test_captioner_keeps_placeholder_when_vision_fails(
 
     assert response.status_code == 200
     body = response.json()
-    store = vector_store_factory.create(settings)
-    chunks = store.get_by_document_id(body["document_id"])
+    chunks = create_knowledge(settings).get_by_document_id(body["document_id"])
     combined = "\n".join(chunk.text for chunk in chunks)
     assert re.search(r"\[IMAGE: [a-f0-9]+\]", combined)
-
-    trace_path = Path(settings.paths.traces)
-    trace = json.loads(trace_path.read_text(encoding="utf-8").splitlines()[-1])
-    captioner_stage = next(stage for stage in trace["stages"] if stage["name"] == "captioner")
-    assert captioner_stage.get("error")

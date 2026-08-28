@@ -4,8 +4,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from wenmai.config import Settings
-from wenmai.factories import vector_store as vector_store_factory
 from wenmai.models import Chunk
+from wenmai.tracing.store import average_query_latency_ms
 
 _PREVIEW_CHARS = 120
 _UNKNOWN_DOMAIN = "其他"
@@ -53,6 +53,16 @@ class CultureDomainGroup:
         }
 
 
+@dataclass(frozen=True)
+class OverviewStats:
+    document_count: int
+    chunk_count: int
+    avg_query_latency_ms: float | None
+
+    def as_dict(self) -> dict[str, int | float | None]:
+        return asdict(self)
+
+
 def _culture_domain(chunk: Chunk) -> str:
     value = chunk.metadata.get("culture_domain")
     if isinstance(value, str) and value.strip():
@@ -74,9 +84,7 @@ def _preview(text: str) -> str:
     return collapsed[: _PREVIEW_CHARS - 1] + "…"
 
 
-def browse_by_culture_domain(settings: Settings) -> list[CultureDomainGroup]:
-    store = vector_store_factory.create(settings)
-    chunks = store.list_all()
+def browse_groups_from_chunks(chunks: list[Chunk]) -> list[CultureDomainGroup]:
     by_domain: dict[str, dict[str, list[Chunk]]] = {}
     for chunk in chunks:
         domain = _culture_domain(chunk)
@@ -116,11 +124,7 @@ def browse_by_culture_domain(settings: Settings) -> list[CultureDomainGroup]:
     return groups
 
 
-def get_chunk_detail(settings: Settings, chunk_id: str) -> dict[str, Any] | None:
-    store = vector_store_factory.create(settings)
-    chunk = store.get_by_chunk_id(chunk_id)
-    if chunk is None:
-        return None
+def chunk_detail_from_chunk(chunk: Chunk) -> dict[str, Any]:
     return {
         "chunk_id": chunk.chunk_id,
         "document_id": chunk.document_id,
@@ -129,3 +133,12 @@ def get_chunk_detail(settings: Settings, chunk_id: str) -> dict[str, Any] | None
         "text": chunk.text,
         "metadata": chunk.metadata,
     }
+
+
+def overview_from_chunks(chunks: list[Chunk], settings: Settings) -> OverviewStats:
+    document_ids = {chunk.document_id for chunk in chunks if chunk.document_id}
+    return OverviewStats(
+        document_count=len(document_ids),
+        chunk_count=len(chunks),
+        avg_query_latency_ms=average_query_latency_ms(settings),
+    )

@@ -1,13 +1,15 @@
-from wenmai.storage.cleanup import delete_document_from_stores
-from wenmai.storage.fingerprints import FingerprintRecord, FingerprintStore
-from wenmai.storage.images import ImageRecord, ImageStore
+from wenmai.storage.document_images import (
+    IMAGE_PLACEHOLDER_RE,
+    DocumentImages,
+    find_image_ids,
+    format_image_placeholder,
+)
 from wenmai.storage.paths import store_path
 
 __all__ = [
-    "FingerprintRecord",
-    "FingerprintStore",
-    "ImageRecord",
-    "ImageStore",
-    "delete_document_from_stores",
+    "IMAGE_PLACEHOLDER_RE",
+    "DocumentImages",
+    "find_image_ids",
+    "format_image_placeholder",
     "store_path",
 ]

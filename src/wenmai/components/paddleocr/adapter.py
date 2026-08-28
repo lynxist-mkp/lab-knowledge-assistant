@@ -8,15 +8,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-import pypdfium2 as pdfium
-
-from wenmai.components.paddleocr.mlx_server import get_mlx_server_manager
-from wenmai.config import PaddleOCR, PdfLoad
-from wenmai.storage.images import ImageStore
+from wenmai.components.mlx.server import MlxVlmProcessConfig, get_mlx_vlm_manager
+from wenmai.config import PaddleOCR
+from wenmai.storage.document_images import DocumentImages
 
 SubprocessRunner = Callable[[list[str]], subprocess.CompletedProcess[str]]
 
-PdfRoute = str  # "markitdown" | "paddleocr-vl"
 DISCARDED_LAYOUT_LABELS = frozenset({"header_image", "footer_image"})
 TEXT_LAYOUT_LABELS = frozenset({"chart", "seal"})
 IMAGE_LAYOUT_LABEL = "image"
@@ -24,44 +21,9 @@ IMAGE_LAYOUT_LABEL = "image"
 _STDERR_EXCERPT_CHARS = 500
 
 
-def measure_pdf_chars_per_page(path: Path) -> float:
-    pdf = pdfium.PdfDocument(str(path))
-    try:
-        page_count = len(pdf)
-        if page_count == 0:
-            return 0.0
-        total_chars = 0
-        for page_index in range(page_count):
-            page = pdf[page_index]
-            textpage = page.get_textpage()
-            total_chars += len(textpage.get_text_range().strip())
-        return total_chars / page_count
-    finally:
-        pdf.close()
-
-
-def choose_pdf_route(
-    path: Path,
-    pdf_load: PdfLoad,
-    override_mode: str | None = None,
-) -> PdfRoute:
-    mode = (override_mode or pdf_load.mode or "auto").lower()
-    if mode == "markitdown":
-        return "markitdown"
-    if mode == "ocr":
-        return "paddleocr-vl"
-    if mode != "auto":
-        raise ValueError(f"unsupported pdf load mode: {mode}")
-
-    chars_per_page = measure_pdf_chars_per_page(path)
-    if chars_per_page >= pdf_load.chars_per_page_threshold:
-        return "markitdown"
-    return "paddleocr-vl"
-
-
 def build_text_from_ocr_payload(
     payload: dict[str, Any],
-    image_store: ImageStore,
+    images: DocumentImages,
     *,
     document_id: str,
     source_path: str,
@@ -80,14 +42,15 @@ def build_text_from_ocr_payload(
                     continue
                 image_bytes = base64.b64decode(image_b64)
                 mime_type = str(block.get("mime_type") or "image/png")
-                image_id = image_store.save(
-                    document_id=document_id,
-                    source_path=source_path,
-                    page=page_number,
-                    image_bytes=image_bytes,
-                    mime_type=mime_type,
+                page_parts.append(
+                    images.attach(
+                        document_id=document_id,
+                        source_path=source_path,
+                        page=page_number,
+                        image_bytes=image_bytes,
+                        mime_type=mime_type,
+                    )
                 )
-                page_parts.append(f"[IMAGE: {image_id}]")
                 continue
 
             content = str(block.get("content") or "").strip()
@@ -138,6 +101,26 @@ def _build_command(
     ]
 
 
+def _get_paddle_mlx_manager(config: PaddleOCR):
+    resolve_script = Path(config.script).resolve().parent / "resolve_modelscope_model.py"
+    fallback = config.mlx_fallback_model or None
+    if fallback == config.mlx_model:
+        fallback = None
+    return get_mlx_vlm_manager(
+        MlxVlmProcessConfig(
+            mlx_python=config.mlx_python,
+            server_port=config.server_port,
+            server_url=config.server_url,
+            model=config.mlx_model,
+            resolve_script=str(resolve_script),
+            idle_timeout_seconds=config.idle_timeout_seconds,
+            fallback_model=fallback,
+            reuse_healthy=True,
+            ready_timeout_seconds=120.0,
+        )
+    )
+
+
 def parse_scanned_pdf(
     pdf_path: str | Path,
     *,
@@ -148,7 +131,7 @@ def parse_scanned_pdf(
     """Run PaddleOCR-VL in an isolated env and return structured layout JSON."""
     pdf = Path(pdf_path)
     run = runner or _default_runner
-    manager = server_manager or get_mlx_server_manager(config)
+    manager = server_manager or _get_paddle_mlx_manager(config)
     manager.ensure_running()
     active_model = getattr(manager, "active_mlx_model", None)
     vl_model = active_model or config.vl_rec_api_model_name

@@ -24,20 +24,16 @@ def test_settings(tmp_path: Path) -> Settings:
         "prompts": raw["paths"]["prompts"],
     }
     raw["observability"] = {"trace_file": str(tmp_path / "traces.jsonl")}
-    raw["providers"]["llm"] = "fake"
-    raw["providers"]["vision"] = "fake"
+    raw["providers"]["multimodal"] = "fake"
     raw["providers"]["embedding"] = "fake"
     raw["providers"]["reranker"] = "fake"
     raw["providers"]["splitter"] = "recursive_zh"
     raw["providers"]["vector_store"] = "chroma"
-    raw["providers"]["evaluator"] = "fake"
     raw["transform"]["stages"] = ["refiner", "enricher"]
     raw["fakes"] = {
-        "llm": "ok",
-        "vision": "ok",
+        "multimodal": "ok",
         "embedding": "ok",
         "reranker": "ok",
-        "evaluator": "ok",
         "splitter": "ok",
         "vector_store": "ok",
     }
@@ -51,3 +47,12 @@ def test_settings(tmp_path: Path) -> Settings:
             "idle_timeout_seconds": 60,
         }
     return Settings.from_dict(raw, root=repo_settings.parent)
+
+
+@pytest.fixture
+def without_ragas_judge_key(monkeypatch: pytest.MonkeyPatch, test_settings: Settings) -> None:
+    """Configure zhipu Ragas judge and ensure its API key is unset."""
+    monkeypatch.delenv("ZHIPUAI_API_KEY", raising=False)
+    test_settings.evaluation.ragas_judge.model = "glm-5.3-flash"
+    test_settings.evaluation.ragas_judge.base_url = "https://open.bigmodel.cn/api/paas/v4"
+    test_settings.evaluation.ragas_judge.api_key_env = "ZHIPUAI_API_KEY"

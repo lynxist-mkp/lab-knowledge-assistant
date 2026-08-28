@@ -1,4 +1,4 @@
-"""Ingestion management API (HTML pages retired in #3)."""
+"""Ingestion management API and retired HTML paths."""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def test_ingestion_trace_shows_skip_status(
 def test_ingestion_degradations_api_for_enricher_garbage(
     test_settings: Settings, tmp_path: Path
 ) -> None:
-    test_settings.fakes["llm"] = "garbage"
+    test_settings.fakes["multimodal"] = "garbage"
     source = _write_markdown(tmp_path / "matsu.md")
     client = TestClient(create_app(test_settings))
     ingest = client.post("/ingest", json={"source_path": str(source)})
@@ -73,4 +73,4 @@ def test_ingestion_degradations_api_for_enricher_garbage(
     degradations = client.get(f"/api/traces/{trace_id}/degradations")
     assert degradations.status_code == 200
     body = degradations.json()
-    assert any(item["stage"] == "enricher" for item in body)
+    assert any(item["stage"] == "补元数据" for item in body)

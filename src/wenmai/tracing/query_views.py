@@ -3,23 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-QUERY_STAGE_NAMES = (
-    "query_processing",
-    "dense",
-    "sparse",
-    "fusion",
-    "rerank",
-    "generation",
-)
-
-STAGE_LABELS: dict[str, str] = {
-    "query_processing": "查询处理",
-    "dense": "嵌入检索",
-    "sparse": "稀疏检索",
-    "fusion": "融合",
-    "rerank": "精排",
-    "generation": "生成",
-}
+from wenmai.tracing.steps import QUERY_LABELS, QUERY_STAGE_ORDER, stage_label
 
 
 @dataclass
@@ -37,6 +21,7 @@ class QueryTraceSummary:
 
     def as_dict(self) -> dict[str, Any]:
         return {
+            "trace_type": "query",
             "trace_id": self.trace_id,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
@@ -52,16 +37,11 @@ class QueryTraceSummary:
 
 @dataclass
 class StageLatency:
-    name: str
     label: str
     elapsed_ms: float
 
     def as_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "label": self.label,
-            "elapsed_ms": self.elapsed_ms,
-        }
+        return {"label": self.label, "elapsed_ms": self.elapsed_ms}
 
 
 @dataclass
@@ -71,11 +51,7 @@ class CandidateRow:
     score: float
 
     def as_dict(self) -> dict[str, Any]:
-        return {
-            "rank": self.rank,
-            "chunk_id": self.chunk_id,
-            "score": self.score,
-        }
+        return {"rank": self.rank, "chunk_id": self.chunk_id, "score": self.score}
 
 
 @dataclass
@@ -92,26 +68,50 @@ class RankChange:
         }
 
 
-def _stage_by_name(trace: dict[str, Any], name: str) -> dict[str, Any] | None:
-    for stage in trace.get("stages") or []:
+@dataclass
+class QueryTraceDetail:
+    summary: QueryTraceSummary
+    stage_latencies: list[StageLatency]
+    dense_candidates: list[CandidateRow]
+    sparse_candidates: list[CandidateRow]
+    fusion_candidates: list[CandidateRow]
+    rerank_candidates: list[CandidateRow]
+    rank_changes: list[RankChange]
+    rerank_fallback_reason: str | None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            **self.summary.as_dict(),
+            "stage_latencies": [item.as_dict() for item in self.stage_latencies],
+            "dense_candidates": [item.as_dict() for item in self.dense_candidates],
+            "sparse_candidates": [item.as_dict() for item in self.sparse_candidates],
+            "fusion_candidates": [item.as_dict() for item in self.fusion_candidates],
+            "rerank_candidates": [item.as_dict() for item in self.rerank_candidates],
+            "rank_changes": [item.as_dict() for item in self.rank_changes],
+            "rerank_fallback_reason": self.rerank_fallback_reason,
+        }
+
+
+def _stage_by_name(record: dict[str, Any], name: str) -> dict[str, Any] | None:
+    for stage in record.get("stages") or []:
         if stage.get("name") == name:
             return stage
     return None
 
 
-def _question(trace: dict[str, Any]) -> str:
-    metadata = trace.get("metadata") or {}
+def _question(record: dict[str, Any]) -> str:
+    metadata = record.get("metadata") or {}
     question = metadata.get("question")
     if isinstance(question, str) and question:
         return question
-    processing = _stage_by_name(trace, "query_processing")
+    processing = _stage_by_name(record, "query_processing")
     if processing is None:
         return ""
     return str(processing.get("input_summary") or "")
 
 
-def _culture_domain(trace: dict[str, Any]) -> str | None:
-    processing = _stage_by_name(trace, "query_processing")
+def _culture_domain(record: dict[str, Any]) -> str | None:
+    processing = _stage_by_name(record, "query_processing")
     if processing is None:
         return None
     culture_domain = processing.get("culture_domain")
@@ -120,26 +120,33 @@ def _culture_domain(trace: dict[str, Any]) -> str | None:
     return None
 
 
-def is_refusal(trace: dict[str, Any]) -> bool:
-    generation = _stage_by_name(trace, "generation")
+def _is_refusal(record: dict[str, Any]) -> bool:
+    generation = _stage_by_name(record, "generation")
     if generation is None:
         return False
     return generation.get("output_summary") == "refusal"
 
 
-def is_rerank_fallback(trace: dict[str, Any]) -> bool:
-    rerank = _stage_by_name(trace, "rerank")
+def _is_rerank_fallback(record: dict[str, Any]) -> bool:
+    rerank = _stage_by_name(record, "rerank")
     if rerank is None:
         return False
     return rerank.get("method") == "rrf_fallback"
 
 
+def _rerank_fallback_reason(record: dict[str, Any]) -> str | None:
+    rerank = _stage_by_name(record, "rerank")
+    if rerank is None:
+        return None
+    reason = rerank.get("fallback_reason") or rerank.get("error")
+    return str(reason) if reason else None
+
+
 def _candidate_rows(stage: dict[str, Any] | None, key: str = "candidates") -> list[CandidateRow]:
     if stage is None:
         return []
-    candidates = stage.get(key) or []
     rows: list[CandidateRow] = []
-    for index, item in enumerate(candidates, start=1):
+    for index, item in enumerate(stage.get(key) or [], start=1):
         if not isinstance(item, dict):
             continue
         chunk_id = item.get("chunk_id")
@@ -156,32 +163,8 @@ def _candidate_rows(stage: dict[str, Any] | None, key: str = "candidates") -> li
     return rows
 
 
-def get_dense_candidates(trace: dict[str, Any]) -> list[CandidateRow]:
-    return _candidate_rows(_stage_by_name(trace, "dense"))
-
-
-def get_sparse_candidates(trace: dict[str, Any]) -> list[CandidateRow]:
-    return _candidate_rows(_stage_by_name(trace, "sparse"))
-
-
-def get_fusion_candidates(trace: dict[str, Any]) -> list[CandidateRow]:
-    return _candidate_rows(_stage_by_name(trace, "fusion"))
-
-
-def get_fusion_dense_candidates(trace: dict[str, Any]) -> list[CandidateRow]:
-    return _candidate_rows(_stage_by_name(trace, "fusion"), key="dense_candidates")
-
-
-def get_fusion_sparse_candidates(trace: dict[str, Any]) -> list[CandidateRow]:
-    return _candidate_rows(_stage_by_name(trace, "fusion"), key="sparse_candidates")
-
-
-def get_rerank_candidates(trace: dict[str, Any]) -> list[CandidateRow]:
-    return _candidate_rows(_stage_by_name(trace, "rerank"))
-
-
-def get_rank_changes(trace: dict[str, Any]) -> list[RankChange]:
-    rerank = _stage_by_name(trace, "rerank")
+def _rank_changes(record: dict[str, Any]) -> list[RankChange]:
+    rerank = _stage_by_name(record, "rerank")
     if rerank is None:
         return []
     changes: list[RankChange] = []
@@ -203,30 +186,26 @@ def get_rank_changes(trace: dict[str, Any]) -> list[RankChange]:
     return changes
 
 
-def list_stage_latencies(trace: dict[str, Any]) -> list[StageLatency]:
+def list_stage_latencies(record: dict[str, Any]) -> list[StageLatency]:
     stage_by_name = {
         stage.get("name"): stage
-        for stage in trace.get("stages") or []
+        for stage in record.get("stages") or []
         if isinstance(stage.get("name"), str)
     }
     latencies: list[StageLatency] = []
-    for name in QUERY_STAGE_NAMES:
+    for name in QUERY_STAGE_ORDER:
         stage = stage_by_name.get(name)
         elapsed_ms = float(stage.get("elapsed_ms") or 0.0) if stage else 0.0
         latencies.append(
-            StageLatency(
-                name=name,
-                label=STAGE_LABELS.get(name, name),
-                elapsed_ms=elapsed_ms,
-            )
+            StageLatency(label=stage_label(name, QUERY_LABELS), elapsed_ms=elapsed_ms)
         )
     return latencies
 
 
-def summarize_query_trace(trace: dict[str, Any]) -> QueryTraceSummary:
-    refused = is_refusal(trace)
-    rerank_fallback = is_rerank_fallback(trace)
-    error = trace.get("error")
+def summarize_query_trace(record: dict[str, Any]) -> QueryTraceSummary:
+    refused = _is_refusal(record)
+    rerank_fallback = _is_rerank_fallback(record)
+    error = record.get("error")
     if error:
         status = "failed"
     elif refused:
@@ -234,14 +213,27 @@ def summarize_query_trace(trace: dict[str, Any]) -> QueryTraceSummary:
     else:
         status = "ok"
     return QueryTraceSummary(
-        trace_id=str(trace.get("trace_id") or ""),
-        started_at=str(trace.get("started_at") or ""),
-        finished_at=trace.get("finished_at"),
-        total_elapsed_ms=float(trace.get("total_elapsed_ms") or 0.0),
-        question=_question(trace),
-        culture_domain=_culture_domain(trace),
+        trace_id=str(record.get("trace_id") or ""),
+        started_at=str(record.get("started_at") or ""),
+        finished_at=record.get("finished_at"),
+        total_elapsed_ms=float(record.get("total_elapsed_ms") or 0.0),
+        question=_question(record),
+        culture_domain=_culture_domain(record),
         status=status,
         refused=refused,
         rerank_fallback=rerank_fallback,
         error=error if isinstance(error, str) else None,
+    )
+
+
+def query_trace_detail(record: dict[str, Any]) -> QueryTraceDetail:
+    return QueryTraceDetail(
+        summary=summarize_query_trace(record),
+        stage_latencies=list_stage_latencies(record),
+        dense_candidates=_candidate_rows(_stage_by_name(record, "dense")),
+        sparse_candidates=_candidate_rows(_stage_by_name(record, "sparse")),
+        fusion_candidates=_candidate_rows(_stage_by_name(record, "fusion")),
+        rerank_candidates=_candidate_rows(_stage_by_name(record, "rerank")),
+        rank_changes=_rank_changes(record),
+        rerank_fallback_reason=_rerank_fallback_reason(record),
     )

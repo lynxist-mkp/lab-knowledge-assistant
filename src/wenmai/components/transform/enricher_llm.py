@@ -3,10 +3,8 @@ from __future__ import annotations
 import json
 import time
 
-from wenmai.components.transform.base import BaseTransform
 from wenmai.config import Settings
-from wenmai.factories import llm as llm_factory
-from wenmai.factories.transform import registry
+from wenmai.factories import multimodal as multimodal_factory
 from wenmai.models import Chunk
 from wenmai.tracing.context import TraceContext
 
@@ -51,13 +49,10 @@ def _parse_response(raw: str, domains: list[str]) -> dict[str, object]:
     return result
 
 
-@registry.register("enricher.llm")
-class LlmEnricher(BaseTransform):
-    name = "enricher"
-
+class LlmEnricher:
     def __init__(self, settings: Settings, **kwargs: object) -> None:
         self._settings = settings
-        self._llm = llm_factory.create(settings)
+        self._llm = multimodal_factory.create(settings)
         self._template = _load_prompt(settings)
         self._domains = list(settings.transform.domains)
 
