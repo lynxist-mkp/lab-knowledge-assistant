@@ -30,6 +30,7 @@ class Paths:
     chroma: str
     bm25: str
     ingestion_history: str
+    catalog: str
     images: str
     image_index: str
     traces: str

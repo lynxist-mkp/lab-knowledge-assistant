@@ -179,6 +179,64 @@ def test_culture_domain_filter_hides_other_domain(test_settings: Settings) -> No
     assert "doc-ship:0000" not in ids
 
 
+def test_catalog_updates_on_commit_and_delete(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-a", "船政学堂简介", culture_domain="船政")
+    _commit(knowledge, "doc-b", "湄洲祖庙简介", culture_domain="妈祖")
+
+    overview = knowledge.overview()
+    assert overview.document_count == 2
+    assert overview.chunk_count == 2
+
+    groups = knowledge.browse_by_culture_domain()
+    by_domain = {group.culture_domain: group for group in groups}
+    assert by_domain["船政"].document_count == 1
+    assert by_domain["妈祖"].chunk_count == 1
+
+    knowledge.delete_document("doc-a")
+    overview = knowledge.overview()
+    assert overview.document_count == 1
+    assert overview.chunk_count == 1
+
+
+def test_browse_and_overview_use_catalog_not_list_all(
+    test_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-a", "船政学堂简介", culture_domain="船政")
+
+    def fail_list_all() -> list[Chunk]:
+        raise AssertionError("browse/overview should not scan list_all()")
+
+    monkeypatch.setattr(knowledge._store, "list_all", fail_list_all)
+
+    assert knowledge.overview().document_count == 1
+    assert knowledge.browse_by_culture_domain()
+
+
+def test_search_modes_match_direct_retrieval(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-a", "船政学堂创办于马尾，是近代海军摇篮。")
+    _commit(knowledge, "doc-b", "湄洲祖庙是妈祖信仰的中心。")
+
+    dense = knowledge.search("船政学堂在哪里", mode="dense_only")
+    sparse = knowledge.search("船政学堂", mode="sparse_only")
+    fused = knowledge.search("船政学堂", mode="rrf")
+
+    assert dense.chunks
+    assert sparse.chunks[0].chunk.chunk_id == "doc-a:0000"
+    assert fused.chunks
+    assert fused.dense_chunks
+    assert fused.sparse_chunks
+
+
+def test_search_unknown_mode_raises(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    with pytest.raises(ValueError, match="unknown search mode"):
+        knowledge.search("妈祖", mode="clip")
+
+
 def test_commit_rolls_back_dense_on_sparse_write_failure(
     test_settings: Settings,
     monkeypatch: pytest.MonkeyPatch,
@@ -202,6 +260,7 @@ def test_commit_rolls_back_dense_on_sparse_write_failure(
         )
 
     assert knowledge.get_by_document_id(doc_id) == []
+    assert knowledge.overview().document_count == 0
     sparse = knowledge.sparse_search("回滚", top_k=5)
     assert all(item.chunk.document_id != doc_id for item in sparse)
     plan = knowledge.plan_document(
@@ -233,6 +292,7 @@ def test_commit_rolls_back_on_sparse_save_failure(
         )
 
     assert knowledge.get_by_document_id(doc_id) == []
+    assert knowledge.overview().document_count == 0
     sparse = knowledge.sparse_search("回滚", top_k=5)
     assert all(item.chunk.document_id != doc_id for item in sparse)
 

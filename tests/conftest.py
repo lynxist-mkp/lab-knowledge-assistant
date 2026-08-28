@@ -17,6 +17,7 @@ def test_settings(tmp_path: Path) -> Settings:
         "chroma": str(tmp_path / "chroma"),
         "bm25": str(tmp_path / "bm25"),
         "ingestion_history": str(tmp_path / "ingestion_history.db"),
+        "catalog": str(tmp_path / "catalog.json"),
         "images": str(tmp_path / "images"),
         "image_index": str(tmp_path / "image_index.db"),
         "traces": str(tmp_path / "traces.jsonl"),

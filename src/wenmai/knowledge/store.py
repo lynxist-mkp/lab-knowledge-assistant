@@ -12,11 +12,12 @@ from wenmai.factories.loader import ensure_providers
 from wenmai.knowledge.browse import (
     CultureDomainGroup,
     OverviewStats,
-    browse_groups_from_chunks,
     chunk_detail_from_chunk,
-    overview_from_chunks,
+    overview_from_catalog,
 )
+from wenmai.knowledge.search import SearchResult, run_search
 from wenmai.models import Chunk, ScoredChunk
+from wenmai.storage.catalog import DocumentCatalog
 from wenmai.storage.document_images import DocumentImages
 from wenmai.storage.fingerprints import FingerprintRecord, FingerprintStore
 
@@ -49,6 +50,7 @@ class Knowledge:
         self._bm25 = bm25_factory.create(settings)
         self._images = DocumentImages(settings)
         self._fingerprints = FingerprintStore.from_settings(settings)
+        self._catalog = DocumentCatalog.from_settings(settings)
 
     @property
     def images(self) -> DocumentImages:
@@ -116,6 +118,7 @@ class Knowledge:
             raise
         self._images.delete_for_document(document_id)
         self._fingerprints.delete_by_document_id(document_id)
+        self._catalog.remove_document(document_id)
 
     def _upsert_chunks(self, chunks: list[Chunk]) -> UpsertResult:
         if not chunks:
@@ -143,6 +146,8 @@ class Knowledge:
             raise
         upsert_elapsed_ms = (time.perf_counter() - started) * 1000
 
+        self._catalog.upsert_document(chunks)
+
         return UpsertResult(
             chunk_count=len(chunks),
             embed_provider=self._embedder.provider_name,
@@ -160,6 +165,7 @@ class Knowledge:
         except Exception:
             pass
         self._images.delete_for_document(document_id)
+        self._catalog.remove_document(document_id)
 
     def _restore_fingerprint(
         self,
@@ -175,6 +181,21 @@ class Knowledge:
             )
             return
         self._fingerprints.delete_by_source_path(source_path)
+
+    def search(
+        self,
+        query: str,
+        *,
+        mode: str,
+        culture_domain: str | None = None,
+    ) -> SearchResult:
+        return run_search(
+            self,
+            query,
+            mode=mode,
+            settings=self._settings,
+            culture_domain=culture_domain,
+        )
 
     def dense_search(
         self,
@@ -221,10 +242,14 @@ class Knowledge:
         return self._store.list_all()
 
     def overview(self) -> OverviewStats:
-        return overview_from_chunks(self.list_all(), self._settings)
+        return overview_from_catalog(
+            document_count=self._catalog.document_count,
+            chunk_count=self._catalog.chunk_count,
+            settings=self._settings,
+        )
 
     def browse_by_culture_domain(self) -> list[CultureDomainGroup]:
-        return browse_groups_from_chunks(self.list_all())
+        return self._catalog.browse_groups()
 
     def chunk_detail(self, chunk_id: str) -> dict[str, Any] | None:
         chunk = self.get_by_chunk_id(chunk_id)
