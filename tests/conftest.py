@@ -47,3 +47,12 @@ def test_settings(tmp_path: Path) -> Settings:
             "idle_timeout_seconds": 60,
         }
     return Settings.from_dict(raw, root=repo_settings.parent)
+
+
+@pytest.fixture
+def without_ragas_judge_key(monkeypatch: pytest.MonkeyPatch, test_settings: Settings) -> None:
+    """Configure zhipu Ragas judge and ensure its API key is unset."""
+    monkeypatch.delenv("ZHIPUAI_API_KEY", raising=False)
+    test_settings.ragas_judge.model = "glm-5.3-flash"
+    test_settings.ragas_judge.base_url = "https://open.bigmodel.cn/api/paas/v4"
+    test_settings.ragas_judge.api_key_env = "ZHIPUAI_API_KEY"

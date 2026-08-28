@@ -1,4 +1,4 @@
-"""Service layer for evaluation dashboard: ablation runs and Ragas status."""
+"""Eval dashboard reads the same typed runs that run_eval writes."""
 
 from __future__ import annotations
 
@@ -9,23 +9,20 @@ from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
-from wenmai.eval.ablation import group_metrics_payload
-from wenmai.services.eval_runs import (
-    get_eval_dashboard,
-    get_ragas_status,
-    list_eval_runs,
-)
+from wenmai.eval import get_eval_dashboard, list_eval_runs
+from wenmai.eval.read import get_ragas_status
+from wenmai.eval.views import GroupMetricsView, parse_eval_run
 
 
 def _sample_metrics(hit: float, mrr: float, refusal: float) -> dict[str, float | int]:
-    return group_metrics_payload(
+    return GroupMetricsView(
         hit_at_5=hit,
         mrr=mrr,
         refusal_accuracy=refusal,
         citation_coverage=0.8,
         answerable_count=40,
         unanswerable_count=10,
-    )
+    ).as_dict()
 
 
 def _write_run(
@@ -34,6 +31,7 @@ def _write_run(
     *,
     dense_hit: float,
     rrf_rerank_hit: float,
+    failures: list[dict[str, str]] | None = None,
 ) -> Path:
     runs_dir.mkdir(parents=True, exist_ok=True)
     groups = {
@@ -47,11 +45,14 @@ def _write_run(
         "golden_set": "data/eval/golden.jsonl",
         "ablations": list(groups.keys()),
         "item_count": 50,
+        "failures": failures or [],
         "groups": {
             name: {"config": {"ablation_group": name}, "metrics": metrics}
             for name, metrics in groups.items()
         },
     }
+    parsed = parse_eval_run(artifact)
+    assert parsed is not None
     path = runs_dir / f"{timestamp}.json"
     path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
@@ -73,9 +74,31 @@ def test_list_eval_runs_newest_first(test_settings: Settings, tmp_path: Path) ->
 
     assert [run.timestamp for run in runs] == ["20260102T100000Z", "20260101T100000Z"]
     assert runs[0].groups["rrf_rerank"].metrics.hit_at_5 == 0.4
+    assert runs[0].failed_count == 0
 
 
-def test_get_eval_dashboard_exposes_latest_and_history(test_settings: Settings, tmp_path: Path) -> None:
+def test_dashboard_exposes_failures(test_settings: Settings, tmp_path: Path) -> None:
+    runs_dir = tmp_path / "runs"
+    test_settings.evaluation.runs = str(runs_dir)
+    _write_run(
+        runs_dir,
+        "20260102T100000Z",
+        dense_hit=0.3,
+        rrf_rerank_hit=0.4,
+        failures=[{"group": "dense_only", "item_id": "g001"}],
+    )
+
+    dashboard = get_eval_dashboard(test_settings)
+
+    assert dashboard.latest_run is not None
+    assert dashboard.latest_run.failed_count == 1
+    assert dashboard.latest_run.failures[0].item_id == "g001"
+    assert dashboard.latest_run.failures[0].group_label == "Dense 单路"
+
+
+def test_get_eval_dashboard_exposes_latest_and_history(
+    test_settings: Settings, tmp_path: Path
+) -> None:
     runs_dir = tmp_path / "runs"
     test_settings.evaluation.runs = str(runs_dir)
     _write_run(runs_dir, "20260101T100000Z", dense_hit=0.1, rrf_rerank_hit=0.2)
@@ -94,14 +117,17 @@ def test_get_eval_dashboard_exposes_latest_and_history(test_settings: Settings, 
     }
 
 
-def test_get_ragas_status_marks_unavailable_for_fake_evaluator(test_settings: Settings) -> None:
+def test_get_ragas_status_marks_unavailable_without_api_key(
+    test_settings: Settings,
+    without_ragas_judge_key: None,
+) -> None:
     status = get_ragas_status(test_settings)
 
-    assert status.configured is False
-    assert status.faithfulness.status == "not_configured"
-    assert status.context_precision.status == "not_configured"
-    assert "未接入" in status.faithfulness.label
-    assert "未接入" in status.context_precision.label
+    assert status.configured is True
+    assert status.faithfulness.status == "unavailable"
+    assert status.context_precision.status == "unavailable"
+    assert "未跑通" in status.faithfulness.label
+    assert "ZHIPUAI_API_KEY" in status.faithfulness.reason
 
 
 def test_api_eval_runs_endpoint(test_settings: Settings, tmp_path: Path) -> None:
@@ -117,3 +143,4 @@ def test_api_eval_runs_endpoint(test_settings: Settings, tmp_path: Path) -> None
     assert len(payload) == 1
     assert payload[0]["timestamp"] == "20260102T100000Z"
     assert payload[0]["groups"]["rrf_rerank"]["metrics"]["hit_at_5"] == 0.62
+    assert payload[0]["failed_count"] == 0

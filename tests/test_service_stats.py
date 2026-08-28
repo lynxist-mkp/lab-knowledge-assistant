@@ -10,10 +10,8 @@ from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
-from wenmai.factories import vector_store as vector_store_factory
+from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
-from wenmai.services.browse import browse_by_culture_domain, get_chunk_detail
-from wenmai.services.stats import get_overview_stats
 
 
 def _write_markdown(path: Path, *, culture_domain: str, title: str, body: str) -> Path:
@@ -48,7 +46,7 @@ def _append_query_trace(path: Path, *, trace_id: str, elapsed_ms: float) -> None
 
 
 def test_overview_stats_empty_store(test_settings: Settings) -> None:
-    stats = get_overview_stats(test_settings)
+    stats = create_knowledge(test_settings).overview()
 
     assert stats.document_count == 0
     assert stats.chunk_count == 0
@@ -66,7 +64,7 @@ def test_overview_stats_after_ingest(test_settings: Settings, tmp_path: Path) ->
     response = client.post("/ingest", json={"source_path": str(source)})
     assert response.status_code == 200
 
-    stats = get_overview_stats(test_settings)
+    stats = create_knowledge(test_settings).overview()
 
     assert stats.document_count == 1
     assert stats.chunk_count == response.json()["chunk_count"]
@@ -91,33 +89,30 @@ def test_overview_avg_query_latency_from_traces(test_settings: Settings) -> None
     with trace_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(ingestion_trace, ensure_ascii=False) + "\n")
 
-    stats = get_overview_stats(test_settings)
+    stats = create_knowledge(test_settings).overview()
 
     assert stats.avg_query_latency_ms == pytest.approx(200.0)
 
 
 def test_browse_groups_documents_by_culture_domain(test_settings: Settings) -> None:
-    store = vector_store_factory.create(test_settings)
-    store.upsert(
+    create_knowledge(test_settings).upsert(
         [
             Chunk(
                 chunk_id="matsu-001",
                 document_id="doc-matsu",
                 text="妈祖信仰发源于湄洲岛。",
-                embedding=[1.0, 0.0],
                 metadata={"title": "妈祖简介", "culture_domain": "妈祖", "document_id": "doc-matsu"},
             ),
             Chunk(
                 chunk_id="zhuzi-001",
                 document_id="doc-zhuzi",
                 text="朱熹是理学集大成者。",
-                embedding=[0.0, 1.0],
                 metadata={"title": "朱子理学", "culture_domain": "朱子", "document_id": "doc-zhuzi"},
             ),
         ]
     )
 
-    groups = browse_by_culture_domain(test_settings)
+    groups = create_knowledge(test_settings).browse_by_culture_domain()
     by_domain = {group.culture_domain: group for group in groups}
 
     assert set(by_domain) == {"妈祖", "朱子"}
@@ -139,9 +134,9 @@ def test_get_chunk_detail_returns_final_text(test_settings: Settings, tmp_path: 
     ingest = client.post("/ingest", json={"source_path": str(source)})
     assert ingest.status_code == 200
 
-    groups = browse_by_culture_domain(test_settings)
+    groups = create_knowledge(test_settings).browse_by_culture_domain()
     chunk_id = groups[0].documents[0].chunks[0].chunk_id
-    detail = get_chunk_detail(test_settings, chunk_id)
+    detail = create_knowledge(test_settings).chunk_detail(chunk_id)
 
     assert detail is not None
     assert detail["chunk_id"] == chunk_id

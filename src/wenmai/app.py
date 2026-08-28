@@ -15,7 +15,7 @@ from wenmai.config import Settings
 from wenmai.pipelines.ingestion import ingest_source
 from wenmai.pipelines.query import QueryGenerationError, ask_question
 from wenmai.runtime import create_runtime
-from wenmai.services.eval_runs import list_eval_runs
+from wenmai.eval import list_eval_runs
 from wenmai.tracing import (
     get_trace_detail,
     get_trace_summary,
