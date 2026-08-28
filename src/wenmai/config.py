@@ -102,17 +102,20 @@ class Observability:
 
 
 @dataclass
+class RagasJudge:
+    provider: str
+    provider_label: str
+    model: str
+    base_url: str
+    api_key_env: str
+
+
+@dataclass
 class Evaluation:
     golden_set: str
     runs: str
     ablations: list[str]
-
-
-@dataclass
-class RagasJudge:
-    model: str = "deepseek-chat"
-    base_url: str = "https://api.deepseek.com"
-    api_key_env: str = "DEEPSEEK_API_KEY"
+    ragas_judge: RagasJudge
 
 
 @dataclass
@@ -165,7 +168,6 @@ class Settings:
     server: Server
     observability: Observability
     evaluation: Evaluation
-    ragas_judge: RagasJudge
     dolphin: Dolphin
     pdf_load: PdfLoad
     paddleocr: PaddleOCR
@@ -185,8 +187,7 @@ class Settings:
             providers=_build(Providers, _normalize_providers(raw["providers"])),
             server=_build(Server, raw["server"]),
             observability=_build(Observability, raw["observability"]),
-            evaluation=_build(Evaluation, raw["evaluation"]),
-            ragas_judge=_build(RagasJudge, raw.get("ragas_judge") or {}),
+            evaluation=_build_evaluation(raw),
             dolphin=_build(Dolphin, raw["dolphin"]),
             pdf_load=_build(PdfLoad, raw["pdf_load"]),
             paddleocr=_build(PaddleOCR, raw["paddleocr"]),
@@ -212,6 +213,55 @@ class Settings:
             if alt in self.fakes:
                 return self.fakes[alt]
         return "ok"
+
+
+_RAGAS_JUDGE_PRESETS: dict[str, dict[str, str]] = {
+    "zhipu": {
+        "provider": "zhipu",
+        "provider_label": "智谱",
+        "model": "glm-5.3-flash",
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "api_key_env": "ZHIPUAI_API_KEY",
+    },
+    "deepseek": {
+        "provider": "deepseek",
+        "provider_label": "DeepSeek",
+        "model": "deepseek-chat",
+        "base_url": "https://api.deepseek.com",
+        "api_key_env": "DEEPSEEK_API_KEY",
+    },
+}
+
+_RAGAS_JUDGE_PROVIDER_ALIASES: dict[str, str] = {
+    "zhipu": "zhipu",
+    "ds": "deepseek",
+    "deepseek": "deepseek",
+}
+
+
+def resolve_ragas_judge(raw: dict[str, Any] | None) -> RagasJudge:
+    """Normalize Ragas judge config; default provider is 智谱 (zhipu)."""
+    payload = dict(raw or {})
+    provider_raw = str(payload.pop("provider", "") or "").strip().lower()
+    if not provider_raw:
+        canonical = "zhipu"
+    else:
+        canonical = _RAGAS_JUDGE_PROVIDER_ALIASES.get(provider_raw)
+        if canonical is None:
+            raise ValueError(f"unknown ragas_judge provider: {provider_raw!r}")
+    resolved = dict(_RAGAS_JUDGE_PRESETS[canonical])
+    for key in ("model", "base_url", "api_key_env"):
+        if key in payload:
+            resolved[key] = str(payload[key])
+    return RagasJudge(**resolved)
+
+
+def _build_evaluation(raw: dict[str, Any]) -> Evaluation:
+    eval_raw = dict(raw["evaluation"])
+    legacy_judge = raw.get("ragas_judge") or {}
+    nested_judge = eval_raw.pop("ragas_judge", None) or {}
+    eval_raw["ragas_judge"] = resolve_ragas_judge({**legacy_judge, **nested_judge})
+    return _build(Evaluation, eval_raw)
 
 
 def _normalize_transform(raw: dict[str, Any]) -> dict[str, Any]:

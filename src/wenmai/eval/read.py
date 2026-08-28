@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from wenmai.components.evaluator.ragas_probe import probe_ragas_judge
-from wenmai.config import RagasJudge, Settings
+from wenmai.config import Settings
 from wenmai.eval.views import (
     EvalDashboardView,
     EvalRunView,
@@ -42,15 +42,9 @@ def list_eval_runs(settings: Settings) -> list[EvalRunView]:
     return runs
 
 
-def _judge_provider_info(judge: RagasJudge) -> tuple[str, str]:
-    if judge.api_key_env == "ZHIPUAI_API_KEY":
-        return "zhipu", "智谱"
-    return "deepseek", "DeepSeek"
-
-
 def get_ragas_status(settings: Settings) -> RagasStatusView:
-    judge = settings.ragas_judge
-    provider, provider_label = _judge_provider_info(judge)
+    judge = settings.evaluation.ragas_judge
+    provider, provider_label = judge.provider, judge.provider_label
     judge_available, init_error = probe_ragas_judge(settings)
 
     if judge_available:

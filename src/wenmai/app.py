@@ -15,7 +15,7 @@ from wenmai.config import Settings
 from wenmai.pipelines.ingestion import ingest_source
 from wenmai.pipelines.query import QueryGenerationError, ask_question
 from wenmai.runtime import create_runtime
-from wenmai.eval import list_eval_runs
+from wenmai.eval import list_eval_runs, run_eval
 from wenmai.tracing import (
     get_trace_detail,
     get_trace_summary,
@@ -191,6 +191,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/eval/runs")
     def api_eval_runs() -> list[dict[str, object]]:
         return [run.as_dict() for run in list_eval_runs(resolved)]
+
+    @app.post("/api/eval/runs")
+    def api_post_eval_runs() -> dict[str, object]:
+        return run_eval(resolved).as_dict()
 
     return app
 
