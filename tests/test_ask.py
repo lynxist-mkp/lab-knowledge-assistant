@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.pipelines.query import ask_question
+from wenmai.tracing.store import get_trace_record
 
 
 def _write_minpai_markdown(path: Path) -> Path:
@@ -105,3 +107,50 @@ def test_ask_records_generation_failure_in_trace_and_returns_error(
     detail = response.json()["detail"]
     assert detail["trace_id"]
     assert "error" in detail["message"].lower() or "fake" in detail["message"].lower()
+
+
+def test_ask_empty_kb_refuses_without_calling_llm(
+    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    llm_called = False
+
+    def _fail_if_called(settings: Settings) -> object:
+        nonlocal llm_called
+        llm_called = True
+        raise AssertionError("LLM should not be called for zero chunks")
+
+    monkeypatch.setattr("wenmai.factories.multimodal.create", _fail_if_called)
+
+    result = ask_question("妈祖信仰的发源地在哪里？", test_settings)
+
+    assert llm_called is False
+    assert result.refused is True
+    assert result.answer.startswith("拒答：")
+    assert result.citations == []
+
+    record = get_trace_record(test_settings, result.trace_id)
+    assert record is not None
+    outcome = record["metadata"]["outcome"]
+    assert outcome["refused"] is True
+    assert outcome["refusal_reason"] == "insufficient_evidence"
+    assert outcome["citation_count"] == 0
+
+
+def test_ask_writes_trace_outcome_metadata(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    source = _write_minpai_markdown(tmp_path / "matsu.md")
+    client = TestClient(create_app(test_settings))
+    client.post("/ingest", json={"source_path": str(source)})
+
+    test_settings.fakes["multimodal"] = "refuse"
+    response = client.post(
+        "/ask", json={"question": "船政学堂是什么时候创办的？"}
+    )
+    body = response.json()
+    record = get_trace_record(test_settings, body["trace_id"])
+    assert record is not None
+    outcome = record["metadata"]["outcome"]
+    assert outcome["refused"] is body["refused"]
+    assert outcome["refusal_reason"] == "model_refused"
+    assert outcome["citation_count"] == len(body["citations"])

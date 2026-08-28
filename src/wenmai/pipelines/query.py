@@ -71,6 +71,12 @@ def ask_question(
             generation_info["output_summary"] = gen_result.output_summary
             generation_info["candidate_count"] = gen_result.candidate_count
 
+        trace.metadata["outcome"] = {
+            "refused": gen_result.refused,
+            "refusal_reason": gen_result.refusal_reason,
+            "citation_count": len(gen_result.citations),
+        }
+
         return AskResult(
             answer=gen_result.answer,
             citations=gen_result.citations,

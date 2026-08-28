@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Literal
 
 from wenmai.config import Settings
 from wenmai.factories import multimodal as multimodal_factory
@@ -9,6 +10,9 @@ from wenmai.models import Citation, ScoredChunk
 
 _CITATION_PATTERN = re.compile(r"\[(\d+)\]")
 _REFUSAL_PREFIX = "拒答："
+_INSUFFICIENT_EVIDENCE_ANSWER = "拒答：检索未返回可用片段，无法依据材料回答该问题。"
+
+RefusalReason = Literal["insufficient_evidence", "model_refused"]
 
 
 class GenerationError(Exception):
@@ -33,6 +37,7 @@ class GenerationResult:
     provider_name: str
     output_summary: str
     candidate_count: int
+    refusal_reason: RefusalReason | None = None
     error: str | None = None
 
 
@@ -108,7 +113,20 @@ def _resolve_response(answer: str, scored_chunks: list[ScoredChunk]) -> tuple[bo
     return False, _extract_citations(answer, scored_chunks)
 
 
-def generate(question: str, scored_chunks: list[ScoredChunk], settings: Settings) -> GenerationResult:
+def generate(
+    question: str, scored_chunks: list[ScoredChunk], settings: Settings
+) -> GenerationResult:
+    if not scored_chunks:
+        return GenerationResult(
+            answer=_INSUFFICIENT_EVIDENCE_ANSWER,
+            refused=True,
+            citations=[],
+            provider_name="local",
+            output_summary="insufficient_evidence",
+            candidate_count=0,
+            refusal_reason="insufficient_evidence",
+        )
+
     llm = multimodal_factory.create(settings)
     template = _load_qa_prompt(settings)
     prompt = _build_prompt(template, question, scored_chunks)
@@ -126,4 +144,5 @@ def generate(question: str, scored_chunks: list[ScoredChunk], settings: Settings
         provider_name=llm.provider_name,
         output_summary="refusal" if refused else f"{len(answer)} chars",
         candidate_count=len(scored_chunks),
+        refusal_reason="model_refused" if refused else None,
     )
