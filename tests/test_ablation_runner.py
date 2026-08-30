@@ -132,6 +132,7 @@ def test_eval_keeps_failure_after_retries(
         rerank_enabled: bool,
         knowledge: object,
         retrieved_chunks: list[object] | None = None,
+        query_rewrite: bool = False,
     ):
         current_mode.clear()
         current_mode.append(retrieval_mode)
@@ -142,6 +143,7 @@ def test_eval_keeps_failure_after_retries(
             rerank_enabled=rerank_enabled,
             knowledge=knowledge,
             retrieved_chunks=retrieved_chunks,
+            query_rewrite=query_rewrite,
         )
 
     def always_fail_dense(question: str, scored_chunks: list[object], settings: Settings):
@@ -323,6 +325,7 @@ def test_eval_single_retrieve_per_item(
         rerank_enabled: bool,
         knowledge: object,
         retrieved_chunks: list[object] | None = None,
+        query_rewrite: bool = False,
     ):
         current_mode.clear()
         current_mode.append(retrieval_mode)
@@ -333,6 +336,7 @@ def test_eval_single_retrieve_per_item(
             rerank_enabled=rerank_enabled,
             knowledge=knowledge,
             retrieved_chunks=retrieved_chunks,
+            query_rewrite=query_rewrite,
         )
 
     def counting_retrieve(

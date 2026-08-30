@@ -4,12 +4,11 @@ import re
 import time
 
 from wenmai.config import Settings
-from wenmai.factories import query_rewrite as query_rewrite_factory
 from wenmai.generation import GenerationError, QueryGenerationError, generate
 from wenmai.generation.expand import expand_for_generation
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import AskResult
-from wenmai.query_processing import multi_query
+from wenmai.query_processing.extras import collect_extra_queries
 from wenmai.retrieval import retrieve
 from wenmai.tracing import TraceContext, save_trace
 from wenmai.tracing.stages.query import QueryStage
@@ -37,10 +36,10 @@ def ask_question(
 
     try:
         processing_started = time.perf_counter()
+        from wenmai.factories import query_rewrite as query_rewrite_factory
+
         rewriter = query_rewrite_factory.create(settings)
-        term_extras = rewriter.extra_queries(normalized)
-        mq_extras = multi_query.expand(normalized, settings)
-        extra_queries = term_extras + mq_extras
+        extras = collect_extra_queries(normalized, settings)
         mq_provider = (
             settings.providers.multimodal
             if settings.query_processing.multi_query
@@ -52,8 +51,8 @@ def ask_question(
                 normalized=normalized,
                 elapsed_ms=(time.perf_counter() - processing_started) * 1000,
                 culture_domain=culture_domain,
-                term_extras=term_extras,
-                multi_query_extras=mq_extras,
+                term_extras=extras.term_extras,
+                multi_query_extras=extras.multi_query_extras,
                 rewriter=rewriter.provider_name,
                 multi_query_provider=mq_provider,
             )
@@ -66,7 +65,7 @@ def ask_question(
             retrieval_mode=retrieval_mode,
             rerank_enabled=rerank_enabled,
             knowledge=knowledge,
-            extra_queries=extra_queries,
+            extra_queries=extras.combined,
         )
         for stage in retrieved.stages:
             trace.append_stage(stage)

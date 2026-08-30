@@ -51,6 +51,38 @@ def config_snapshot(settings: Settings, group: str) -> dict[str, Any]:
     }
 
 
+def rewrite_compare_config_snapshot(
+    settings: Settings,
+    *,
+    group: str,
+    query_rewrite: bool,
+) -> dict[str, Any]:
+    return {
+        "compare_group": group,
+        "query_rewrite": query_rewrite,
+        "retrieval": {
+            "mode": "rrf",
+            "rerank_enabled": True,
+            "dense_k": settings.retrieval.dense_k,
+            "sparse_k": settings.retrieval.sparse_k,
+            "rrf_k": settings.retrieval.rrf_k,
+            "fused_k": settings.retrieval.fused_k,
+            "rerank_top": settings.retrieval.rerank_top,
+        },
+        "query_processing": {
+            "rewriter": settings.query_processing.rewriter,
+            "multi_query": settings.query_processing.multi_query,
+            "multi_query_n": settings.query_processing.multi_query_n,
+        },
+        "providers": {
+            "embedding": settings.providers.embedding,
+            "reranker": settings.providers.reranker,
+            "llm": settings.providers.multimodal,
+            "multimodal": settings.providers.multimodal,
+        },
+    }
+
+
 def group_metrics_payload(
     hit_at_5: float,
     mrr: float,

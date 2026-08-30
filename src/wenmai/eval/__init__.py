@@ -15,7 +15,7 @@ from wenmai.eval.metrics import (
     unique_corpus_doc_ids,
 )
 from wenmai.eval.read import eval_chart_data, get_eval_dashboard, list_eval_runs
-from wenmai.eval.runner import run_eval
+from wenmai.eval.runner import run_eval, run_rewrite_compare
 from wenmai.eval.views import (
     EvalDashboardView,
     EvalRunView,
@@ -41,6 +41,7 @@ __all__ = [
     "load_golden_set_from_settings",
     "mean_reciprocal_rank",
     "run_eval",
+    "run_rewrite_compare",
     "aggregate_hit_at_5",
     "aggregate_mrr",
     "corpus_doc_ids_from_chunks",

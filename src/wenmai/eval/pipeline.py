@@ -10,6 +10,7 @@ from wenmai.generation import GenerationError, GenerationResult, generate
 from wenmai.knowledge import Knowledge
 from wenmai.models import ScoredChunk
 from wenmai.pipelines.query import normalize_question
+from wenmai.query_processing.extras import collect_extra_queries
 from wenmai.retrieval import retrieve
 
 
@@ -44,6 +45,7 @@ def eval_item(
     rerank_enabled: bool,
     knowledge: Knowledge,
     retrieved_chunks: list[ScoredChunk] | None = None,
+    query_rewrite: bool = False,
 ) -> EvalItemResult:
     """Retrieve once (unless chunks supplied), then generate for one golden item."""
     normalized = normalize_question(item.question)
@@ -51,6 +53,11 @@ def eval_item(
     if retrieved_chunks is not None:
         chunks = retrieved_chunks
     else:
+        extra_queries: list[str]
+        if query_rewrite:
+            extra_queries = collect_extra_queries(normalized, settings).combined
+        else:
+            extra_queries = []
         try:
             result = retrieve(
                 normalized,
@@ -58,6 +65,7 @@ def eval_item(
                 retrieval_mode=retrieval_mode,
                 rerank_enabled=rerank_enabled,
                 knowledge=knowledge,
+                extra_queries=extra_queries,
             )
             chunks = result.chunks
         except Exception:
