@@ -22,6 +22,7 @@ from wenmai.eval.metrics import (
     retrieval_item_snapshot,
 )
 from wenmai.eval.pipeline import eval_item
+from wenmai.eval.ragas_metrics import attach_ragas_to_artifact, should_run_ragas
 from wenmai.eval.views import EvalRunView, FailedEvalItem, parse_eval_run
 from wenmai.generation import GenerationResult
 from wenmai.knowledge import Knowledge, create_knowledge
@@ -197,6 +198,7 @@ def run_eval(
     *,
     knowledge: Knowledge | None = None,
     query_rewrite: bool = False,
+    ragas: bool | None = None,
 ) -> EvalRunView:
     items = load_golden_set_from_settings(settings)
     run_started = datetime.now(UTC).isoformat()
@@ -247,6 +249,14 @@ def run_eval(
             for name in groups
         },
     }
+    if should_run_ragas(settings, ragas):
+        attach_ragas_to_artifact(
+            artifact,
+            items,
+            generation_results["rrf_rerank"],
+            ranked_chunks["rrf_rerank"],
+            settings,
+        )
 
     output_path = _runs_dir(settings) / f"{timestamp}.json"
     output_path.write_text(

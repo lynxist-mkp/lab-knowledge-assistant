@@ -20,4 +20,9 @@ class FakeEvaluator(BaseEvaluator):
         apply_behavior(self.behavior, "evaluator")
         if self.behavior == "garbage":
             return {}
+        if "user_input" in kwargs or "retrieved_contexts" in kwargs:
+            return {
+                "faithfulness": {"value": 0.9, "status": "ok"},
+                "context_precision": {"value": 0.8, "status": "ok"},
+            }
         return {"value": 0.0}

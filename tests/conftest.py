@@ -28,6 +28,7 @@ def test_settings(tmp_path: Path) -> Settings:
     raw["providers"]["multimodal"] = "fake"
     raw["providers"]["embedding"] = "fake"
     raw["providers"]["reranker"] = "fake"
+    raw["providers"]["evaluator"] = "fake"
     raw["providers"]["splitter"] = "recursive_zh"
     raw["providers"]["vector_store"] = "chroma"
     raw["transform"]["stages"] = ["refiner", "enricher"]
@@ -35,6 +36,7 @@ def test_settings(tmp_path: Path) -> Settings:
         "multimodal": "ok",
         "embedding": "ok",
         "reranker": "ok",
+        "evaluator": "ok",
         "splitter": "ok",
         "vector_store": "ok",
     }
