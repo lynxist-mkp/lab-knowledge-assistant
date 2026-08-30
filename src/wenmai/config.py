@@ -61,6 +61,12 @@ class TransformConfig:
 
 
 @dataclass
+class QueryProcessing:
+    rewriter: str = "lexicon"
+    lexicon: str = "data/lexicon/synonyms.yaml"
+
+
+@dataclass
 class Retrieval:
     dense_k: int
     sparse_k: int
@@ -179,6 +185,7 @@ class Settings:
     chunking: Chunking
     transform: TransformConfig
     retrieval: Retrieval
+    query_processing: QueryProcessing
     bm25: Bm25
     providers: Providers
     server: Server
@@ -200,6 +207,9 @@ class Settings:
             chunking=_build(Chunking, raw["chunking"]),
             transform=_build(TransformConfig, _normalize_transform(raw["transform"])),
             retrieval=_build(Retrieval, raw["retrieval"]),
+            query_processing=_build(
+                QueryProcessing, raw.get("query_processing") or {}
+            ),
             bm25=_build(Bm25, raw["bm25"]),
             providers=_build(Providers, _normalize_providers(raw["providers"])),
             server=_build(Server, raw["server"]),

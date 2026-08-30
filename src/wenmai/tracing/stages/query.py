@@ -38,15 +38,26 @@ class QueryStage:
         normalized: str,
         elapsed_ms: float,
         culture_domain: str | None = None,
+        extra_queries: list[str] | None = None,
+        rewriter: str = "local",
     ) -> StageRecord:
+        extras = extra_queries or []
+        if extras:
+            method = "term-normalize"
+            output_summary = " | ".join([normalized, *extras])
+            candidate_count = 1 + len(extras)
+        else:
+            method = "normalize"
+            output_summary = normalized
+            candidate_count = 1
         return StageRecord(
             name="query_processing",
-            method="normalize",
-            provider="local",
+            method=method,
+            provider=rewriter,
             elapsed_ms=elapsed_ms,
             input_summary=question,
-            output_summary=normalized,
-            candidate_count=1,
+            output_summary=output_summary,
+            candidate_count=candidate_count,
             culture_domain=culture_domain,
         )
 
