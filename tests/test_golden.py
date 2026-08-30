@@ -110,11 +110,19 @@ def test_corpus_id_matches_manifest_item_id_from_source_path() -> None:
     )
 
 
-def test_committed_golden_set_has_fifty_items_and_four_categories() -> None:
+def _is_short_or_colloquial(question: str) -> bool:
+    cjk = sum(1 for ch in question if "\u4e00" <= ch <= "\u9fff")
+    if cjk <= 12:
+        return True
+    colloquial_markers = ("啥", "哪年", "是谁", "咋", "叫啥", "几时", "多大", "在哪")
+    return any(marker in question for marker in colloquial_markers)
+
+
+def test_committed_golden_set_has_hundred_items_and_four_categories() -> None:
     repo = Path(__file__).resolve().parents[1]
     items = load_golden_set(repo / "data" / "eval" / "golden.jsonl", include_placeholders=True)
 
-    assert len(items) == 50
+    assert len(items) == 100
     present = {item.category for item in items}
     assert present == set(CATEGORIES)
 
@@ -130,6 +138,10 @@ def test_committed_golden_set_has_fifty_items_and_four_categories() -> None:
     images = [item for item in items if item.category == "图内信息"]
     assert images
     assert all(item.status == "placeholder" for item in images)
+
+    new_batch = [item for item in ready if item.id >= "g051"]
+    short_colloquial = [item for item in new_batch if _is_short_or_colloquial(item.question)]
+    assert len(short_colloquial) >= 10
 
     manifest_path = repo / "data" / "corpus" / "manifest.yaml"
     manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
