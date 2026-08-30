@@ -3,11 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from wenmai.knowledge.document_card import DocumentNotFoundError
-from wenmai.knowledge.domain import culture_domain, review_status, title
-from wenmai.knowledge.store import Knowledge
-
-_REVIEW_PENDING = "待审"
-_REVIEW_APPROVED = "已通过"
+from wenmai.knowledge.domain import (
+    REVIEW_APPROVED,
+    REVIEW_PENDING,
+    culture_domain,
+    review_status,
+    title,
+)
 
 
 @dataclass(frozen=True)
@@ -29,7 +31,7 @@ class PendingDocument:
 def list_pending_documents(knowledge: Knowledge) -> list[PendingDocument]:
     by_document: dict[str, list] = {}
     for chunk in knowledge.list_all():
-        if review_status(chunk) != _REVIEW_PENDING:
+        if review_status(chunk) != REVIEW_PENDING:
             continue
         by_document.setdefault(chunk.document_id, []).append(chunk)
 
@@ -51,7 +53,7 @@ def list_pending_documents(knowledge: Knowledge) -> list[PendingDocument]:
 def approve_document(knowledge: Knowledge, document_id: str) -> None:
     if not knowledge.get_by_document_id(document_id):
         raise DocumentNotFoundError(document_id)
-    knowledge.set_review_status(document_id, _REVIEW_APPROVED)
+    knowledge.set_review_status(document_id, REVIEW_APPROVED)
 
 
 def reject_document(knowledge: Knowledge, document_id: str) -> None:

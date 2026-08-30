@@ -561,7 +561,7 @@ def test_review_pending_approve_reject_api_contract(
 
     reject = client.post("/api/review/doc-reject-me/reject")
     assert reject.status_code == 200
-    assert reject.json()["status"] == "deleted"
+    assert reject.json()["审阅状态"] == "已驳回"
 
     pending_final = client.get("/api/review/pending")
     assert pending_final.status_code == 200

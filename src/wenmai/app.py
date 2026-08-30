@@ -143,7 +143,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             reject_document(app.state.knowledge, document_id)
         except DocumentNotFoundError as exc:
             raise HTTPException(status_code=404, detail="document not found") from exc
-        return {"document_id": document_id, "status": "deleted"}
+        return {"document_id": document_id, "审阅状态": "已驳回"}
 
     @app.get("/api/chunks/{chunk_id}")
     def api_chunk_detail(chunk_id: str) -> dict[str, object]:

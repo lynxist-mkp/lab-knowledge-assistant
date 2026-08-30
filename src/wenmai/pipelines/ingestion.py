@@ -12,7 +12,7 @@ from wenmai.ingestion.loaders import LoadedDocument, SourceLoadError, load_sourc
 from wenmai.ingestion.prepare import prepare_chunks
 from wenmai.ingestion.quality import evaluate_quality_gate, peek_source
 from wenmai.knowledge import Knowledge, create_knowledge
-from wenmai.knowledge.domain import stamp_review_status
+from wenmai.knowledge.domain import REVIEW_PENDING, REVIEW_STATUS_FIELD, stamp_review_status
 from wenmai.models import Chunk, IngestResult
 from wenmai.storage.document_images import IMAGE_PLACEHOLDER_RE
 from wenmai.tracing import StageRecord, TraceContext, save_trace
@@ -42,6 +42,32 @@ def _set_trace_summary(
             "chunk_count": chunk_count,
             "chunks_with_images": chunks_with_images,
         }
+    )
+
+
+def _finish_rejected_ingest(
+    trace: TraceContext,
+    source_path: Path,
+    *,
+    document_source_path: str,
+) -> IngestResult:
+    document_id = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    _set_trace_summary(
+        trace,
+        source_path=document_source_path,
+        document_id=document_id,
+        title=source_path.stem,
+        status="rejected",
+        chunk_count=0,
+        chunks_with_images=0,
+    )
+    trace.close()
+    return IngestResult(
+        document_id=document_id,
+        chunk_count=0,
+        elapsed_ms=trace.total_elapsed_ms,
+        trace_id=trace.trace_id,
+        status="rejected",
     )
 
 
@@ -86,23 +112,10 @@ def ingest_source(
                     f"effective_char_ratio {gate_result.ratio:.2f} "
                     f"below {settings.quality_gate.reject_below:.2f}"
                 )
-                document_id = hashlib.sha256(source_path.read_bytes()).hexdigest()
-                _set_trace_summary(
+                return _finish_rejected_ingest(
                     trace,
-                    source_path=document_source_path,
-                    document_id=document_id,
-                    title=source_path.stem,
-                    status="rejected",
-                    chunk_count=0,
-                    chunks_with_images=0,
-                )
-                trace.close()
-                return IngestResult(
-                    document_id=document_id,
-                    chunk_count=0,
-                    elapsed_ms=trace.total_elapsed_ms,
-                    trace_id=trace.trace_id,
-                    status="rejected",
+                    source_path,
+                    document_source_path=document_source_path,
                 )
             gray_review = gate_result.band == "gray"
 
@@ -120,23 +133,10 @@ def ingest_source(
                 )
             )
             if outcome.hard_reject:
-                document_id = hashlib.sha256(source_path.read_bytes()).hexdigest()
-                _set_trace_summary(
+                return _finish_rejected_ingest(
                     trace,
-                    source_path=document_source_path,
-                    document_id=document_id,
-                    title=source_path.stem,
-                    status="rejected",
-                    chunk_count=0,
-                    chunks_with_images=0,
-                )
-                trace.close()
-                return IngestResult(
-                    document_id=document_id,
-                    chunk_count=0,
-                    elapsed_ms=trace.total_elapsed_ms,
-                    trace_id=trace.trace_id,
-                    status="rejected",
+                    source_path,
+                    document_source_path=document_source_path,
                 )
             gray_review = outcome.pending
 
@@ -305,7 +305,7 @@ def _chunk_metadata(
         },
     }
     if gray_review:
-        metadata["审阅状态"] = "待审"
+        metadata[REVIEW_STATUS_FIELD] = REVIEW_PENDING
     else:
         stamp_review_status(metadata)
     return metadata

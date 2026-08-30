@@ -38,6 +38,7 @@ class FakeMultimodal(BaseMultimodal):
             return f"{_REFUSAL_PREFIX}检索片段不足以回答该问题。"
         if _GRAY_REVIEW_MARKER in prompt:
             return "不通过" if _GRAY_REJECT_HINT in prompt else "通过"
+        if _QA_MARKER in prompt:
             return "湄洲岛是妈祖信仰的发源地，祖庙是信俗活动的中心场所[1]。"
         if _ENRICHER_MARKER in prompt:
             return (
