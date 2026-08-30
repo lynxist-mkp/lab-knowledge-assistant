@@ -9,6 +9,7 @@ from wenmai.generation import GenerationError, QueryGenerationError, generate
 from wenmai.generation.expand import expand_for_generation
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import AskResult
+from wenmai.query_processing import multi_query
 from wenmai.retrieval import retrieve
 from wenmai.tracing import TraceContext, save_trace
 from wenmai.tracing.stages.query import QueryStage
@@ -37,15 +38,24 @@ def ask_question(
     try:
         processing_started = time.perf_counter()
         rewriter = query_rewrite_factory.create(settings)
-        extra_queries = rewriter.extra_queries(normalized)
+        term_extras = rewriter.extra_queries(normalized)
+        mq_extras = multi_query.expand(normalized, settings)
+        extra_queries = term_extras + mq_extras
+        mq_provider = (
+            settings.providers.multimodal
+            if settings.query_processing.multi_query
+            else None
+        )
         trace.append_stage(
             QueryStage.query_processing(
                 question=question,
                 normalized=normalized,
                 elapsed_ms=(time.perf_counter() - processing_started) * 1000,
                 culture_domain=culture_domain,
-                extra_queries=extra_queries,
+                term_extras=term_extras,
+                multi_query_extras=mq_extras,
                 rewriter=rewriter.provider_name,
+                multi_query_provider=mq_provider,
             )
         )
 

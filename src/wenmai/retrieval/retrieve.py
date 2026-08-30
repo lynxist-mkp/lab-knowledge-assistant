@@ -123,6 +123,7 @@ def _stages_from_fusion(
             sparse_chunks,
             fusion_result.chunks,
             fusion_result.fusion_elapsed_ms,
+            query_path_counts=fusion_result.query_path_counts,
         ),
     ]
 

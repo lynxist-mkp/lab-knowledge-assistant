@@ -26,6 +26,7 @@ class RetrievalResult:
     dense_elapsed_ms: float = 0.0
     sparse_elapsed_ms: float = 0.0
     fusion_elapsed_ms: float = 0.0
+    query_path_counts: list[dict[str, object]] = field(default_factory=list)
 
 
 def validate_retrieval_mode(mode: str) -> RetrievalMode:
@@ -73,6 +74,7 @@ def _dense_only(
     primary_chunks: list[ScoredChunk] = []
     ranked_lists: list[list[str]] = []
     chunk_by_id: dict[str, ScoredChunk] = {}
+    query_path_counts: list[dict[str, object]] = []
     for index, query in enumerate(queries):
         chunks = knowledge.dense_search(
             query,
@@ -82,6 +84,9 @@ def _dense_only(
         if index == 0:
             primary_chunks = chunks
         ranked_lists.append([item.chunk.chunk_id for item in chunks])
+        query_path_counts.append(
+            {"query_index": index, "dense_count": len(chunks), "sparse_count": 0}
+        )
         for item in chunks:
             chunk_by_id[item.chunk.chunk_id] = item
     elapsed_ms = (time.perf_counter() - started) * 1000
@@ -107,6 +112,7 @@ def _dense_only(
         dense_chunks=primary_chunks,
         dense_elapsed_ms=elapsed_ms,
         fusion_elapsed_ms=fusion_ms,
+        query_path_counts=query_path_counts,
     )
 
 
@@ -120,6 +126,7 @@ def _sparse_only(
     primary_chunks: list[ScoredChunk] = []
     ranked_lists: list[list[str]] = []
     chunk_by_id: dict[str, ScoredChunk] = {}
+    query_path_counts: list[dict[str, object]] = []
     for index, query in enumerate(queries):
         chunks = knowledge.sparse_search(
             query,
@@ -129,6 +136,9 @@ def _sparse_only(
         if index == 0:
             primary_chunks = chunks
         ranked_lists.append([item.chunk.chunk_id for item in chunks])
+        query_path_counts.append(
+            {"query_index": index, "dense_count": 0, "sparse_count": len(chunks)}
+        )
         for item in chunks:
             chunk_by_id[item.chunk.chunk_id] = item
     elapsed_ms = (time.perf_counter() - started) * 1000
@@ -154,6 +164,7 @@ def _sparse_only(
         sparse_chunks=primary_chunks,
         sparse_elapsed_ms=elapsed_ms,
         fusion_elapsed_ms=fusion_ms,
+        query_path_counts=query_path_counts,
     )
 
 
@@ -169,6 +180,7 @@ def _rrf(
     sparse_ms = 0.0
     ranked_lists: list[list[str]] = []
     chunk_by_id: dict[str, Chunk] = {}
+    query_path_counts: list[dict[str, object]] = []
 
     for index, query in enumerate(queries):
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -187,6 +199,13 @@ def _rrf(
             sparse_ms = query_sparse_ms
         ranked_lists.append([item.chunk.chunk_id for item in dense_chunks])
         ranked_lists.append([item.chunk.chunk_id for item in sparse_chunks])
+        query_path_counts.append(
+            {
+                "query_index": index,
+                "dense_count": len(dense_chunks),
+                "sparse_count": len(sparse_chunks),
+            }
+        )
         for item in dense_chunks + sparse_chunks:
             chunk_by_id[item.chunk.chunk_id] = item.chunk
 
@@ -210,6 +229,7 @@ def _rrf(
         dense_elapsed_ms=dense_ms,
         sparse_elapsed_ms=sparse_ms,
         fusion_elapsed_ms=fusion_ms,
+        query_path_counts=query_path_counts,
     )
 
 

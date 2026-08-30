@@ -64,6 +64,10 @@ class TransformConfig:
 class QueryProcessing:
     rewriter: str = "lexicon"
     lexicon: str = "data/lexicon/synonyms.yaml"
+    multi_query: bool = False
+    multi_query_n: int = 3
+    multi_query_timeout_seconds: float = 10.0
+    multi_query_prompt: str = "prompts/multi_query_v1.txt"
 
 
 @dataclass
