@@ -26,6 +26,7 @@ from wenmai.tracing import (
     list_query_summaries,
     list_trace_degradations,
 )
+from wenmai.tracing.latency import query_latency_percentiles
 from wenmai.tracing.store import average_query_latency_ms
 
 
@@ -95,10 +96,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/stats/overview")
     def api_overview_stats() -> dict[str, object]:
         catalog = DocumentCatalog.from_settings(resolved)
+        latency = query_latency_percentiles(resolved)
+        total = latency.get("total") or {}
         return build_overview_stats(
             resolved,
             catalog,
             avg_query_latency_ms=average_query_latency_ms(resolved),
+            query_latency_p50_ms=total.get("p50"),
+            query_latency_p95_ms=total.get("p95"),
+            stage_latency=latency,
         ).as_dict()
 
     @app.get("/api/browse")

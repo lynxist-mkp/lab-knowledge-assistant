@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -180,6 +182,68 @@ def test_post_eval_runs_returns_typed_run(test_settings: Settings, tmp_path: Pat
     assert body["groups"]["rrf_rerank"]["label"] == "RRF + Rerank"
     assert "hit_at_5" in body["groups"]["rrf_rerank"]["metrics"]
     assert "stages" not in body
+
+
+def test_run_eval_artifact_contains_latency_ms(
+    test_settings: Settings,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    without_ragas_judge_key: None,
+) -> None:
+    _prepare_eval(test_settings, tmp_path)
+    run_started = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
+    monkeypatch.setattr(
+        "wenmai.eval.runner.datetime",
+        SimpleNamespace(
+            now=lambda tz=None: run_started,
+            UTC=UTC,
+        ),
+    )
+    trace_path = Path(test_settings.paths.traces)
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    generation_stage = {
+        "name": "generation",
+        "method": "llm",
+        "provider": "fake",
+        "elapsed_ms": 0.0,
+    }
+    for trace_id, generation_ms in [("eval-q1", 100.0), ("eval-q2", 300.0)]:
+        trace = {
+            "trace_id": trace_id,
+            "trace_type": "query",
+            "started_at": run_started.isoformat(),
+            "finished_at": "2026-06-01T12:00:01+00:00",
+            "total_elapsed_ms": generation_ms,
+            "stages": [{**generation_stage, "elapsed_ms": generation_ms}],
+            "error": None,
+            "metadata": {},
+        }
+        with trace_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(trace, ensure_ascii=False) + "\n")
+
+    run = run_eval(test_settings)
+    artifact_path = Path(test_settings.evaluation.runs) / f"{run.timestamp}.json"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+
+    assert artifact["latency_ms"]["generation"]["p50"] == 100.0
+    assert artifact["latency_ms"]["generation"]["p95"] == 300.0
+    assert artifact["latency_ms"]["total"]["p50"] == 100.0
+    assert artifact["latency_ms"]["total"]["p95"] == 300.0
+
+
+def test_run_eval_artifact_latency_empty_without_traces(
+    test_settings: Settings,
+    tmp_path: Path,
+    without_ragas_judge_key: None,
+) -> None:
+    _prepare_eval(test_settings, tmp_path)
+
+    run = run_eval(test_settings)
+    artifact_path = Path(test_settings.evaluation.runs) / f"{run.timestamp}.json"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+
+    assert artifact["latency_ms"]["total"]["p50"] is None
+    assert artifact["latency_ms"]["total"]["p95"] is None
 
 
 def test_run_eval_does_not_write_query_traces(

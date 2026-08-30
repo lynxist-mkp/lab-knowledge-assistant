@@ -59,9 +59,13 @@ def test_ops_landmarks_and_overview_panel(test_settings: Settings) -> None:
     assert 'id="stat-doc-count"' in html
     assert 'id="stat-chunk-count"' in html
     assert 'id="stat-avg-latency"' in html
+    assert 'id="stat-latency-p50"' in html
+    assert 'id="stat-latency-p95"' in html
     assert "document_count" in html
     assert "chunk_count" in html
     assert "avg_query_latency_ms" in html
+    assert "query_latency_p50_ms" in html
+    assert "query_latency_p95_ms" in html
 
     # Compliance footer inherited from shell
     assert "人工智能生成合成" in html
@@ -150,6 +154,10 @@ def test_ops_overview_api_contract(test_settings: Settings, tmp_path: Path) -> N
     assert data["document_count"] == 0
     assert data["chunk_count"] == 0
     assert "avg_query_latency_ms" in data
+    assert "query_latency_p50_ms" in data
+    assert "query_latency_p95_ms" in data
+    assert data["query_latency_p50_ms"] is None
+    assert data["query_latency_p95_ms"] is None
 
     # After ingesting a file
     source = _write_markdown(

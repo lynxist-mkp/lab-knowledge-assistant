@@ -14,15 +14,21 @@ from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
 from wenmai.ops.overview import build_overview_stats
 from wenmai.storage.catalog import DocumentCatalog
+from wenmai.tracing.latency import query_latency_percentiles
 from wenmai.tracing.store import average_query_latency_ms
 
 
 def _overview_stats(settings: Settings) -> object:
     catalog = DocumentCatalog.from_settings(settings)
+    latency = query_latency_percentiles(settings)
+    total = latency.get("total") or {}
     return build_overview_stats(
         settings,
         catalog,
         avg_query_latency_ms=average_query_latency_ms(settings),
+        query_latency_p50_ms=total.get("p50"),
+        query_latency_p95_ms=total.get("p95"),
+        stage_latency=latency,
     )
 
 
@@ -43,13 +49,29 @@ title: {title}
 
 
 def _append_query_trace(path: Path, *, trace_id: str, elapsed_ms: float) -> None:
+    _append_query_trace_with_stages(
+        path,
+        trace_id=trace_id,
+        total_elapsed_ms=elapsed_ms,
+        stages=[],
+    )
+
+
+def _append_query_trace_with_stages(
+    path: Path,
+    *,
+    trace_id: str,
+    total_elapsed_ms: float,
+    stages: list[dict[str, object]],
+    started_at: str = "2026-01-01T00:00:00+00:00",
+) -> None:
     trace = {
         "trace_id": trace_id,
         "trace_type": "query",
-        "started_at": "2026-01-01T00:00:00+00:00",
+        "started_at": started_at,
         "finished_at": "2026-01-01T00:00:01+00:00",
-        "total_elapsed_ms": elapsed_ms,
-        "stages": [],
+        "total_elapsed_ms": total_elapsed_ms,
+        "stages": stages,
         "error": None,
         "metadata": {},
     }
@@ -63,6 +85,8 @@ def test_overview_stats_empty_store(test_settings: Settings) -> None:
     assert stats.document_count == 0
     assert stats.chunk_count == 0
     assert stats.avg_query_latency_ms is None
+    assert stats.query_latency_p50_ms is None
+    assert stats.query_latency_p95_ms is None
 
 
 def test_overview_stats_after_ingest(test_settings: Settings, tmp_path: Path) -> None:
@@ -81,6 +105,45 @@ def test_overview_stats_after_ingest(test_settings: Settings, tmp_path: Path) ->
     assert stats.document_count == 1
     assert stats.chunk_count == response.json()["chunk_count"]
     assert stats.avg_query_latency_ms is None
+    assert stats.query_latency_p50_ms is None
+    assert stats.query_latency_p95_ms is None
+
+
+def test_overview_query_latency_percentiles_from_traces(test_settings: Settings) -> None:
+    trace_path = Path(test_settings.paths.traces)
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    generation_stage = {
+        "name": "generation",
+        "method": "llm",
+        "provider": "fake",
+        "elapsed_ms": 0.0,
+    }
+    for trace_id, generation_ms, total_ms in [
+        ("q1", 100.0, 150.0),
+        ("q2", 300.0, 350.0),
+    ]:
+        _append_query_trace_with_stages(
+            trace_path,
+            trace_id=trace_id,
+            total_elapsed_ms=total_ms,
+            stages=[{**generation_stage, "elapsed_ms": generation_ms}],
+        )
+
+    stats = _overview_stats(test_settings)
+    latency = query_latency_percentiles(test_settings)
+
+    assert stats.query_latency_p50_ms == pytest.approx(150.0)
+    assert stats.query_latency_p95_ms == pytest.approx(350.0)
+    assert latency["generation"]["p50"] == pytest.approx(100.0)
+    assert latency["generation"]["p95"] == pytest.approx(300.0)
+    assert latency["total"]["p50"] == pytest.approx(150.0)
+    assert latency["total"]["p95"] == pytest.approx(350.0)
+
+
+def test_query_latency_percentiles_empty_traces(test_settings: Settings) -> None:
+    latency = query_latency_percentiles(test_settings)
+
+    assert latency == {"total": {"p50": None, "p95": None}}
 
 
 def test_overview_avg_query_latency_from_traces(test_settings: Settings) -> None:

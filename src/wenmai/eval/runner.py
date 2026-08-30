@@ -21,6 +21,7 @@ from wenmai.eval.views import EvalRunView, FailedEvalItem, parse_eval_run
 from wenmai.generation import GenerationResult
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import ScoredChunk
+from wenmai.tracing.latency import query_latency_percentiles
 
 FAILURE_RETRIES = 3
 
@@ -111,6 +112,7 @@ def run_eval(
     knowledge: Knowledge | None = None,
 ) -> EvalRunView:
     items = load_golden_set_from_settings(settings)
+    run_started = datetime.now(UTC).isoformat()
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     groups = list(settings.evaluation.ablations)
     ranked_chunks: dict[str, dict[str, list[ScoredChunk]]] = {name: {} for name in groups}
@@ -150,12 +152,14 @@ def run_eval(
     failures = [
         FailedEvalItem(group=group, item_id=item.id) for group, item in still
     ]
+    latency_ms = query_latency_percentiles(settings, started_at_min=run_started)
     artifact = {
         "timestamp": timestamp,
         "golden_set": settings.evaluation.golden_set,
         "ablations": groups,
         "item_count": len(items),
         "failures": [item.as_dict() for item in failures],
+        "latency_ms": latency_ms,
         "groups": {
             name: {
                 "config": config_snapshot(settings, name),
