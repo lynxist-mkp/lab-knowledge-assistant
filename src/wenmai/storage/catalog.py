@@ -6,14 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from wenmai.config import Settings
-from wenmai.knowledge.browse import (
-    ChunkSummary,
-    CultureDomainGroup,
-    DocumentSummary,
-    _culture_domain,
-    _preview,
-    _title,
-)
+from wenmai.knowledge.browse import ChunkSummary, CultureDomainGroup, DocumentSummary
+from wenmai.knowledge.domain import culture_domain, preview, title
 from wenmai.models import Chunk
 from wenmai.storage.paths import store_path
 
@@ -60,13 +54,13 @@ class DocumentCatalog:
         document_id = chunks[0].document_id
         sorted_chunks = sorted(chunks, key=lambda item: item.chunk_id)
         self._documents[document_id] = {
-            "culture_domain": _culture_domain(sorted_chunks[0]),
-            "title": _title(sorted_chunks[0]),
+            "culture_domain": culture_domain(sorted_chunks[0]),
+            "title": title(sorted_chunks[0]),
             "chunks": [
                 {
                     "chunk_id": chunk.chunk_id,
                     "document_id": chunk.document_id,
-                    "preview": _preview(chunk.text),
+                    "preview": preview(chunk.text),
                 }
                 for chunk in sorted_chunks
             ],

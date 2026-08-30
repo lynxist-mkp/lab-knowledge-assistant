@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+from wenmai.config import Settings
+from wenmai.knowledge.browse import OverviewStats
+from wenmai.storage.catalog import DocumentCatalog
+
+
+def build_overview_stats(
+    settings: Settings,
+    catalog: DocumentCatalog,
+    *,
+    avg_query_latency_ms: float | None = None,
+) -> OverviewStats:
+    _ = settings
+    return OverviewStats(
+        document_count=catalog.document_count,
+        chunk_count=catalog.chunk_count,
+        avg_query_latency_ms=avg_query_latency_ms,
+    )

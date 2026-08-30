@@ -7,6 +7,7 @@ import pytest
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
+from wenmai.ops.overview import build_overview_stats
 from wenmai.storage.document_images import find_image_ids
 
 
@@ -23,6 +24,10 @@ def _chunk(chunk_id: str, document_id: str, text: str, culture_domain: str = "")
         text=text,
         metadata=metadata,
     )
+
+
+def _overview(knowledge) -> object:
+    return build_overview_stats(knowledge._settings, knowledge._catalog)
 
 
 def _commit(
@@ -184,7 +189,7 @@ def test_catalog_updates_on_commit_and_delete(test_settings: Settings) -> None:
     _commit(knowledge, "doc-a", "船政学堂简介", culture_domain="船政")
     _commit(knowledge, "doc-b", "湄洲祖庙简介", culture_domain="妈祖")
 
-    overview = knowledge.overview()
+    overview = _overview(knowledge)
     assert overview.document_count == 2
     assert overview.chunk_count == 2
 
@@ -194,12 +199,12 @@ def test_catalog_updates_on_commit_and_delete(test_settings: Settings) -> None:
     assert by_domain["妈祖"].chunk_count == 1
 
     knowledge.delete_document("doc-a")
-    overview = knowledge.overview()
+    overview = _overview(knowledge)
     assert overview.document_count == 1
     assert overview.chunk_count == 1
 
 
-def test_browse_and_overview_use_catalog_not_list_all(
+def test_browse_uses_catalog_not_list_all(
     test_settings: Settings,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -207,11 +212,11 @@ def test_browse_and_overview_use_catalog_not_list_all(
     _commit(knowledge, "doc-a", "船政学堂简介", culture_domain="船政")
 
     def fail_list_all() -> list[Chunk]:
-        raise AssertionError("browse/overview should not scan list_all()")
+        raise AssertionError("browse should not scan list_all()")
 
     monkeypatch.setattr(knowledge._store, "list_all", fail_list_all)
 
-    assert knowledge.overview().document_count == 1
+    assert _overview(knowledge).document_count == 1
     assert knowledge.browse_by_culture_domain()
 
 
@@ -238,7 +243,7 @@ def test_commit_rolls_back_dense_on_sparse_write_failure(
         )
 
     assert knowledge.get_by_document_id(doc_id) == []
-    assert knowledge.overview().document_count == 0
+    assert _overview(knowledge).document_count == 0
     sparse = knowledge.sparse_search("回滚", top_k=5)
     assert all(item.chunk.document_id != doc_id for item in sparse)
     plan = knowledge.plan_document(
@@ -270,7 +275,7 @@ def test_commit_rolls_back_on_sparse_save_failure(
         )
 
     assert knowledge.get_by_document_id(doc_id) == []
-    assert knowledge.overview().document_count == 0
+    assert _overview(knowledge).document_count == 0
     sparse = knowledge.sparse_search("回滚", top_k=5)
     assert all(item.chunk.document_id != doc_id for item in sparse)
 
@@ -317,7 +322,7 @@ def test_commit_rebuild_delete_failure_restores_fingerprint(
     def fail_delete(_document_id: str) -> None:
         raise RuntimeError("simulated previous delete failure")
 
-    monkeypatch.setattr(knowledge, "delete_document", fail_delete)
+    monkeypatch.setattr(knowledge._write, "delete_document", fail_delete)
 
     with pytest.raises(RuntimeError, match="simulated previous delete failure"):
         knowledge.commit_document(
