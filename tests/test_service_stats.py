@@ -20,7 +20,10 @@ from wenmai.tracing.store import average_query_latency_ms
 
 def _overview_stats(settings: Settings) -> object:
     catalog = DocumentCatalog.from_settings(settings)
-    latency = query_latency_percentiles(settings)
+    latency = query_latency_percentiles(
+        settings,
+        recent_n=settings.observability.query_latency_recent_n,
+    )
     total = latency.get("total") or {}
     return build_overview_stats(
         settings,
@@ -138,6 +141,31 @@ def test_overview_query_latency_percentiles_from_traces(test_settings: Settings)
     assert latency["generation"]["p95"] == pytest.approx(300.0)
     assert latency["total"]["p50"] == pytest.approx(150.0)
     assert latency["total"]["p95"] == pytest.approx(350.0)
+
+
+def test_query_latency_percentiles_use_recent_n_only(test_settings: Settings) -> None:
+    trace_path = Path(test_settings.paths.traces)
+    for index in range(5):
+        _append_query_trace_with_stages(
+            trace_path,
+            trace_id=f"old-{index}",
+            total_elapsed_ms=10.0,
+            stages=[{"name": "generation", "elapsed_ms": 10.0}],
+            started_at=f"2026-01-01T00:00:0{index}+00:00",
+        )
+    _append_query_trace_with_stages(
+        trace_path,
+        trace_id="recent-slow",
+        total_elapsed_ms=300.0,
+        stages=[{"name": "generation", "elapsed_ms": 300.0}],
+        started_at="2026-01-02T00:00:00+00:00",
+    )
+
+    all_latency = query_latency_percentiles(test_settings, recent_n=None)
+    recent_latency = query_latency_percentiles(test_settings, recent_n=1)
+
+    assert all_latency["total"]["p50"] == pytest.approx(10.0)
+    assert recent_latency["total"]["p50"] == pytest.approx(300.0)
 
 
 def test_query_latency_percentiles_empty_traces(test_settings: Settings) -> None:

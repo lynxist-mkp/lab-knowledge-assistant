@@ -65,6 +65,18 @@ culture_domain: 船政
     return path
 
 
+def test_scanned_peek_low_ratio_routes_to_gray_not_approve(
+    test_settings: Settings,
+) -> None:
+    gate = evaluate_quality_gate(
+        "@#@$%^&*()!~`" * 80,
+        test_settings.quality_gate,
+        defer_reject=True,
+    )
+    assert gate.band == "gray"
+    assert gate.ratio < test_settings.quality_gate.reject_below
+
+
 def test_quality_gate_rejects_low_ratio_without_writing_knowledge(
     test_settings: Settings, tmp_path: Path
 ) -> None:

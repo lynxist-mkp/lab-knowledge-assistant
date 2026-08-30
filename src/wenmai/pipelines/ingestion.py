@@ -78,7 +78,7 @@ def ingest_source(
             gate_info["output_summary"] = (
                 f"ratio={gate_result.ratio:.2f} band={gate_result.band}"
             )
-            if source_peek.defer_reject and gate_result.ratio < settings.quality_gate.reject_below:
+            if source_peek.defer_reject and gate_result.band == "gray":
                 gate_info["output_summary"] += " defer=scanned_pdf"
             gate_info["candidate_count"] = 1
             if gate_result.band == "reject":

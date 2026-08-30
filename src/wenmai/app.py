@@ -101,7 +101,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/stats/overview")
     def api_overview_stats() -> dict[str, object]:
         catalog = DocumentCatalog.from_settings(resolved)
-        latency = query_latency_percentiles(resolved)
+        latency = query_latency_percentiles(
+            resolved,
+            recent_n=resolved.observability.query_latency_recent_n,
+        )
         total = latency.get("total") or {}
         return build_overview_stats(
             resolved,

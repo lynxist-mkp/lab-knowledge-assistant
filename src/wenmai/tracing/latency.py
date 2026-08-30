@@ -29,19 +29,22 @@ def _query_records(
     settings: Settings,
     *,
     started_at_min: str | None = None,
+    recent_n: int | None = None,
 ) -> list[dict[str, Any]]:
     records = [
         record
         for record in read_trace_records(settings)
         if record.get("trace_type") == "query"
     ]
-    if started_at_min is None:
-        return records
-    return [
-        record
-        for record in records
-        if str(record.get("started_at") or "") >= started_at_min
-    ]
+    if started_at_min is not None:
+        records = [
+            record
+            for record in records
+            if str(record.get("started_at") or "") >= started_at_min
+        ]
+    if recent_n is not None and recent_n > 0 and len(records) > recent_n:
+        records = records[-recent_n:]
+    return records
 
 
 def collect_stage_elapsed_ms(records: list[dict[str, Any]]) -> dict[str, list[float]]:
@@ -76,5 +79,12 @@ def query_latency_percentiles(
     settings: Settings,
     *,
     started_at_min: str | None = None,
+    recent_n: int | None = None,
 ) -> dict[str, StageLatencyPercentiles]:
-    return latency_ms_payload(_query_records(settings, started_at_min=started_at_min))
+    return latency_ms_payload(
+        _query_records(
+            settings,
+            started_at_min=started_at_min,
+            recent_n=recent_n,
+        )
+    )

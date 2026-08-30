@@ -66,6 +66,7 @@ server:
 
 observability:
   trace_file: "logs/traces.jsonl"
+  query_latency_recent_n: 50
 
 evaluation:
   golden_set: "data/eval/golden.jsonl"

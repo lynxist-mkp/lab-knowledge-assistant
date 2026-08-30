@@ -13,7 +13,7 @@ import pypdfium2 as pdfium
 
 from wenmai.config import Settings
 from wenmai.factories import multimodal as multimodal_factory
-from wenmai.ingestion.quality import SourcePeek
+from wenmai.ingestion.quality import SourcePeek, peek_pdf_text
 
 _PROMPT_TEXT = (
     "你是知识库入库助手，正在做灰区复判。判断下列抽文是否值得入库。"
@@ -92,7 +92,13 @@ def run_gray_review(path: Path, peek: SourcePeek, settings: Settings) -> GrayRev
 def _judge(path: Path, peek: SourcePeek, settings: Settings, provider: object) -> str:
     if peek.defer_reject and path.suffix.lower() == ".pdf":
         return _judge_pages(path, settings, provider)
-    excerpt = peek.text[: settings.quality_gate.preview_chars]
+    if path.suffix.lower() == ".pdf":
+        excerpt = peek_pdf_text(
+            path,
+            max_pages=settings.quality_gate.preview_pages,
+        )[: settings.quality_gate.preview_chars]
+    else:
+        excerpt = peek.text[: settings.quality_gate.preview_chars]
     prompt = f"{_PROMPT_TEXT}{excerpt}"
     return provider.generate(prompt)  # type: ignore[union-attr]
 

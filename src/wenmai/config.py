@@ -104,6 +104,7 @@ class Server:
 @dataclass
 class Observability:
     trace_file: str
+    query_latency_recent_n: int = 50
 
 
 @dataclass

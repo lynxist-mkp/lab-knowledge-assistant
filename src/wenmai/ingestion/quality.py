@@ -44,7 +44,8 @@ def evaluate_quality_gate(
 ) -> QualityGateResult:
     ratio = effective_char_ratio(text)
     if ratio < gate.reject_below:
-        band: QualityBand = "approve" if defer_reject else "reject"
+        # Scanned PDF peek text is unreliable; route to 灰区 instead of hard reject or 已通过.
+        band = "gray" if defer_reject else "reject"
     elif ratio > gate.approve_above:
         band = "approve"
     else:
@@ -76,14 +77,20 @@ def _peek_markdown_text(path: Path) -> str:
     return raw
 
 
-def _peek_pdf_text(path: Path) -> str:
+def _peek_pdf_text(path: Path, *, max_pages: int | None = None) -> str:
     pdf = pdfium.PdfDocument(str(path))
     try:
         parts: list[str] = []
-        for page_index in range(len(pdf)):
+        limit = len(pdf) if max_pages is None else min(max_pages, len(pdf))
+        for page_index in range(limit):
             page = pdf[page_index]
             textpage = page.get_textpage()
             parts.append(textpage.get_text_range())
         return "".join(parts)
     finally:
         pdf.close()
+
+
+def peek_pdf_text(path: Path, *, max_pages: int | None = None) -> str:
+    """Extract PDF text for 入库质量门 / 灰区复判 previews."""
+    return _peek_pdf_text(path, max_pages=max_pages)
