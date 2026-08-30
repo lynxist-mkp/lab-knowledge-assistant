@@ -5,10 +5,10 @@ import re
 from wenmai.components.transform.base import BaseTransform
 from wenmai.config import Settings
 from wenmai.factories.transform import registry
+from wenmai.ingestion.quality import effective_char_ratio
 from wenmai.models import Chunk
 from wenmai.tracing.context import TraceContext
 
-_EFFECTIVE_CHAR = re.compile(r"[\u4e00-\u9fffA-Za-z0-9]")
 _HEADER_FOOTER_LINE = re.compile(
     r"^\s*(?:"
     r"第\s*\d+\s*页"
@@ -22,13 +22,6 @@ _HEADER_FOOTER_LINE = re.compile(
 )
 _SENTENCE_END = re.compile(r"[。！？；.!?;]$")
 _NEW_BLOCK = re.compile(r"^(?:#+\s|[-*•]\s|\d+[.)]\s)")
-
-
-def effective_char_ratio(text: str) -> float:
-    if not text:
-        return 0.0
-    effective = len(_EFFECTIVE_CHAR.findall(text))
-    return effective / len(text)
 
 
 def _strip_header_footer_lines(text: str) -> str:

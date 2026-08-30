@@ -85,6 +85,10 @@ pdf_load:
   mode: "auto"
   chars_per_page_threshold: 100
 
+quality_gate:
+  reject_below: 0.60
+  approve_above: 0.80
+
 paddleocr:
   python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.venvs/paddleocr-env/bin/python"
   script: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/scripts/paddleocr_parse_pdf.py"

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from pathlib import Path
 
 from wenmai.config import Settings
 from wenmai.factories import splitter as splitter_factory
-from wenmai.ingestion.loaders import SourceLoadError, load_source
+from wenmai.ingestion.loaders import LoadedDocument, SourceLoadError, load_source
 from wenmai.ingestion.prepare import prepare_chunks
+from wenmai.ingestion.quality import evaluate_quality_gate, peek_source
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.knowledge.domain import stamp_review_status
 from wenmai.models import Chunk, IngestResult
@@ -57,7 +59,51 @@ def ingest_source(
     document_id = ""
     document_title = ""
     document_source_path = str(source_path)
+    gray_review = False
     try:
+        with trace.stage(
+            "quality_gate",
+            method="effective_char_ratio",
+            provider="config",
+            input_summary=str(source_path),
+        ) as gate_info:
+            source_peek = peek_source(source_path, settings)
+            gate_result = evaluate_quality_gate(
+                source_peek.text,
+                settings.quality_gate,
+                defer_reject=source_peek.defer_reject,
+            )
+            gate_info["output_summary"] = (
+                f"ratio={gate_result.ratio:.2f} band={gate_result.band}"
+            )
+            if source_peek.defer_reject and gate_result.ratio < settings.quality_gate.reject_below:
+                gate_info["output_summary"] += " defer=scanned_pdf"
+            gate_info["candidate_count"] = 1
+            if gate_result.band == "reject":
+                gate_info["error"] = (
+                    f"effective_char_ratio {gate_result.ratio:.2f} "
+                    f"below {settings.quality_gate.reject_below:.2f}"
+                )
+                document_id = hashlib.sha256(source_path.read_bytes()).hexdigest()
+                _set_trace_summary(
+                    trace,
+                    source_path=document_source_path,
+                    document_id=document_id,
+                    title=source_path.stem,
+                    status="rejected",
+                    chunk_count=0,
+                    chunks_with_images=0,
+                )
+                trace.close()
+                return IngestResult(
+                    document_id=document_id,
+                    chunk_count=0,
+                    elapsed_ms=trace.total_elapsed_ms,
+                    trace_id=trace.trace_id,
+                    status="rejected",
+                )
+            gray_review = gate_result.band == "gray"
+
         with trace.stage(
             "load",
             method="pending",
@@ -147,19 +193,9 @@ def ingest_source(
                 chunk_id=f"{document.document_id}:{index:04d}",
                 document_id=document.document_id,
                 text=text,
-                metadata=stamp_review_status(
-                    {
-                        "document_id": document.document_id,
-                        "title": document.title,
-                        "url": document.url,
-                        "page": document.page,
-                        "source_path": document.source_path,
-                        **{
-                            key: value
-                            for key, value in document.extra.items()
-                            if isinstance(value, (str, int, float, bool))
-                        },
-                    }
+                metadata=_chunk_metadata(
+                    document=document,
+                    gray_review=gray_review,
                 ),
             )
             for index, text in enumerate(texts)
@@ -210,3 +246,23 @@ def ingest_source(
         trace_id=trace.trace_id,
         status=status,
     )
+
+
+def _chunk_metadata(*, document: LoadedDocument, gray_review: bool) -> dict[str, object]:
+    metadata: dict[str, object] = {
+        "document_id": document.document_id,
+        "title": document.title,
+        "url": document.url,
+        "page": document.page,
+        "source_path": document.source_path,
+        **{
+            key: value
+            for key, value in document.extra.items()
+            if isinstance(value, (str, int, float, bool))
+        },
+    }
+    if gray_review:
+        metadata["审阅状态"] = "待审"
+    else:
+        stamp_review_status(metadata)
+    return metadata
