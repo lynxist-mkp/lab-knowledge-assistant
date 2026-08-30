@@ -10,6 +10,7 @@ from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import ScoredChunk
 from wenmai.retrieval.fusion import RetrievalResult, run_fusion
 from wenmai.tracing.context import StageRecord
+from wenmai.tracing.stages.query import QueryStage
 
 _RETRIEVAL_MODES = frozenset({"rrf", "dense_only", "sparse_only"})
 
@@ -66,67 +67,6 @@ def _resolve_retrieval(
     return mode, bool(rerank)
 
 
-def _candidate_records(scored_chunks: list[ScoredChunk]) -> list[dict[str, object]]:
-    return [
-        {
-            "chunk_id": item.chunk.chunk_id,
-            "score": round(item.score, 6),
-        }
-        for item in scored_chunks
-    ]
-
-
-def _dense_input_summary(settings: Settings, culture_domain: str | None) -> str:
-    summary = f"k={settings.retrieval.dense_k}"
-    if culture_domain is not None:
-        summary += f" culture_domain={culture_domain}"
-    return summary
-
-
-def _sparse_input_summary(settings: Settings, culture_domain: str | None) -> str:
-    summary = f"k={settings.retrieval.sparse_k}"
-    if culture_domain is not None:
-        summary += f" culture_domain={culture_domain}"
-    return summary
-
-
-def _dense_stage(
-    knowledge: Knowledge,
-    settings: Settings,
-    scored_chunks: list[ScoredChunk],
-    elapsed_ms: float,
-    culture_domain: str | None,
-) -> StageRecord:
-    return StageRecord(
-        name="dense",
-        method="vector_query",
-        provider=knowledge.dense_provider,
-        elapsed_ms=elapsed_ms,
-        input_summary=_dense_input_summary(settings, culture_domain),
-        output_summary=f"retrieved {len(scored_chunks)} chunks",
-        candidate_count=len(scored_chunks),
-        candidates=_candidate_records(scored_chunks),
-    )
-
-
-def _sparse_stage(
-    settings: Settings,
-    scored_chunks: list[ScoredChunk],
-    elapsed_ms: float,
-    culture_domain: str | None,
-) -> StageRecord:
-    return StageRecord(
-        name="sparse",
-        method="bm25",
-        provider="local",
-        elapsed_ms=elapsed_ms,
-        input_summary=_sparse_input_summary(settings, culture_domain),
-        output_summary=f"retrieved {len(scored_chunks)} chunks",
-        candidate_count=len(scored_chunks),
-        candidates=_candidate_records(scored_chunks),
-    )
-
-
 def _stages_from_fusion(
     knowledge: Knowledge,
     settings: Settings,
@@ -136,7 +76,7 @@ def _stages_from_fusion(
     mode = fusion_result.mode
     if mode == "dense_only":
         return [
-            _dense_stage(
+            QueryStage.dense(
                 knowledge,
                 settings,
                 fusion_result.dense_chunks,
@@ -146,7 +86,7 @@ def _stages_from_fusion(
         ]
     if mode == "sparse_only":
         return [
-            _sparse_stage(
+            QueryStage.sparse(
                 settings,
                 fusion_result.sparse_chunks,
                 fusion_result.sparse_elapsed_ms,
@@ -156,36 +96,27 @@ def _stages_from_fusion(
 
     dense_chunks = fusion_result.dense_chunks
     sparse_chunks = fusion_result.sparse_chunks
-    fusion = StageRecord(
-        name="fusion",
-        method="rrf",
-        provider="local",
-        elapsed_ms=fusion_result.fusion_elapsed_ms,
-        input_summary=(
-            f"dense={len(dense_chunks)} sparse={len(sparse_chunks)} "
-            f"k={settings.retrieval.rrf_k}"
-        ),
-        output_summary=f"fused {len(fusion_result.chunks)} chunks",
-        candidate_count=len(fusion_result.chunks),
-        candidates=_candidate_records(fusion_result.chunks),
-        dense_candidates=_candidate_records(dense_chunks),
-        sparse_candidates=_candidate_records(sparse_chunks),
-    )
     return [
-        _dense_stage(
+        QueryStage.dense(
             knowledge,
             settings,
             dense_chunks,
             fusion_result.dense_elapsed_ms,
             culture_domain,
         ),
-        _sparse_stage(
+        QueryStage.sparse(
             settings,
             sparse_chunks,
             fusion_result.sparse_elapsed_ms,
             culture_domain,
         ),
-        fusion,
+        QueryStage.fusion(
+            settings,
+            dense_chunks,
+            sparse_chunks,
+            fusion_result.chunks,
+            fusion_result.fusion_elapsed_ms,
+        ),
     ]
 
 
@@ -276,32 +207,23 @@ def _rerank_chunks(
         if not reranked:
             raise RuntimeError("reranker produced no usable candidates")
         elapsed_ms = (time.perf_counter() - started) * 1000
-        return reranked, StageRecord(
-            name="rerank",
-            method="cross_encoder",
+        return reranked, QueryStage.rerank_success(
             provider=reranker.provider_name,
             elapsed_ms=elapsed_ms,
-            input_summary=f"{len(pre_rerank)} candidates, top={rerank_top}",
-            output_summary=f"reranked to {len(reranked)} chunks",
-            candidate_count=len(reranked),
-            candidates=_candidate_records(reranked),
-            pre_rerank_candidates=_candidate_records(pre_rerank),
+            pre_rerank=pre_rerank,
+            reranked=reranked,
+            rerank_top=rerank_top,
             rank_changes=_rank_changes(pre_rerank, reranked),
         )
     except Exception as exc:
         elapsed_ms = (time.perf_counter() - started) * 1000
         fallback = pre_rerank[:rerank_top]
         reason = f"{type(exc).__name__}: {exc}"
-        return fallback, StageRecord(
-            name="rerank",
-            method="rrf_fallback",
+        return fallback, QueryStage.rerank_fallback(
             provider=reranker.provider_name,
             elapsed_ms=elapsed_ms,
-            input_summary=f"{len(pre_rerank)} candidates, top={rerank_top}",
-            output_summary=f"fallback to RRF top-{len(fallback)}",
-            candidate_count=len(fallback),
-            candidates=_candidate_records(fallback),
-            pre_rerank_candidates=_candidate_records(pre_rerank),
-            error=reason,
-            fallback_reason=reason,
+            pre_rerank=pre_rerank,
+            fallback=fallback,
+            rerank_top=rerank_top,
+            reason=reason,
         )

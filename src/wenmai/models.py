@@ -47,6 +47,7 @@ class AskResult:
     citations: list[Citation]
     trace_id: str
     refused: bool = False
+    refusal_reason: str | None = None
     error: str | None = None
     ranked_chunks: list[ScoredChunk] = field(default_factory=list)
 
@@ -56,6 +57,7 @@ class AskResult:
             "citations": [citation.as_dict() for citation in self.citations],
             "trace_id": self.trace_id,
             "refused": self.refused,
+            "refusal_reason": self.refusal_reason,
         }
         if self.error:
             payload["error"] = self.error

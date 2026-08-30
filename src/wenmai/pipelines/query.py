@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 
 from wenmai.config import Settings
 from wenmai.generation import GenerationError, QueryGenerationError, generate
@@ -8,6 +9,7 @@ from wenmai.knowledge import Knowledge
 from wenmai.models import AskResult
 from wenmai.retrieval import retrieve
 from wenmai.tracing import TraceContext, save_trace
+from wenmai.tracing.stages.query import QueryStage
 
 __all__ = ["QueryGenerationError", "ask_question", "normalize_question"]
 
@@ -31,16 +33,15 @@ def ask_question(
     normalized = normalize_question(question)
 
     try:
-        with trace.stage(
-            "query_processing",
-            method="normalize",
-            provider="local",
-            input_summary=question,
-        ) as stage_info:
-            stage_info["output_summary"] = normalized
-            stage_info["candidate_count"] = 1
-            if culture_domain is not None:
-                stage_info["culture_domain"] = culture_domain
+        processing_started = time.perf_counter()
+        trace.append_stage(
+            QueryStage.query_processing(
+                question=question,
+                normalized=normalized,
+                elapsed_ms=(time.perf_counter() - processing_started) * 1000,
+                culture_domain=culture_domain,
+            )
+        )
 
         retrieved = retrieve(
             normalized,
@@ -54,23 +55,34 @@ def ask_question(
             trace.append_stage(stage)
         scored_chunks = retrieved.chunks
 
-        with trace.stage(
-            "generation",
-            method="llm",
-            provider="unknown",
-            input_summary=f"{len(scored_chunks)} chunks",
-        ) as generation_info:
-            try:
-                gen_result = generate(normalized, scored_chunks, settings)
-            except GenerationError as exc:
-                generation_info["provider"] = exc.provider_name
-                generation_info["output_summary"] = "generation failed"
-                generation_info["error"] = f"{type(exc).__name__}: {exc}"
-                trace.error = generation_info["error"]
-                raise QueryGenerationError(str(exc), trace.trace_id) from exc
-            generation_info["provider"] = gen_result.provider_name
-            generation_info["output_summary"] = gen_result.output_summary
-            generation_info["candidate_count"] = gen_result.candidate_count
+        generation_started = time.perf_counter()
+        generation_input = f"{len(scored_chunks)} chunks"
+        try:
+            gen_result = generate(normalized, scored_chunks, settings)
+        except GenerationError as exc:
+            generation_error = f"{type(exc).__name__}: {exc}"
+            trace.append_stage(
+                QueryStage.generation(
+                    provider=exc.provider_name,
+                    elapsed_ms=(time.perf_counter() - generation_started) * 1000,
+                    input_summary=generation_input,
+                    output_summary="generation failed",
+                    candidate_count=0,
+                    error=generation_error,
+                )
+            )
+            trace.error = generation_error
+            raise QueryGenerationError(str(exc), trace.trace_id) from exc
+
+        trace.append_stage(
+            QueryStage.generation(
+                provider=gen_result.provider_name,
+                elapsed_ms=(time.perf_counter() - generation_started) * 1000,
+                input_summary=generation_input,
+                output_summary=gen_result.output_summary,
+                candidate_count=gen_result.candidate_count,
+            )
+        )
 
         trace.metadata["outcome"] = {
             "refused": gen_result.refused,
@@ -83,6 +95,7 @@ def ask_question(
             citations=gen_result.citations,
             trace_id=trace.trace_id,
             refused=gen_result.refused,
+            refusal_reason=gen_result.refusal_reason,
             ranked_chunks=scored_chunks,
         )
     finally:

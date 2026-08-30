@@ -11,6 +11,7 @@ from wenmai.factories.transform import registry
 from wenmai.models import Chunk
 from wenmai.storage.images import ImageStore
 from wenmai.tracing.context import TraceContext
+from wenmai.tracing.stages.ingestion import IngestionStage
 
 _IMAGE_PLACEHOLDER = re.compile(r"\[IMAGE:\s*([a-f0-9]+)\s*\]")
 
@@ -71,14 +72,13 @@ class VisionCaptioner(BaseTransform):
             if len(failures) > 1:
                 stage_error += f" (+{len(failures) - 1} more)"
 
-        trace.record_stage(
-            name="captioner",
-            method="vision",
-            provider=self._vision.provider_name,
-            elapsed_ms=(time.perf_counter() - started) * 1000,
-            input_summary=f"{len(chunks)} chunks",
-            output_summary=output_summary,
-            candidate_count=len(chunks),
-            error=stage_error,
+        trace.append_stage(
+            IngestionStage.captioner(
+                provider=self._vision.provider_name,
+                elapsed_ms=(time.perf_counter() - started) * 1000,
+                chunk_count=len(chunks),
+                output_summary=output_summary,
+                error=stage_error,
+            )
         )
         return chunks

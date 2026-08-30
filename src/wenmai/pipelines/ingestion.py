@@ -11,6 +11,7 @@ from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import Chunk, IngestResult
 from wenmai.storage.document_images import IMAGE_PLACEHOLDER_RE
 from wenmai.tracing import StageRecord, TraceContext, save_trace
+from wenmai.tracing.stages.ingestion import IngestionStage
 
 
 def _chunks_with_images(chunks: list[Chunk]) -> int:
@@ -181,23 +182,20 @@ def ingest_source(
             chunks=chunks,
             previous_document_id=prepared.previous_document_id,
         )
-        trace.record_stage(
-            name="embed",
-            method=upserted.embed_provider,
-            provider=upserted.embed_provider,
-            elapsed_ms=upserted.embed_elapsed_ms,
-            input_summary=f"{len(chunks)} chunks",
-            output_summary=f"dim={upserted.embed_dimension}",
-            candidate_count=upserted.chunk_count,
+        trace.append_stage(
+            IngestionStage.embed(
+                provider=upserted.embed_provider,
+                elapsed_ms=upserted.embed_elapsed_ms,
+                chunk_count=upserted.chunk_count,
+                embed_dimension=upserted.embed_dimension,
+            )
         )
-        trace.record_stage(
-            name="upsert",
-            method=upserted.upsert_provider,
-            provider=upserted.upsert_provider,
-            elapsed_ms=upserted.upsert_elapsed_ms,
-            input_summary=f"{len(chunks)} chunks",
-            output_summary=f"upserted {upserted.chunk_count}",
-            candidate_count=upserted.chunk_count,
+        trace.append_stage(
+            IngestionStage.upsert(
+                provider=upserted.upsert_provider,
+                elapsed_ms=upserted.upsert_elapsed_ms,
+                chunk_count=upserted.chunk_count,
+            )
         )
     finally:
         save_trace(settings, trace)
