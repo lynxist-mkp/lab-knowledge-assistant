@@ -10,9 +10,16 @@ ABLATION_GROUP_LABELS: dict[str, str] = {
     "rrf_rerank": "RRF + Rerank",
 }
 
+REWRITE_COMPARE_GROUP_LABELS: dict[str, str] = {
+    "rewrite_off": "无改写",
+    "rewrite_on": "术语归一+Multi-Query",
+}
+
 
 def group_label(name: str) -> str:
-    return ABLATION_GROUP_LABELS.get(name, name)
+    if name in ABLATION_GROUP_LABELS:
+        return ABLATION_GROUP_LABELS[name]
+    return REWRITE_COMPARE_GROUP_LABELS.get(name, name)
 
 
 @dataclass(frozen=True)
@@ -22,7 +29,7 @@ class FailedEvalItem:
 
     @property
     def group_label(self) -> str:
-        return ABLATION_GROUP_LABELS.get(self.group, self.group)
+        return group_label(self.group)
 
     def as_dict(self) -> dict[str, str]:
         return {

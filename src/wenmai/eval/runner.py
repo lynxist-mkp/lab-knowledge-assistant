@@ -6,7 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from wenmai.config import Settings
-from wenmai.eval.ablation import config_snapshot, group_metrics_payload, resolve_ablation
+from wenmai.eval.ablation import (
+    config_snapshot,
+    group_metrics_payload,
+    resolve_ablation,
+    rewrite_compare_config_snapshot,
+)
 from wenmai.eval.golden import GoldItem, load_golden_set_from_settings
 from wenmai.eval.metrics import (
     aggregate_hit_at_5,
@@ -24,6 +29,12 @@ from wenmai.models import ScoredChunk
 from wenmai.tracing.latency import query_latency_percentiles
 
 FAILURE_RETRIES = 3
+
+REWRITE_COMPARE_GROUPS = ("rewrite_off", "rewrite_on")
+REWRITE_COMPARE_FLAGS: dict[str, bool] = {
+    "rewrite_off": False,
+    "rewrite_on": True,
+}
 
 
 def _runs_dir(settings: Settings) -> Path:
@@ -93,6 +104,8 @@ def _run_eval_item(
     group: str,
     knowledge: Knowledge,
     existing_chunks: list[ScoredChunk] | None,
+    *,
+    query_rewrite: bool = False,
 ) -> tuple[list[ScoredChunk] | None, GenerationResult | None]:
     spec = resolve_ablation(group)
     outcome = eval_item(
@@ -102,29 +115,55 @@ def _run_eval_item(
         rerank_enabled=spec.rerank_enabled,
         knowledge=knowledge,
         retrieved_chunks=existing_chunks,
+        query_rewrite=query_rewrite,
     )
     return outcome.chunks, outcome.generation
 
 
-def run_eval(
+def _run_compare_item(
+    item: GoldItem,
     settings: Settings,
-    *,
-    knowledge: Knowledge | None = None,
-) -> EvalRunView:
-    items = load_golden_set_from_settings(settings)
-    run_started = datetime.now(UTC).isoformat()
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    groups = list(settings.evaluation.ablations)
-    ranked_chunks: dict[str, dict[str, list[ScoredChunk]]] = {name: {} for name in groups}
-    generation_results: dict[str, dict[str, GenerationResult]] = {name: {} for name in groups}
-    resolved_knowledge = knowledge or create_knowledge(settings)
+    group: str,
+    knowledge: Knowledge,
+    existing_chunks: list[ScoredChunk] | None,
+) -> tuple[list[ScoredChunk] | None, GenerationResult | None]:
+    query_rewrite = REWRITE_COMPARE_FLAGS[group]
+    outcome = eval_item(
+        item,
+        settings,
+        retrieval_mode="rrf",
+        rerank_enabled=True,
+        knowledge=knowledge,
+        retrieved_chunks=existing_chunks,
+        query_rewrite=query_rewrite,
+    )
+    return outcome.chunks, outcome.generation
+
+
+def _run_grouped_eval(
+    items: list[GoldItem],
+    settings: Settings,
+    groups: list[str],
+    knowledge: Knowledge,
+    run_item: object,
+) -> tuple[
+    dict[str, dict[str, list[ScoredChunk]]],
+    dict[str, dict[str, GenerationResult]],
+    list[FailedEvalItem],
+]:
+    ranked_chunks: dict[str, dict[str, list[ScoredChunk]]] = {
+        name: {} for name in groups
+    }
+    generation_results: dict[str, dict[str, GenerationResult]] = {
+        name: {} for name in groups
+    }
 
     pending: list[tuple[str, GoldItem]] = [
         (group, item) for group in groups for item in items
     ]
     still: list[tuple[str, GoldItem]] = []
     for group, item in pending:
-        chunks, result = _run_eval_item(item, settings, group, resolved_knowledge, None)
+        chunks, result = run_item(item, settings, group, knowledge, None)
         if chunks is not None:
             ranked_chunks[group][item.id] = chunks
         if result is not None:
@@ -138,9 +177,7 @@ def run_eval(
         nxt: list[tuple[str, GoldItem]] = []
         for group, item in still:
             existing = ranked_chunks[group].get(item.id)
-            chunks, result = _run_eval_item(
-                item, settings, group, resolved_knowledge, existing
-            )
+            chunks, result = run_item(item, settings, group, knowledge, existing)
             if chunks is not None:
                 ranked_chunks[group][item.id] = chunks
             if result is not None:
@@ -152,6 +189,40 @@ def run_eval(
     failures = [
         FailedEvalItem(group=group, item_id=item.id) for group, item in still
     ]
+    return ranked_chunks, generation_results, failures
+
+
+def run_eval(
+    settings: Settings,
+    *,
+    knowledge: Knowledge | None = None,
+    query_rewrite: bool = False,
+) -> EvalRunView:
+    items = load_golden_set_from_settings(settings)
+    run_started = datetime.now(UTC).isoformat()
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    groups = list(settings.evaluation.ablations)
+    resolved_knowledge = knowledge or create_knowledge(settings)
+
+    def run_item(
+        item: GoldItem,
+        settings: Settings,
+        group: str,
+        knowledge: Knowledge,
+        existing_chunks: list[ScoredChunk] | None,
+    ) -> tuple[list[ScoredChunk] | None, GenerationResult | None]:
+        return _run_eval_item(
+            item,
+            settings,
+            group,
+            knowledge,
+            existing_chunks,
+            query_rewrite=query_rewrite,
+        )
+
+    ranked_chunks, generation_results, failures = _run_grouped_eval(
+        items, settings, groups, resolved_knowledge, run_item
+    )
     latency_ms = query_latency_percentiles(settings, started_at_min=run_started)
     artifact = {
         "timestamp": timestamp,
@@ -185,4 +256,62 @@ def run_eval(
     parsed = parse_eval_run(artifact)
     if parsed is None:
         raise RuntimeError("eval run artifact could not be parsed")
+    return parsed
+
+
+def run_rewrite_compare(
+    settings: Settings,
+    *,
+    knowledge: Knowledge | None = None,
+) -> EvalRunView:
+    items = load_golden_set_from_settings(settings)
+    run_started = datetime.now(UTC).isoformat()
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    groups = list(REWRITE_COMPARE_GROUPS)
+    resolved_knowledge = knowledge or create_knowledge(settings)
+
+    ranked_chunks, generation_results, failures = _run_grouped_eval(
+        items,
+        settings,
+        groups,
+        resolved_knowledge,
+        _run_compare_item,
+    )
+    latency_ms = query_latency_percentiles(settings, started_at_min=run_started)
+    artifact = {
+        "timestamp": timestamp,
+        "golden_set": settings.evaluation.golden_set,
+        "compare": "rewrite",
+        "item_count": len(items),
+        "failures": [item.as_dict() for item in failures],
+        "latency_ms": latency_ms,
+        "groups": {
+            name: {
+                "config": rewrite_compare_config_snapshot(
+                    settings,
+                    group=name,
+                    query_rewrite=REWRITE_COMPARE_FLAGS[name],
+                ),
+                "metrics": _metrics_payload(
+                    items,
+                    {
+                        item_id: corpus_doc_ids_from_chunks(chunks)
+                        for item_id, chunks in ranked_chunks[name].items()
+                    },
+                    generation_results[name],
+                ),
+                "items": _item_snapshots(items, ranked_chunks[name], generation_results[name]),
+            }
+            for name in groups
+        },
+    }
+
+    output_path = _runs_dir(settings) / f"{timestamp}.json"
+    output_path.write_text(
+        json.dumps(artifact, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    parsed = parse_eval_run(artifact)
+    if parsed is None:
+        raise RuntimeError("rewrite compare artifact could not be parsed")
     return parsed

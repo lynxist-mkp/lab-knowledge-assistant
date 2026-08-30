@@ -1,3 +1,3 @@
-from wenmai.query_processing import multi_query
+from wenmai.query_processing import extras, multi_query
 
-__all__ = ["multi_query"]
+__all__ = ["extras", "multi_query"]
