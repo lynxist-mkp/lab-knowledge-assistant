@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from wenmai.config import Settings
 from wenmai.eval import list_eval_runs, run_eval
+from wenmai.knowledge.document_card import DocumentNotFoundError, build_document_card
 from wenmai.ops.overview import build_overview_stats
 from wenmai.pipelines.ingestion import ingest_source
 from wenmai.pipelines.query import QueryGenerationError, ask_question
@@ -113,6 +114,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if detail is None:
             raise HTTPException(status_code=404, detail="chunk not found")
         return detail
+
+    @app.get("/api/documents/{document_id}")
+    def api_document_card(document_id: str) -> dict[str, object]:
+        try:
+            return build_document_card(app.state.knowledge, document_id).as_dict()
+        except DocumentNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.get("/api/traces/ingestion")
     def api_ingestion_traces() -> list[dict[str, object]]:

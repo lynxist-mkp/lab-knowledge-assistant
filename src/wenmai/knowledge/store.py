@@ -62,6 +62,10 @@ class Knowledge:
     def dense_provider(self) -> str:
         return self._store.provider_name
 
+    @property
+    def catalog(self) -> DocumentCatalog:
+        return self._catalog
+
     def plan_document(
         self,
         *,

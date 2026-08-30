@@ -81,36 +81,44 @@ class DocumentCatalog:
     def chunk_count(self) -> int:
         return sum(len(doc.get("chunks") or []) for doc in self._documents.values())
 
+    def _parse_document(self, document_id: str, raw: dict[str, Any]) -> CatalogDocument:
+        culture_domain = str(raw.get("culture_domain") or "其他")
+        chunks_raw = raw.get("chunks") or []
+        chunks = [
+            ChunkSummary(
+                chunk_id=str(item["chunk_id"]),
+                document_id=str(item.get("document_id") or document_id),
+                preview=str(item.get("preview") or ""),
+            )
+            for item in chunks_raw
+            if isinstance(item, dict) and item.get("chunk_id")
+        ]
+        return CatalogDocument(
+            document_id=document_id,
+            culture_domain=culture_domain,
+            title=str(raw.get("title") or document_id),
+            chunk_count=len(chunks),
+            chunks=chunks,
+        )
+
+    def get_document(self, document_id: str) -> CatalogDocument | None:
+        raw = self._documents.get(document_id)
+        if raw is None:
+            return None
+        return self._parse_document(document_id, raw)
+
     def browse_groups(self) -> list[CultureDomainGroup]:
         by_domain: dict[str, list[CatalogDocument]] = {}
         for document_id in sorted(self._documents):
-            raw = self._documents[document_id]
-            culture_domain = str(raw.get("culture_domain") or "其他")
-            chunks_raw = raw.get("chunks") or []
-            chunks = [
-                ChunkSummary(
-                    chunk_id=str(item["chunk_id"]),
-                    document_id=str(item.get("document_id") or document_id),
-                    preview=str(item.get("preview") or ""),
-                )
-                for item in chunks_raw
-                if isinstance(item, dict) and item.get("chunk_id")
-            ]
-            entry = CatalogDocument(
-                document_id=document_id,
-                culture_domain=culture_domain,
-                title=str(raw.get("title") or document_id),
-                chunk_count=len(chunks),
-                chunks=chunks,
-            )
-            by_domain.setdefault(culture_domain, []).append(entry)
+            entry = self._parse_document(document_id, self._documents[document_id])
+            by_domain.setdefault(entry.culture_domain, []).append(entry)
 
         groups: list[CultureDomainGroup] = []
-        for culture_domain in sorted(by_domain):
-            documents = by_domain[culture_domain]
+        for domain in sorted(by_domain):
+            documents = by_domain[domain]
             groups.append(
                 CultureDomainGroup(
-                    culture_domain=culture_domain,
+                    culture_domain=domain,
                     document_count=len(documents),
                     chunk_count=sum(doc.chunk_count for doc in documents),
                     documents=[
