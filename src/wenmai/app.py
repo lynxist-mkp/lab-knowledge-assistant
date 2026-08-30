@@ -12,11 +12,11 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from wenmai.config import Settings
+from wenmai.eval import list_eval_runs, run_eval
+from wenmai.ops.overview import build_overview_stats
 from wenmai.pipelines.ingestion import ingest_source
 from wenmai.pipelines.query import QueryGenerationError, ask_question
 from wenmai.runtime import create_runtime
-from wenmai.eval import list_eval_runs, run_eval
-from wenmai.ops.overview import build_overview_stats
 from wenmai.storage.catalog import DocumentCatalog
 from wenmai.tracing import (
     get_trace_detail,

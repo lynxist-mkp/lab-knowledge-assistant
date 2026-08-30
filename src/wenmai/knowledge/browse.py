@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from wenmai.knowledge.domain import culture_domain, preview, title
+from wenmai.knowledge.domain import culture_domain, title
 from wenmai.models import Chunk
 
 

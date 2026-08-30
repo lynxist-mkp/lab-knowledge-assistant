@@ -8,7 +8,7 @@ from wenmai.config import Settings
 from wenmai.factories import multimodal as multimodal_factory
 from wenmai.factories.transform import registry
 from wenmai.models import Chunk
-from wenmai.storage.document_images import DocumentImages, IMAGE_PLACEHOLDER_RE
+from wenmai.storage.document_images import IMAGE_PLACEHOLDER_RE, DocumentImages
 from wenmai.tracing.context import TraceContext
 from wenmai.tracing.stages.ingestion import IngestionStage
 

@@ -1,9 +1,19 @@
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 from wenmai.models import Chunk
 from wenmai.storage.fingerprints import FingerprintRecord
+
+if TYPE_CHECKING:
+    from wenmai.components.bm25.index import Bm25Index
+    from wenmai.components.embedding.base import BaseEmbedding
+    from wenmai.components.vector_store.base import BaseVectorStore
+    from wenmai.knowledge.store import IngestStatus, PrepareResult, UpsertResult
+    from wenmai.storage.catalog import DocumentCatalog
+    from wenmai.storage.document_images import DocumentImages
+    from wenmai.storage.fingerprints import FingerprintStore
 
 
 class WritePath:
@@ -12,8 +22,8 @@ class WritePath:
     def __init__(
         self,
         *,
-        embedder: Embedder,
-        store: VectorStore,
+        embedder: BaseEmbedding,
+        store: BaseVectorStore,
         bm25: Bm25Index,
         images: DocumentImages,
         fingerprints: FingerprintStore,
@@ -53,8 +63,6 @@ class WritePath:
         chunks: list[Chunk],
         previous_document_id: str | None = None,
     ) -> UpsertResult:
-        from wenmai.knowledge.store import UpsertResult
-
         if status == "skipped":
             raise ValueError("cannot commit a skipped ingest")
         previous_fingerprint = self._fingerprints.get_by_source_path(source_path)
