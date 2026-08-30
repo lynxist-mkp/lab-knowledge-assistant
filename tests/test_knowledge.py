@@ -215,28 +215,6 @@ def test_browse_and_overview_use_catalog_not_list_all(
     assert knowledge.browse_by_culture_domain()
 
 
-def test_search_modes_match_direct_retrieval(test_settings: Settings) -> None:
-    knowledge = create_knowledge(test_settings)
-    _commit(knowledge, "doc-a", "船政学堂创办于马尾，是近代海军摇篮。")
-    _commit(knowledge, "doc-b", "湄洲祖庙是妈祖信仰的中心。")
-
-    dense = knowledge.search("船政学堂在哪里", mode="dense_only")
-    sparse = knowledge.search("船政学堂", mode="sparse_only")
-    fused = knowledge.search("船政学堂", mode="rrf")
-
-    assert dense.chunks
-    assert sparse.chunks[0].chunk.chunk_id == "doc-a:0000"
-    assert fused.chunks
-    assert fused.dense_chunks
-    assert fused.sparse_chunks
-
-
-def test_search_unknown_mode_raises(test_settings: Settings) -> None:
-    knowledge = create_knowledge(test_settings)
-    with pytest.raises(ValueError, match="unknown search mode"):
-        knowledge.search("妈祖", mode="clip")
-
-
 def test_commit_rolls_back_dense_on_sparse_write_failure(
     test_settings: Settings,
     monkeypatch: pytest.MonkeyPatch,

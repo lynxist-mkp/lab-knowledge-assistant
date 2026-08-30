@@ -3,22 +3,15 @@ from __future__ import annotations
 import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
-from dataclasses import dataclass, field
 
 from wenmai.config import Settings
 from wenmai.factories import reranker as reranker_factory
 from wenmai.knowledge import Knowledge, create_knowledge
-from wenmai.knowledge.search import SearchResult
 from wenmai.models import ScoredChunk
+from wenmai.retrieval.fusion import RetrievalResult, run_fusion
 from wenmai.tracing.context import StageRecord
 
 _RETRIEVAL_MODES = frozenset({"rrf", "dense_only", "sparse_only"})
-
-
-@dataclass(frozen=True)
-class RetrievalResult:
-    chunks: list[ScoredChunk]
-    stages: list[StageRecord] = field(default_factory=list)
 
 
 def retrieve(
@@ -33,15 +26,30 @@ def retrieve(
     mode, do_rerank = _resolve_retrieval(settings, retrieval_mode, rerank_enabled)
     knowledge = knowledge or create_knowledge(settings)
 
-    search_result = knowledge.search(question, mode=mode, culture_domain=culture_domain)
-    chunks = search_result.chunks
-    stages = _stages_from_search(knowledge, settings, search_result, culture_domain)
+    fusion_result = run_fusion(
+        knowledge,
+        question,
+        mode=mode,
+        settings=settings,
+        culture_domain=culture_domain,
+    )
+    chunks = fusion_result.chunks
+    stages = _stages_from_fusion(knowledge, settings, fusion_result, culture_domain)
 
     if do_rerank:
         chunks, rerank_stage = _rerank_chunks(settings, question, chunks)
         if rerank_stage is not None:
             stages = [*stages, rerank_stage]
-    return RetrievalResult(chunks=chunks, stages=stages)
+    return RetrievalResult(
+        chunks=chunks,
+        mode=fusion_result.mode,
+        stages=stages,
+        dense_chunks=fusion_result.dense_chunks,
+        sparse_chunks=fusion_result.sparse_chunks,
+        dense_elapsed_ms=fusion_result.dense_elapsed_ms,
+        sparse_elapsed_ms=fusion_result.sparse_elapsed_ms,
+        fusion_elapsed_ms=fusion_result.fusion_elapsed_ms,
+    )
 
 
 def _resolve_retrieval(
@@ -119,20 +127,20 @@ def _sparse_stage(
     )
 
 
-def _stages_from_search(
+def _stages_from_fusion(
     knowledge: Knowledge,
     settings: Settings,
-    search_result: SearchResult,
+    fusion_result: RetrievalResult,
     culture_domain: str | None,
 ) -> list[StageRecord]:
-    mode = search_result.mode
+    mode = fusion_result.mode
     if mode == "dense_only":
         return [
             _dense_stage(
                 knowledge,
                 settings,
-                search_result.dense_chunks,
-                search_result.dense_elapsed_ms,
+                fusion_result.dense_chunks,
+                fusion_result.dense_elapsed_ms,
                 culture_domain,
             )
         ]
@@ -140,26 +148,26 @@ def _stages_from_search(
         return [
             _sparse_stage(
                 settings,
-                search_result.sparse_chunks,
-                search_result.sparse_elapsed_ms,
+                fusion_result.sparse_chunks,
+                fusion_result.sparse_elapsed_ms,
                 culture_domain,
             )
         ]
 
-    dense_chunks = search_result.dense_chunks
-    sparse_chunks = search_result.sparse_chunks
+    dense_chunks = fusion_result.dense_chunks
+    sparse_chunks = fusion_result.sparse_chunks
     fusion = StageRecord(
         name="fusion",
         method="rrf",
         provider="local",
-        elapsed_ms=search_result.fusion_elapsed_ms,
+        elapsed_ms=fusion_result.fusion_elapsed_ms,
         input_summary=(
             f"dense={len(dense_chunks)} sparse={len(sparse_chunks)} "
             f"k={settings.retrieval.rrf_k}"
         ),
-        output_summary=f"fused {len(search_result.chunks)} chunks",
-        candidate_count=len(search_result.chunks),
-        candidates=_candidate_records(search_result.chunks),
+        output_summary=f"fused {len(fusion_result.chunks)} chunks",
+        candidate_count=len(fusion_result.chunks),
+        candidates=_candidate_records(fusion_result.chunks),
         dense_candidates=_candidate_records(dense_chunks),
         sparse_candidates=_candidate_records(sparse_chunks),
     )
@@ -168,13 +176,13 @@ def _stages_from_search(
             knowledge,
             settings,
             dense_chunks,
-            search_result.dense_elapsed_ms,
+            fusion_result.dense_elapsed_ms,
             culture_domain,
         ),
         _sparse_stage(
             settings,
             sparse_chunks,
-            search_result.sparse_elapsed_ms,
+            fusion_result.sparse_elapsed_ms,
             culture_domain,
         ),
         fusion,

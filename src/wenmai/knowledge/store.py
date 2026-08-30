@@ -15,7 +15,6 @@ from wenmai.knowledge.browse import (
     chunk_detail_from_chunk,
     overview_from_catalog,
 )
-from wenmai.knowledge.search import SearchResult, run_search
 from wenmai.models import Chunk, ScoredChunk
 from wenmai.storage.catalog import DocumentCatalog
 from wenmai.storage.document_images import DocumentImages
@@ -181,21 +180,6 @@ class Knowledge:
             )
             return
         self._fingerprints.delete_by_source_path(source_path)
-
-    def search(
-        self,
-        query: str,
-        *,
-        mode: str,
-        culture_domain: str | None = None,
-    ) -> SearchResult:
-        return run_search(
-            self,
-            query,
-            mode=mode,
-            settings=self._settings,
-            culture_domain=culture_domain,
-        )
 
     def dense_search(
         self,
