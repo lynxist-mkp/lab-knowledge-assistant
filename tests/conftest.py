@@ -43,6 +43,7 @@ def test_settings(tmp_path: Path) -> Settings:
     raw["query_processing"] = {
         "rewriter": "none",
         "lexicon": str(repo_settings.parent / "data/lexicon/synonyms.yaml"),
+        "multi_query": False,
     }
     if "gemma" not in raw:
         raw["gemma"] = {

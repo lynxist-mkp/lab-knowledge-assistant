@@ -38,22 +38,34 @@ class QueryStage:
         normalized: str,
         elapsed_ms: float,
         culture_domain: str | None = None,
-        extra_queries: list[str] | None = None,
+        term_extras: list[str] | None = None,
+        multi_query_extras: list[str] | None = None,
         rewriter: str = "local",
+        multi_query_provider: str | None = None,
     ) -> StageRecord:
-        extras = extra_queries or []
-        if extras:
-            method = "term-normalize"
-            output_summary = " | ".join([normalized, *extras])
-            candidate_count = 1 + len(extras)
+        terms = term_extras or []
+        mq = multi_query_extras or []
+        methods: list[str] = []
+        if terms:
+            methods.append("term-normalize")
+        if mq:
+            methods.append("multi-query")
+        if methods:
+            method = "+".join(methods)
+            output_summary = " | ".join([normalized, *terms, *mq])
+            candidate_count = 1 + len(terms) + len(mq)
         else:
             method = "normalize"
             output_summary = normalized
             candidate_count = 1
+        providers = [rewriter]
+        if mq and multi_query_provider:
+            providers.append(multi_query_provider)
+        provider = "+".join(providers) if len(providers) > 1 else providers[0]
         return StageRecord(
             name="query_processing",
             method=method,
-            provider=rewriter,
+            provider=provider,
             elapsed_ms=elapsed_ms,
             input_summary=question,
             output_summary=output_summary,
@@ -105,7 +117,15 @@ class QueryStage:
         sparse_chunks: list[ScoredChunk],
         fused_chunks: list[ScoredChunk],
         elapsed_ms: float,
+        query_path_counts: list[dict[str, object]] | None = None,
     ) -> StageRecord:
+        path_summary = ""
+        if query_path_counts:
+            parts = [
+                f"q{item['query_index']}:d={item['dense_count']},s={item['sparse_count']}"
+                for item in query_path_counts
+            ]
+            path_summary = f" paths=[{'; '.join(parts)}]"
         return StageRecord(
             name="fusion",
             method="rrf",
@@ -113,7 +133,7 @@ class QueryStage:
             elapsed_ms=elapsed_ms,
             input_summary=(
                 f"dense={len(dense_chunks)} sparse={len(sparse_chunks)} "
-                f"k={settings.retrieval.rrf_k}"
+                f"k={settings.retrieval.rrf_k}{path_summary}"
             ),
             output_summary=f"fused {len(fused_chunks)} chunks",
             candidate_count=len(fused_chunks),

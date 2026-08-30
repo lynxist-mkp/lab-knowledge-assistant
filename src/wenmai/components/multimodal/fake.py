@@ -8,9 +8,27 @@ from wenmai.factories.multimodal import registry
 
 _ENRICHER_MARKER = "入库助手"
 _QA_MARKER = "文脉助手"
+_MULTI_QUERY_MARKER = "多路改写"
 _GRAY_REVIEW_MARKER = "灰区复判"
 _GRAY_REJECT_HINT = "不值得入库"
 _REFUSAL_PREFIX = "拒答："
+
+
+def _behavior_applies_to_prompt(behavior: str, prompt: str) -> bool:
+    if behavior == "error":
+        return True
+    if behavior != "timeout":
+        return False
+    if _QA_MARKER in prompt:
+        return False
+    return any(
+        marker in prompt
+        for marker in (
+            _MULTI_QUERY_MARKER,
+            _ENRICHER_MARKER,
+            _GRAY_REVIEW_MARKER,
+        )
+    )
 
 
 @registry.register("fake")
@@ -31,13 +49,26 @@ class FakeMultimodal(BaseMultimodal):
         return "fake"
 
     def generate(self, prompt: str) -> str:
-        apply_behavior(self.behavior, "llm")
+        if self.behavior == "error" and _behavior_applies_to_prompt(
+            self.behavior, prompt
+        ):
+            apply_behavior(self.behavior, "llm")
+        if self.behavior == "timeout" and _behavior_applies_to_prompt(
+            self.behavior, prompt
+        ):
+            apply_behavior(self.behavior, "llm")
         if self.behavior == "garbage":
             return "<<<not-json>>>"
         if self.behavior == "refuse":
             return f"{_REFUSAL_PREFIX}检索片段不足以回答该问题。"
         if _GRAY_REVIEW_MARKER in prompt:
             return "不通过" if _GRAY_REJECT_HINT in prompt else "通过"
+        if _MULTI_QUERY_MARKER in prompt:
+            return (
+                "马尾船政学堂是哪年创立的？\n"
+                "船政学院创办年份是多少？\n"
+                "1866年成立的船政教育机构何时建立？"
+            )
         if _QA_MARKER in prompt:
             return "湄洲岛是妈祖信仰的发源地，祖庙是信俗活动的中心场所[1]。"
         if _ENRICHER_MARKER in prompt:

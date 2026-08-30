@@ -10,10 +10,24 @@ from wenmai.factories.llm import registry, vision_registry
 
 _ENRICHER_MARKER = "入库助手"
 _QA_MARKER = "文脉助手"
+_MULTI_QUERY_MARKER = "多路改写"
 _REFUSAL_PREFIX = "拒答："
 _QUESTION_STOP_TERMS = frozenset(
     {"什么", "时候", "哪里", "如何", "为什么", "创办", "是什么", "多少", "哪些"}
 )
+
+
+def _behavior_applies_to_prompt(behavior: str, prompt: str) -> bool:
+    if behavior == "error":
+        return True
+    if behavior != "timeout":
+        return False
+    if _QA_MARKER in prompt:
+        return False
+    return any(
+        marker in prompt
+        for marker in (_MULTI_QUERY_MARKER, _ENRICHER_MARKER)
+    )
 
 
 @registry.register("fake")
@@ -27,9 +41,22 @@ class FakeLLM(BaseLLM):
         return "fake"
 
     def generate(self, prompt: str) -> str:
-        apply_behavior(self.behavior, "llm")
+        if self.behavior == "error" and _behavior_applies_to_prompt(
+            self.behavior, prompt
+        ):
+            apply_behavior(self.behavior, "llm")
+        if self.behavior == "timeout" and _behavior_applies_to_prompt(
+            self.behavior, prompt
+        ):
+            apply_behavior(self.behavior, "llm")
         if self.behavior == "garbage":
             return "<<<not-json>>>"
+        if _MULTI_QUERY_MARKER in prompt:
+            return (
+                "马尾船政学堂是哪年创立的？\n"
+                "船政学院创办年份是多少？\n"
+                "1866年成立的船政教育机构何时建立？"
+            )
         if _QA_MARKER in prompt:
             if _qa_should_refuse(prompt):
                 return _qa_refusal_response(prompt)
