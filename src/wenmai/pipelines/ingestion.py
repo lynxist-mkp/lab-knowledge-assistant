@@ -147,6 +147,7 @@ def ingest_source(
                 document_id=document.document_id,
                 text=text,
                 metadata={
+                    "chunk_index": index,
                     "document_id": document.document_id,
                     "title": document.title,
                     "url": document.url,

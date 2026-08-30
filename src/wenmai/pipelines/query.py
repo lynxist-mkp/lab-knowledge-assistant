@@ -5,7 +5,8 @@ import time
 
 from wenmai.config import Settings
 from wenmai.generation import GenerationError, QueryGenerationError, generate
-from wenmai.knowledge import Knowledge
+from wenmai.generation.expand import expand_for_generation
+from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import AskResult
 from wenmai.retrieval import retrieve
 from wenmai.tracing import TraceContext, save_trace
@@ -54,11 +55,17 @@ def ask_question(
         for stage in retrieved.stages:
             trace.append_stage(stage)
         scored_chunks = retrieved.chunks
+        knowledge = knowledge or create_knowledge(settings)
+        expanded_chunks, expanded_from, expanded_chunk_ids = expand_for_generation(
+            scored_chunks,
+            knowledge,
+            settings.retrieval.adjacent_n,
+        )
 
         generation_started = time.perf_counter()
-        generation_input = f"{len(scored_chunks)} chunks"
+        generation_input = f"{len(expanded_chunks)} chunks"
         try:
-            gen_result = generate(normalized, scored_chunks, settings)
+            gen_result = generate(normalized, expanded_chunks, settings)
         except GenerationError as exc:
             generation_error = f"{type(exc).__name__}: {exc}"
             trace.append_stage(
@@ -69,6 +76,8 @@ def ask_question(
                     output_summary="generation failed",
                     candidate_count=0,
                     error=generation_error,
+                    expanded_from=expanded_from,
+                    expanded_chunk_ids=expanded_chunk_ids,
                 )
             )
             trace.error = generation_error
@@ -81,6 +90,8 @@ def ask_question(
                 input_summary=generation_input,
                 output_summary=gen_result.output_summary,
                 candidate_count=gen_result.candidate_count,
+                expanded_from=expanded_from,
+                expanded_chunk_ids=expanded_chunk_ids,
             )
         )
 

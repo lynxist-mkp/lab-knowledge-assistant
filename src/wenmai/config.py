@@ -70,6 +70,7 @@ class Retrieval:
     mode: str = "rrf"
     rerank_enabled: bool = True
     rerank_timeout_seconds: float = 30.0
+    adjacent_n: int = 1
 
 
 @dataclass
