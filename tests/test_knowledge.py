@@ -340,3 +340,65 @@ def test_commit_rebuild_delete_failure_restores_fingerprint(
         source_path=source, sha256="old-sha", document_id="old-doc"
     )
     assert plan.status == "skipped"
+
+
+def test_pending_chunks_excluded_from_dense_and_sparse_search(
+    test_settings: Settings,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-pending", "待审片段独有术语船政密档")
+    _commit(knowledge, "doc-approved", "已通过片段船政学堂简介")
+
+    knowledge.set_review_status("doc-pending", "待审")
+
+    dense = knowledge.dense_search("船政密档", top_k=5)
+    dense_ids = {item.chunk.chunk_id for item in dense}
+    assert "doc-pending:0000" not in dense_ids
+
+    sparse = knowledge.sparse_search("船政密档", top_k=5)
+    sparse_ids = {item.chunk.chunk_id for item in sparse}
+    assert "doc-pending:0000" not in sparse_ids
+
+
+def test_approved_after_pending_becomes_searchable(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-flip", "翻转后可检索的船政密档内容")
+    knowledge.set_review_status("doc-flip", "待审")
+    assert not knowledge.sparse_search("船政密档", top_k=5)
+
+    knowledge.set_review_status("doc-flip", "已通过")
+    hits = knowledge.sparse_search("船政密档", top_k=5)
+    assert hits and hits[0].chunk.document_id == "doc-flip"
+
+
+def test_chunks_without_review_status_remain_searchable(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    knowledge.commit_document(
+        source_path="/tmp/legacy.md",
+        sha256="legacy",
+        document_id="legacy",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="legacy:0000",
+                document_id="legacy",
+                text="旧数据无审阅状态字段",
+                metadata={"document_id": "legacy", "title": "legacy"},
+            )
+        ],
+    )
+    hits = knowledge.sparse_search("旧数据", top_k=5)
+    assert hits and hits[0].chunk.chunk_id == "legacy:0000"
+
+
+def test_browse_lists_pending_chunks_with_review_status(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-pending", "待审库览片段", culture_domain="船政")
+    knowledge.set_review_status("doc-pending", "待审")
+
+    groups = knowledge.browse_by_culture_domain()
+    by_domain = {group.culture_domain: group for group in groups}
+    doc = by_domain["船政"].documents[0]
+    assert doc.chunk_count == 1
+    assert doc.chunks[0].review_status == "待审"
+    assert doc.chunks[0].as_dict()["审阅状态"] == "待审"

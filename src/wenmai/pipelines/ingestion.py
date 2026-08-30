@@ -8,6 +8,7 @@ from wenmai.factories import splitter as splitter_factory
 from wenmai.ingestion.loaders import SourceLoadError, load_source
 from wenmai.ingestion.prepare import prepare_chunks
 from wenmai.knowledge import Knowledge, create_knowledge
+from wenmai.knowledge.domain import stamp_review_status
 from wenmai.models import Chunk, IngestResult
 from wenmai.storage.document_images import IMAGE_PLACEHOLDER_RE
 from wenmai.tracing import StageRecord, TraceContext, save_trace
@@ -146,18 +147,20 @@ def ingest_source(
                 chunk_id=f"{document.document_id}:{index:04d}",
                 document_id=document.document_id,
                 text=text,
-                metadata={
-                    "document_id": document.document_id,
-                    "title": document.title,
-                    "url": document.url,
-                    "page": document.page,
-                    "source_path": document.source_path,
-                    **{
-                        key: value
-                        for key, value in document.extra.items()
-                        if isinstance(value, (str, int, float, bool))
-                    },
-                },
+                metadata=stamp_review_status(
+                    {
+                        "document_id": document.document_id,
+                        "title": document.title,
+                        "url": document.url,
+                        "page": document.page,
+                        "source_path": document.source_path,
+                        **{
+                            key: value
+                            for key, value in document.extra.items()
+                            if isinstance(value, (str, int, float, bool))
+                        },
+                    }
+                ),
             )
             for index, text in enumerate(texts)
         ]

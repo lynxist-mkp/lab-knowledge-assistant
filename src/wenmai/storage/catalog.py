@@ -7,7 +7,7 @@ from typing import Any
 
 from wenmai.config import Settings
 from wenmai.knowledge.browse import ChunkSummary, CultureDomainGroup, DocumentSummary
-from wenmai.knowledge.domain import culture_domain, preview, title
+from wenmai.knowledge.domain import culture_domain, preview, review_status, title
 from wenmai.models import Chunk
 from wenmai.storage.paths import store_path
 
@@ -61,6 +61,7 @@ class DocumentCatalog:
                     "chunk_id": chunk.chunk_id,
                     "document_id": chunk.document_id,
                     "preview": preview(chunk.text),
+                    "审阅状态": review_status(chunk),
                 }
                 for chunk in sorted_chunks
             ],
@@ -92,6 +93,7 @@ class DocumentCatalog:
                     chunk_id=str(item["chunk_id"]),
                     document_id=str(item.get("document_id") or document_id),
                     preview=str(item.get("preview") or ""),
+                    review_status=str(item.get("审阅状态") or "已通过"),
                 )
                 for item in chunks_raw
                 if isinstance(item, dict) and item.get("chunk_id")

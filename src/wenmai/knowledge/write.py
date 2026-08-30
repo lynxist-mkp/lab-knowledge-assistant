@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
+from wenmai.knowledge.domain import stamp_review_status
 from wenmai.models import Chunk
 from wenmai.storage.fingerprints import FingerprintRecord
 
@@ -101,6 +102,9 @@ class WritePath:
 
         if not chunks:
             raise ValueError("cannot upsert empty chunk list")
+
+        for chunk in chunks:
+            stamp_review_status(chunk.metadata)
 
         document_id = chunks[0].document_id
         started = time.perf_counter()

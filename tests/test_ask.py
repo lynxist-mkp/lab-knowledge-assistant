@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
+from wenmai.knowledge import create_knowledge
 from wenmai.pipelines.query import ask_question
 from wenmai.tracing.store import get_trace_record, read_trace_records
 
@@ -193,3 +194,25 @@ def test_ask_question_record_trace_false_skips_trace_write(
 
     assert result.trace_id
     assert after == before
+
+
+def test_ask_excludes_pending_chunks_until_approved(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    source = _write_minpai_markdown(tmp_path / "matsu.md")
+    client = TestClient(create_app(test_settings))
+    ingest = client.post("/ingest", json={"source_path": str(source)})
+    assert ingest.status_code == 200
+    document_id = ingest.json()["document_id"]
+
+    knowledge = create_knowledge(test_settings)
+    knowledge.set_review_status(document_id, "待审")
+
+    pending = ask_question("妈祖信仰的发源地在哪里？", test_settings, knowledge=knowledge)
+    assert pending.refused is True
+    assert pending.citations == []
+
+    knowledge.set_review_status(document_id, "已通过")
+    approved = ask_question("妈祖信仰的发源地在哪里？", test_settings, knowledge=knowledge)
+    assert approved.citations
+    assert approved.citations[0].document_id == document_id

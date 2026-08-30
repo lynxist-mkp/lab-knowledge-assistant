@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from wenmai.knowledge.domain import culture_domain, title
+from wenmai.knowledge.domain import culture_domain, review_status, title
 from wenmai.models import Chunk
 
 
@@ -12,9 +12,15 @@ class ChunkSummary:
     chunk_id: str
     document_id: str
     preview: str
+    review_status: str = "已通过"
 
     def as_dict(self) -> dict[str, str]:
-        return asdict(self)
+        return {
+            "chunk_id": self.chunk_id,
+            "document_id": self.document_id,
+            "preview": self.preview,
+            "审阅状态": self.review_status,
+        }
 
 
 @dataclass(frozen=True)
@@ -65,6 +71,7 @@ def chunk_detail_from_chunk(chunk: Chunk) -> dict[str, Any]:
         "document_id": chunk.document_id,
         "title": title(chunk),
         "culture_domain": culture_domain(chunk),
+        "审阅状态": review_status(chunk),
         "text": chunk.text,
         "metadata": chunk.metadata,
     }

@@ -9,6 +9,7 @@ from wenmai.factories import embedding as embedding_factory
 from wenmai.factories import vector_store as vector_store_factory
 from wenmai.factories.loader import ensure_providers
 from wenmai.knowledge.browse import CultureDomainGroup, chunk_detail_from_chunk
+from wenmai.knowledge.domain import is_searchable
 from wenmai.knowledge.write import WritePath
 from wenmai.models import Chunk, ScoredChunk
 from wenmai.storage.catalog import DocumentCatalog
@@ -107,11 +108,13 @@ class Knowledge:
         culture_domain: str | None = None,
     ) -> list[ScoredChunk]:
         vector = self._embedder.embed_query(query)
-        return self._store.query(
+        fetch_k = max(top_k * 3, top_k)
+        hits = self._store.query(
             vector,
-            top_k=top_k,
+            top_k=fetch_k,
             where=_metadata_filter(culture_domain),
         )
+        return _take_searchable(hits, top_k)
 
     def sparse_search(
         self,
@@ -120,19 +123,29 @@ class Knowledge:
         top_k: int,
         culture_domain: str | None = None,
     ) -> list[ScoredChunk]:
+        fetch_k = max(top_k * 3, top_k)
         hits = self._bm25.search(
             query,
-            top_k=top_k,
+            top_k=fetch_k,
             culture_domain=culture_domain,
         )
         chunk_ids = [hit.chunk_id for hit in hits]
         chunks = self._store.get_by_ids(chunk_ids)
         chunk_by_id = {chunk.chunk_id: chunk for chunk in chunks}
-        return [
+        scored = [
             ScoredChunk(chunk=chunk_by_id[hit.chunk_id], score=hit.score)
             for hit in hits
             if hit.chunk_id in chunk_by_id
         ]
+        return _take_searchable(scored, top_k)
+
+    def set_review_status(self, document_id: str, status: str) -> None:
+        chunks = self.get_by_document_id(document_id)
+        if not chunks:
+            return
+        for chunk in chunks:
+            chunk.metadata["审阅状态"] = status
+        self._write._upsert_chunks(chunks)
 
     def get_by_document_id(self, document_id: str) -> list[Chunk]:
         return self._store.get_by_document_id(document_id)
@@ -162,3 +175,8 @@ def _metadata_filter(culture_domain: str | None) -> dict[str, Any] | None:
     if culture_domain is None:
         return None
     return {"culture_domain": culture_domain}
+
+
+def _take_searchable(hits: list[ScoredChunk], top_k: int) -> list[ScoredChunk]:
+    filtered = [hit for hit in hits if is_searchable(hit.chunk)]
+    return filtered[:top_k]
