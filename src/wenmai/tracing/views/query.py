@@ -226,10 +226,12 @@ def build_query_trace_summary(record: dict[str, Any]) -> QueryTraceSummary:
         status = "refused"
     else:
         status = "ok"
+    finished_raw = record.get("finished_at")
+    finished_at = finished_raw if isinstance(finished_raw, str) else None
     return QueryTraceSummary(
         trace_id=str(record.get("trace_id") or ""),
         started_at=str(record.get("started_at") or ""),
-        finished_at=record.get("finished_at") if isinstance(record.get("finished_at"), str) else None,
+        finished_at=finished_at,
         total_elapsed_ms=float(record.get("total_elapsed_ms") or 0.0),
         question=_question(record),
         culture_domain=_culture_domain(record),
