@@ -134,6 +134,20 @@ def test_enricher_writes_culture_domain_to_chunk_metadata(
     assert chunks[0].metadata["chunk_title"] == "妈祖祖庙"
 
 
+def test_ingest_stamps_review_status_approved(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    source = _write_minpai_markdown(tmp_path / "matsu.md")
+    client = TestClient(create_app(test_settings))
+    response = client.post("/ingest", json={"source_path": str(source)})
+    assert response.status_code == 200
+    body = response.json()
+
+    chunks = create_knowledge(test_settings).get_by_document_id(body["document_id"])
+    assert chunks
+    assert all(chunk.metadata.get("审阅状态") == "已通过" for chunk in chunks)
+
+
 def test_unsupported_source_type_returns_400(
     test_settings: Settings, tmp_path: Path
 ) -> None:

@@ -77,3 +77,22 @@ def test_rerank_failure_still_returns_fused_chunks(
     rerank = next(stage for stage in result.stages if stage.name == "rerank")
     assert rerank.method == "rrf_fallback"
     assert rerank.fallback_reason
+
+
+def test_retrieve_excludes_pending_chunks_until_approved(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    from wenmai.knowledge import create_knowledge
+
+    source = _write_minpai_markdown(tmp_path / "matsu.md")
+    result = ingest_source(source, test_settings)
+    knowledge = create_knowledge(test_settings)
+    knowledge.set_review_status(result.document_id, "待审")
+
+    pending = retrieve("妈祖信仰的发源地在哪里？", test_settings, knowledge=knowledge)
+    assert not pending.chunks
+
+    knowledge.set_review_status(result.document_id, "已通过")
+    approved = retrieve("妈祖信仰的发源地在哪里？", test_settings, knowledge=knowledge)
+    assert approved.chunks
+    assert "妈祖" in approved.chunks[0].chunk.text

@@ -232,6 +232,40 @@ def test_ops_browse_api_contract(test_settings: Settings) -> None:
         assert "chunk_id" in chunk
         assert "document_id" in chunk
         assert "preview" in chunk
+        assert "审阅状态" in chunk
+
+
+def test_ops_browse_shows_pending_review_status(test_settings: Settings) -> None:
+    from wenmai.models import Chunk
+
+    app = create_app(test_settings)
+    app.state.knowledge.commit_document(
+        source_path="/tmp/doc-pending.md",
+        sha256="doc-pending",
+        document_id="doc-pending",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="doc-pending:0000",
+                document_id="doc-pending",
+                text="待审片段仅供库览展示。",
+                metadata={
+                    "document_id": "doc-pending",
+                    "title": "待审材料",
+                    "culture_domain": "船政",
+                    "审阅状态": "待审",
+                },
+            ),
+        ],
+    )
+
+    client = TestClient(app)
+    resp = client.get("/api/browse")
+    assert resp.status_code == 200
+    groups = resp.json()
+    ship_group = next(g for g in groups if g["culture_domain"] == "船政")
+    chunk = ship_group["documents"][0]["chunks"][0]
+    assert chunk["审阅状态"] == "待审"
 
 
 def test_ops_ingestion_run_sse_stream_contract(
