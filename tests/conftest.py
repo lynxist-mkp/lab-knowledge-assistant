@@ -38,6 +38,8 @@ def test_settings(tmp_path: Path) -> Settings:
         "splitter": "ok",
         "vector_store": "ok",
     }
+    raw["quality_gate"] = dict(raw.get("quality_gate") or {})
+    raw["quality_gate"]["gray_review"] = False
     if "gemma" not in raw:
         raw["gemma"] = {
             "mlx_python": "python3",

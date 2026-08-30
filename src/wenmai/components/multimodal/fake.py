@@ -8,6 +8,8 @@ from wenmai.factories.multimodal import registry
 
 _ENRICHER_MARKER = "入库助手"
 _QA_MARKER = "文脉助手"
+_GRAY_REVIEW_MARKER = "灰区复判"
+_GRAY_REJECT_HINT = "不值得入库"
 _REFUSAL_PREFIX = "拒答："
 
 
@@ -34,7 +36,8 @@ class FakeMultimodal(BaseMultimodal):
             return "<<<not-json>>>"
         if self.behavior == "refuse":
             return f"{_REFUSAL_PREFIX}检索片段不足以回答该问题。"
-        if _QA_MARKER in prompt:
+        if _GRAY_REVIEW_MARKER in prompt:
+            return "不通过" if _GRAY_REJECT_HINT in prompt else "通过"
             return "湄洲岛是妈祖信仰的发源地，祖庙是信俗活动的中心场所[1]。"
         if _ENRICHER_MARKER in prompt:
             return (
@@ -47,4 +50,6 @@ class FakeMultimodal(BaseMultimodal):
         apply_behavior(self.vision_behavior, "vision")
         if self.vision_behavior == "garbage":
             return ""
+        if _GRAY_REVIEW_MARKER in prompt:
+            return "不通过" if _GRAY_REJECT_HINT in prompt else "通过"
         return f"图片占位说明：{image_path.name}"

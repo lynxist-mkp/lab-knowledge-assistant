@@ -5,6 +5,26 @@ from wenmai.tracing.context import StageRecord
 
 class IngestionStage:
     @staticmethod
+    def gray_review(
+        *,
+        provider: str,
+        method: str,
+        elapsed_ms: float,
+        output_summary: str,
+        error: str | None = None,
+    ) -> StageRecord:
+        return StageRecord(
+            name="gray_review",
+            method=method,
+            provider=provider,
+            elapsed_ms=elapsed_ms,
+            input_summary="灰区复判",
+            output_summary=output_summary,
+            candidate_count=1,
+            error=error,
+        )
+
+    @staticmethod
     def captioner(
         *,
         provider: str,

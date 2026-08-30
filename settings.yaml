@@ -89,6 +89,10 @@ pdf_load:
 quality_gate:
   reject_below: 0.60
   approve_above: 0.80
+  gray_review: true
+  timeout_seconds: 30
+  preview_chars: 2000
+  preview_pages: 3
 
 paddleocr:
   python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.venvs/paddleocr-env/bin/python"

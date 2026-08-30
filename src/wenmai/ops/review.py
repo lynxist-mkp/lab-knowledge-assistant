@@ -2,15 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from wenmai.knowledge.document_card import DocumentNotFoundError
 from wenmai.knowledge.domain import culture_domain, review_status, title
 from wenmai.knowledge.store import Knowledge
 
 _REVIEW_PENDING = "待审"
 _REVIEW_APPROVED = "已通过"
-
-
-class DocumentNotFoundError(LookupError):
-    """Raised when a review action targets a missing document."""
 
 
 @dataclass(frozen=True)

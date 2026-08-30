@@ -16,7 +16,6 @@ from wenmai.eval import list_eval_runs, run_eval
 from wenmai.knowledge.document_card import DocumentNotFoundError, build_document_card
 from wenmai.ops.overview import build_overview_stats
 from wenmai.ops.review import (
-    DocumentNotFoundError,
     approve_document,
     list_pending_documents,
     reject_document,

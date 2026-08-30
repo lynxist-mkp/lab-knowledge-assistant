@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from collections.abc import Callable
 from pathlib import Path
 
 from wenmai.config import Settings
 from wenmai.factories import splitter as splitter_factory
+from wenmai.ingestion.gray_review import run_gray_review
 from wenmai.ingestion.loaders import LoadedDocument, SourceLoadError, load_source
 from wenmai.ingestion.prepare import prepare_chunks
 from wenmai.ingestion.quality import evaluate_quality_gate, peek_source
@@ -103,6 +105,40 @@ def ingest_source(
                     status="rejected",
                 )
             gray_review = gate_result.band == "gray"
+
+        if gray_review and settings.quality_gate.gray_review:
+            review_started = time.perf_counter()
+            outcome = run_gray_review(source_path, source_peek, settings)
+            elapsed_ms = (time.perf_counter() - review_started) * 1000
+            trace.append_stage(
+                IngestionStage.gray_review(
+                    provider=outcome.provider,
+                    method=outcome.method,
+                    elapsed_ms=elapsed_ms,
+                    output_summary=outcome.output_summary,
+                    error=outcome.error,
+                )
+            )
+            if outcome.hard_reject:
+                document_id = hashlib.sha256(source_path.read_bytes()).hexdigest()
+                _set_trace_summary(
+                    trace,
+                    source_path=document_source_path,
+                    document_id=document_id,
+                    title=source_path.stem,
+                    status="rejected",
+                    chunk_count=0,
+                    chunks_with_images=0,
+                )
+                trace.close()
+                return IngestResult(
+                    document_id=document_id,
+                    chunk_count=0,
+                    elapsed_ms=trace.total_elapsed_ms,
+                    trace_id=trace.trace_id,
+                    status="rejected",
+                )
+            gray_review = outcome.pending
 
         with trace.stage(
             "load",

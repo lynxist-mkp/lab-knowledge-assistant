@@ -136,6 +136,10 @@ class Dolphin:
 class QualityGate:
     reject_below: float = 0.60
     approve_above: float = 0.80
+    gray_review: bool = False
+    timeout_seconds: float = 30.0
+    preview_chars: int = 2000
+    preview_pages: int = 3
 
 
 @dataclass
