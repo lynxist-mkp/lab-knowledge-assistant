@@ -318,6 +318,23 @@
     font-size: 0.82rem;
     color: var(--color-muted);
   }
+  .stat-sub-row {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.35rem;
+    margin-top: 0.35rem;
+    font-size: 0.78rem;
+    color: var(--color-muted);
+  }
+  .stat-sub-value {
+    font-weight: 600;
+    color: var(--color-text);
+    font-family: ui-monospace, SFMono-Regular, "PingFang SC", sans-serif;
+  }
+  .stat-sub-sep {
+    opacity: 0.5;
+  }
 
   .overview-info-grid {
     display: grid;
@@ -1207,6 +1224,15 @@
               <span id="stat-avg-latency" class="stat-value">-</span>
               <span class="stat-unit">ms</span>
             </div>
+            <div class="stat-sub-row">
+              <span class="stat-sub-label">P50</span>
+              <span id="stat-latency-p50" class="stat-sub-value">-</span>
+              <span class="stat-sub-unit">ms</span>
+              <span class="stat-sub-sep">·</span>
+              <span class="stat-sub-label">P95</span>
+              <span id="stat-latency-p95" class="stat-sub-value">-</span>
+              <span class="stat-sub-unit">ms</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1712,6 +1738,12 @@
   const statDocCount = document.getElementById('stat-doc-count');
   const statChunkCount = document.getElementById('stat-chunk-count');
   const statAvgLatency = document.getElementById('stat-avg-latency');
+  const statLatencyP50 = document.getElementById('stat-latency-p50');
+  const statLatencyP95 = document.getElementById('stat-latency-p95');
+
+  function formatLatencyMs(value) {
+    return typeof value === 'number' && !isNaN(value) ? value.toFixed(1) : '-';
+  }
 
   // Browse Elements
   const btnRefreshBrowse = document.getElementById('btn-refresh-browse');
@@ -1890,6 +1922,12 @@
         statAvgLatency.textContent = data.avg_query_latency_ms.toFixed(1);
       } else {
         statAvgLatency.textContent = '-';
+      }
+      if (statLatencyP50) {
+        statLatencyP50.textContent = formatLatencyMs(data.query_latency_p50_ms);
+      }
+      if (statLatencyP95) {
+        statLatencyP95.textContent = formatLatencyMs(data.query_latency_p95_ms);
       }
     } catch (err) {
       overviewErrorMsg.textContent = '读取概览统计失败: ' + err.message;

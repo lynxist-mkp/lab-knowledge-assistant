@@ -54,8 +54,11 @@ class OverviewStats:
     document_count: int
     chunk_count: int
     avg_query_latency_ms: float | None
+    query_latency_p50_ms: float | None = None
+    query_latency_p95_ms: float | None = None
+    stage_latency: dict[str, dict[str, float | None]] | None = None
 
-    def as_dict(self) -> dict[str, int | float | None]:
+    def as_dict(self) -> dict[str, int | float | dict[str, dict[str, float | None]] | None]:
         return asdict(self)
 
 
