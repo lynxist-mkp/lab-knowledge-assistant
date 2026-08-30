@@ -5,21 +5,22 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Literal
 
-from wenmai.components.retrieval.rrf import reciprocal_rank_fusion
 from wenmai.config import Settings
+from wenmai.knowledge.store import Knowledge
 from wenmai.models import ScoredChunk
+from wenmai.retrieval.rrf import reciprocal_rank_fusion
+from wenmai.tracing.context import StageRecord
 
-SearchMode = Literal["dense_only", "sparse_only", "rrf"]
+RetrievalMode = Literal["dense_only", "sparse_only", "rrf"]
 
-_SEARCH_MODES = frozenset({"dense_only", "sparse_only", "rrf"})
+_RETRIEVAL_MODES = frozenset({"dense_only", "sparse_only", "rrf"})
 
 
 @dataclass(frozen=True)
-class SearchResult:
-    """Unified retrieval result; sparse→dense hydration stays inside Knowledge."""
-
+class RetrievalResult:
     chunks: list[ScoredChunk]
-    mode: SearchMode
+    mode: RetrievalMode
+    stages: list[StageRecord] = field(default_factory=list)
     dense_chunks: list[ScoredChunk] = field(default_factory=list)
     sparse_chunks: list[ScoredChunk] = field(default_factory=list)
     dense_elapsed_ms: float = 0.0
@@ -27,21 +28,21 @@ class SearchResult:
     fusion_elapsed_ms: float = 0.0
 
 
-def validate_search_mode(mode: str) -> SearchMode:
-    if mode not in _SEARCH_MODES:
-        raise ValueError(f"unknown search mode: {mode!r}")
+def validate_retrieval_mode(mode: str) -> RetrievalMode:
+    if mode not in _RETRIEVAL_MODES:
+        raise ValueError(f"unknown retrieval mode: {mode!r}")
     return mode  # type: ignore[return-value]
 
 
-def run_search(
-    knowledge: object,
+def run_fusion(
+    knowledge: Knowledge,
     query: str,
     *,
     mode: str,
     settings: Settings,
     culture_domain: str | None = None,
-) -> SearchResult:
-    resolved = validate_search_mode(mode)
+) -> RetrievalResult:
+    resolved = validate_retrieval_mode(mode)
     if resolved == "dense_only":
         return _dense_only(knowledge, query, settings, culture_domain)
     if resolved == "sparse_only":
@@ -50,19 +51,19 @@ def run_search(
 
 
 def _dense_only(
-    knowledge: object,
+    knowledge: Knowledge,
     query: str,
     settings: Settings,
     culture_domain: str | None,
-) -> SearchResult:
+) -> RetrievalResult:
     started = time.perf_counter()
-    chunks = knowledge.dense_search(  # type: ignore[attr-defined]
+    chunks = knowledge.dense_search(
         query,
         top_k=settings.retrieval.dense_k,
         culture_domain=culture_domain,
     )
     elapsed_ms = (time.perf_counter() - started) * 1000
-    return SearchResult(
+    return RetrievalResult(
         chunks=chunks,
         mode="dense_only",
         dense_chunks=chunks,
@@ -71,19 +72,19 @@ def _dense_only(
 
 
 def _sparse_only(
-    knowledge: object,
+    knowledge: Knowledge,
     query: str,
     settings: Settings,
     culture_domain: str | None,
-) -> SearchResult:
+) -> RetrievalResult:
     started = time.perf_counter()
-    chunks = knowledge.sparse_search(  # type: ignore[attr-defined]
+    chunks = knowledge.sparse_search(
         query,
         top_k=settings.retrieval.sparse_k,
         culture_domain=culture_domain,
     )
     elapsed_ms = (time.perf_counter() - started) * 1000
-    return SearchResult(
+    return RetrievalResult(
         chunks=chunks,
         mode="sparse_only",
         sparse_chunks=chunks,
@@ -92,11 +93,11 @@ def _sparse_only(
 
 
 def _rrf(
-    knowledge: object,
+    knowledge: Knowledge,
     query: str,
     settings: Settings,
     culture_domain: str | None,
-) -> SearchResult:
+) -> RetrievalResult:
     with ThreadPoolExecutor(max_workers=2) as executor:
         dense_future = executor.submit(
             _timed_dense, knowledge, query, settings, culture_domain
@@ -125,7 +126,7 @@ def _rrf(
         if chunk_id in chunk_by_id
     ]
     fusion_ms = (time.perf_counter() - started) * 1000
-    return SearchResult(
+    return RetrievalResult(
         chunks=scored_chunks,
         mode="rrf",
         dense_chunks=dense_chunks,
@@ -137,13 +138,13 @@ def _rrf(
 
 
 def _timed_dense(
-    knowledge: object,
+    knowledge: Knowledge,
     query: str,
     settings: Settings,
     culture_domain: str | None,
 ) -> tuple[list[ScoredChunk], float]:
     started = time.perf_counter()
-    chunks = knowledge.dense_search(  # type: ignore[attr-defined]
+    chunks = knowledge.dense_search(
         query,
         top_k=settings.retrieval.dense_k,
         culture_domain=culture_domain,
@@ -152,13 +153,13 @@ def _timed_dense(
 
 
 def _timed_sparse(
-    knowledge: object,
+    knowledge: Knowledge,
     query: str,
     settings: Settings,
     culture_domain: str | None,
 ) -> tuple[list[ScoredChunk], float]:
     started = time.perf_counter()
-    chunks = knowledge.sparse_search(  # type: ignore[attr-defined]
+    chunks = knowledge.sparse_search(
         query,
         top_k=settings.retrieval.sparse_k,
         culture_domain=culture_domain,

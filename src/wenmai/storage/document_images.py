@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from wenmai.config import Settings
 from wenmai.storage.images import (
     IMAGE_PLACEHOLDER_RE,
@@ -43,6 +45,12 @@ class DocumentImages:
             mime_type=mime_type,
         )
         return format_image_placeholder(image_id)
+
+    def get(self, image_id: str) -> Path | None:
+        record = self._store.get(image_id)
+        if record is None:
+            return None
+        return Path(record.file_path)
 
     def exists(self, image_id: str) -> bool:
         return self._store.get(image_id) is not None

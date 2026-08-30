@@ -12,10 +12,12 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from wenmai.config import Settings
+from wenmai.eval import list_eval_runs, run_eval
+from wenmai.ops.overview import build_overview_stats
 from wenmai.pipelines.ingestion import ingest_source
 from wenmai.pipelines.query import QueryGenerationError, ask_question
 from wenmai.runtime import create_runtime
-from wenmai.eval import list_eval_runs, run_eval
+from wenmai.storage.catalog import DocumentCatalog
 from wenmai.tracing import (
     get_trace_detail,
     get_trace_summary,
@@ -23,6 +25,7 @@ from wenmai.tracing import (
     list_query_summaries,
     list_trace_degradations,
 )
+from wenmai.tracing.store import average_query_latency_ms
 
 
 class IngestRequest(BaseModel):
@@ -90,7 +93,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/stats/overview")
     def api_overview_stats() -> dict[str, object]:
-        return app.state.knowledge.overview().as_dict()
+        catalog = DocumentCatalog.from_settings(resolved)
+        return build_overview_stats(
+            resolved,
+            catalog,
+            avg_query_latency_ms=average_query_latency_ms(resolved),
+        ).as_dict()
 
     @app.get("/api/browse")
     def api_browse() -> list[dict[str, object]]:

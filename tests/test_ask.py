@@ -90,7 +90,14 @@ def test_ask_accepts_retrieval_mode_and_keeps_public_result(
     body = response.json()
     assert body["citations"]
     assert "ranked_chunks" not in body
-    assert set(body) <= {"answer", "citations", "trace_id", "refused", "error"}
+    assert set(body) <= {
+        "answer",
+        "citations",
+        "trace_id",
+        "refused",
+        "refusal_reason",
+        "error",
+    }
 
 
 def test_ask_records_generation_failure_in_trace_and_returns_error(
@@ -125,6 +132,7 @@ def test_ask_empty_kb_refuses_without_calling_llm(
 
     assert llm_called is False
     assert result.refused is True
+    assert result.refusal_reason == "insufficient_evidence"
     assert result.answer.startswith("拒答：")
     assert result.citations == []
 
@@ -148,6 +156,7 @@ def test_ask_writes_trace_outcome_metadata(
         "/ask", json={"question": "船政学堂是什么时候创办的？"}
     )
     body = response.json()
+    assert body["refusal_reason"] == "model_refused"
     record = get_trace_record(test_settings, body["trace_id"])
     assert record is not None
     outcome = record["metadata"]["outcome"]
