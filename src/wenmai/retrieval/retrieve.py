@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 
 from wenmai.config import Settings
+from wenmai.factories import query_rewrite as query_rewrite_factory
 from wenmai.factories import reranker as reranker_factory
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import ScoredChunk
@@ -23,9 +24,14 @@ def retrieve(
     retrieval_mode: str | None = None,
     rerank_enabled: bool | None = None,
     knowledge: Knowledge | None = None,
+    extra_queries: list[str] | None = None,
 ) -> RetrievalResult:
     mode, do_rerank = _resolve_retrieval(settings, retrieval_mode, rerank_enabled)
     knowledge = knowledge or create_knowledge(settings)
+    resolved_extras = extra_queries
+    if resolved_extras is None:
+        rewriter = query_rewrite_factory.create(settings)
+        resolved_extras = rewriter.extra_queries(question)
 
     fusion_result = run_fusion(
         knowledge,
@@ -33,6 +39,7 @@ def retrieve(
         mode=mode,
         settings=settings,
         culture_domain=culture_domain,
+        extra_queries=resolved_extras,
     )
     chunks = fusion_result.chunks
     stages = _stages_from_fusion(knowledge, settings, fusion_result, culture_domain)

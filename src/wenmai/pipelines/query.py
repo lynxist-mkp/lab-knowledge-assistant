@@ -4,6 +4,7 @@ import re
 import time
 
 from wenmai.config import Settings
+from wenmai.factories import query_rewrite as query_rewrite_factory
 from wenmai.generation import GenerationError, QueryGenerationError, generate
 from wenmai.generation.expand import expand_for_generation
 from wenmai.knowledge import Knowledge, create_knowledge
@@ -35,12 +36,16 @@ def ask_question(
 
     try:
         processing_started = time.perf_counter()
+        rewriter = query_rewrite_factory.create(settings)
+        extra_queries = rewriter.extra_queries(normalized)
         trace.append_stage(
             QueryStage.query_processing(
                 question=question,
                 normalized=normalized,
                 elapsed_ms=(time.perf_counter() - processing_started) * 1000,
                 culture_domain=culture_domain,
+                extra_queries=extra_queries,
+                rewriter=rewriter.provider_name,
             )
         )
 
@@ -51,6 +56,7 @@ def ask_question(
             retrieval_mode=retrieval_mode,
             rerank_enabled=rerank_enabled,
             knowledge=knowledge,
+            extra_queries=extra_queries,
         )
         for stage in retrieved.stages:
             trace.append_stage(stage)

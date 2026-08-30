@@ -29,6 +29,10 @@ transform:
   enricher_prompt: "prompts/enrich_v1.txt"
   captioner_prompt: "prompts/caption_v1.txt"
 
+query_processing:
+  rewriter: lexicon          # lexicon | none
+  lexicon: "data/lexicon/synonyms.yaml"
+
 retrieval:
   mode: rrf                 # rrf | dense_only | sparse_only
   dense_k: 20
