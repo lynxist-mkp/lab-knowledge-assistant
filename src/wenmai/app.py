@@ -14,6 +14,12 @@ from pydantic import BaseModel, Field
 from wenmai.config import Settings
 from wenmai.eval import list_eval_runs, run_eval
 from wenmai.ops.overview import build_overview_stats
+from wenmai.ops.review import (
+    DocumentNotFoundError,
+    approve_document,
+    list_pending_documents,
+    reject_document,
+)
 from wenmai.pipelines.ingestion import ingest_source
 from wenmai.pipelines.query import QueryGenerationError, ask_question
 from wenmai.runtime import create_runtime
@@ -106,6 +112,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             group.as_dict()
             for group in app.state.knowledge.browse_by_culture_domain()
         ]
+
+    @app.get("/api/review/pending")
+    def api_review_pending() -> list[dict[str, object]]:
+        return [
+            item.as_dict()
+            for item in list_pending_documents(app.state.knowledge)
+        ]
+
+    @app.post("/api/review/{document_id}/approve")
+    def api_review_approve(document_id: str) -> dict[str, str]:
+        try:
+            approve_document(app.state.knowledge, document_id)
+        except DocumentNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="document not found") from exc
+        return {"document_id": document_id, "审阅状态": "已通过"}
+
+    @app.post("/api/review/{document_id}/reject")
+    def api_review_reject(document_id: str) -> dict[str, str]:
+        try:
+            reject_document(app.state.knowledge, document_id)
+        except DocumentNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="document not found") from exc
+        return {"document_id": document_id, "status": "deleted"}
 
     @app.get("/api/chunks/{chunk_id}")
     def api_chunk_detail(chunk_id: str) -> dict[str, object]:

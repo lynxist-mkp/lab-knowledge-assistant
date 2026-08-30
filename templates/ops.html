@@ -39,6 +39,21 @@
   <button
     type="button"
     class="ops-nav-tab"
+    id="tab-review"
+    data-tab="review"
+    role="tab"
+    aria-selected="false"
+    aria-controls="ops-panel-review"
+  >
+    <svg class="tab-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+      <path d="M9 12l2 2 4-4"></path>
+    </svg>
+    <span>待审</span>
+  </button>
+  <button
+    type="button"
+    class="ops-nav-tab"
     id="tab-ingest"
     data-tab="ingest"
     role="tab"
@@ -539,6 +554,24 @@
   .chunk-preview-row:hover {
     border-color: var(--color-primary-soft);
   }
+  .chunk-preview-row--pending {
+    border-color: rgba(255, 149, 0, 0.45);
+    background: rgba(255, 149, 0, 0.06);
+  }
+  .chunk-preview-row--pending .chunk-id-tag {
+    color: #c77700;
+  }
+  .chunk-pending-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #c77700;
+    background: rgba(255, 149, 0, 0.12);
+    border: 1px solid rgba(255, 149, 0, 0.35);
+    border-radius: 3px;
+    padding: 0.05rem 0.4rem;
+  }
   .chunk-row-header {
     display: flex;
     justify-content: space-between;
@@ -573,6 +606,79 @@
   .btn-chunk-expand:hover {
     background: var(--color-primary);
     color: #ffffff;
+  }
+
+  /* =========================================================
+     2b. 待审 (Review) Styles
+     ========================================================= */
+  .review-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .review-doc-card {
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    padding: 0.85rem 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .review-doc-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+    flex: 1 1 12rem;
+  }
+  .review-doc-title {
+    margin: 0;
+    font-size: 0.94rem;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+  .review-doc-sub {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .review-doc-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+  .btn-review-approve {
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-review-approve:hover {
+    filter: brightness(1.05);
+  }
+  .btn-review-reject {
+    background: transparent;
+    color: #c0392b;
+    border: 1px solid rgba(192, 57, 43, 0.45);
+    border-radius: 4px;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-review-reject:hover {
+    background: rgba(192, 57, 43, 0.08);
   }
 
   /* =========================================================
@@ -1341,6 +1447,53 @@
   </section>
 
   <!-- =========================================================
+       Panel 2b: 待审 (Review) Panel
+       ========================================================= -->
+  <section id="ops-panel-review" class="ops-panel-section" role="tabpanel" aria-labelledby="tab-review" aria-label="待审片段审阅" style="display: none;" hidden>
+    <div class="ops-card">
+      <div class="ops-card-header">
+        <div class="ops-card-title-wrap">
+          <h2 class="ops-card-title">待审片段</h2>
+          <p class="ops-card-desc">灰区复判产生的待审材料：通过则全文片段参与检索；驳回则整份文档从知识库删除。</p>
+        </div>
+        <button type="button" id="btn-refresh-review" class="btn-secondary" title="刷新待审列表">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M23 4v6h-6"></path>
+            <path d="M1 20v-6h6"></path>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          <span>刷新</span>
+        </button>
+      </div>
+
+      <div id="review-loading" class="loading-state-box" style="display: none;" hidden>
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <span>正在读取待审文档列表...</span>
+      </div>
+
+      <div id="review-error" class="alert-banner" role="alert">
+        <div class="alert-content">
+          <div class="alert-title">待审列表读取失败</div>
+          <p id="review-error-msg" class="alert-message"></p>
+        </div>
+      </div>
+
+      <div id="review-empty" class="empty-state" style="display: none;" hidden>
+        <div class="empty-icon" aria-hidden="true">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            <path d="M9 12l2 2 4-4"></path>
+          </svg>
+        </div>
+        <h3 class="empty-title">暂无待审文档</h3>
+        <p class="empty-desc">当前没有审阅状态为待审的文档。灰区复判产生的材料会出现在此列表。</p>
+      </div>
+
+      <div id="review-list" class="review-list" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <!-- =========================================================
        Panel 3: 入库 (Ingest) Panel
        ========================================================= -->
   <section id="ops-panel-ingest" class="ops-panel-section" role="tabpanel" aria-labelledby="tab-ingest" aria-label="材料入库" style="display: none;" hidden>
@@ -1699,6 +1852,7 @@
   const panels = {
     overview: document.getElementById('ops-panel-overview'),
     browse: document.getElementById('ops-panel-browse'),
+    review: document.getElementById('ops-panel-review'),
     ingest: document.getElementById('ops-panel-ingest'),
     trace: document.getElementById('ops-panel-trace'),
     eval: document.getElementById('ops-panel-eval')
@@ -1722,6 +1876,14 @@
   const opsBrowseList = document.getElementById('ops-browse-list');
   const browseSearchInput = document.getElementById('browse-search-input');
   const browseSummaryCount = document.getElementById('browse-summary-count');
+
+  // Review Elements
+  const btnRefreshReview = document.getElementById('btn-refresh-review');
+  const reviewLoading = document.getElementById('review-loading');
+  const reviewError = document.getElementById('review-error');
+  const reviewErrorMsg = document.getElementById('review-error-msg');
+  const reviewEmpty = document.getElementById('review-empty');
+  const reviewList = document.getElementById('review-list');
 
   // Ingest Elements
   const ingestForm = document.getElementById('ingest-form');
@@ -1841,6 +2003,8 @@
       loadOverview();
     } else if (targetTab === 'browse') {
       loadBrowse();
+    } else if (targetTab === 'review') {
+      loadReview();
     } else if (targetTab === 'trace') {
       if (activeTraceSubtab === 'ingestion') {
         loadTraceIngestionList();
@@ -1961,10 +2125,14 @@
           let chunksHtml = '';
           if (doc.chunks && doc.chunks.length > 0) {
             chunksHtml = doc.chunks.map(function(chunk) {
+              const isPending = chunk['审阅状态'] === '待审';
+              const rowClass = isPending ? 'chunk-preview-row chunk-preview-row--pending' : 'chunk-preview-row';
+              const pendingBadge = isPending ? '<span class="chunk-pending-badge">待审</span>' : '';
               return `
-                <div class="chunk-preview-row">
+                <div class="${rowClass}">
                   <div class="chunk-row-header">
                     <code class="chunk-id-tag">${escapeHtml(chunk.chunk_id)}</code>
+                    ${pendingBadge}
                   </div>
                   <p class="chunk-preview-text">${escapeHtml(chunk.preview)}</p>
                 </div>
@@ -2043,6 +2211,96 @@
     browseSearchInput.addEventListener('input', function() {
       renderBrowseGroups(rawBrowseData, browseSearchInput.value);
     });
+  }
+
+  /* =========================================================
+     2b. 待审 (Review) Data Fetch & Actions
+     ========================================================= */
+  function renderReviewList(items) {
+    reviewList.innerHTML = '';
+    if (!items || items.length === 0) {
+      reviewEmpty.style.display = 'block';
+      reviewEmpty.removeAttribute('hidden');
+      return;
+    }
+
+    reviewEmpty.style.display = 'none';
+    reviewEmpty.setAttribute('hidden', '');
+
+    items.forEach(function(item) {
+      const card = document.createElement('article');
+      card.className = 'review-doc-card';
+      card.dataset.documentId = item.document_id;
+      card.innerHTML = `
+        <div class="review-doc-meta">
+          <h3 class="review-doc-title">${escapeHtml(item.title || '未命名文档')}</h3>
+          <p class="review-doc-sub">
+            <span class="domain-badge">${escapeHtml(item.culture_domain || '其他')}</span>
+            <code class="doc-id-code">${escapeHtml(item.document_id)}</code>
+            <span class="badge-metric">${item.chunk_count || 0} 个片段</span>
+          </p>
+        </div>
+        <div class="review-doc-actions">
+          <button type="button" class="btn-review-approve" data-action="approve" data-document-id="${escapeHtml(item.document_id)}">通过</button>
+          <button type="button" class="btn-review-reject" data-action="reject" data-document-id="${escapeHtml(item.document_id)}">驳回</button>
+        </div>
+      `;
+      reviewList.appendChild(card);
+    });
+  }
+
+  async function loadReview() {
+    reviewError.classList.remove('visible');
+    reviewErrorMsg.textContent = '';
+    reviewLoading.style.display = 'flex';
+    reviewLoading.removeAttribute('hidden');
+
+    try {
+      const response = await fetch('/api/review/pending');
+      if (!response.ok) {
+        throw new Error('服务响应异常 (HTTP ' + response.status + ')');
+      }
+      renderReviewList(await response.json());
+    } catch (err) {
+      reviewErrorMsg.textContent = '读取待审列表失败: ' + err.message;
+      reviewError.classList.add('visible');
+    } finally {
+      reviewLoading.style.display = 'none';
+      reviewLoading.setAttribute('hidden', '');
+    }
+  }
+
+  async function handleReviewAction(documentId, action) {
+    const endpoint = action === 'approve'
+      ? '/api/review/' + encodeURIComponent(documentId) + '/approve'
+      : '/api/review/' + encodeURIComponent(documentId) + '/reject';
+    const response = await fetch(endpoint, { method: 'POST' });
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error('操作失败 (HTTP ' + response.status + '): ' + detail);
+    }
+    await loadReview();
+  }
+
+  if (reviewList) {
+    reviewList.addEventListener('click', function(event) {
+      const button = event.target.closest('[data-action]');
+      if (!button) return;
+      const documentId = button.getAttribute('data-document-id');
+      const action = button.getAttribute('data-action');
+      if (!documentId || !action) return;
+      button.disabled = true;
+      handleReviewAction(documentId, action).catch(function(err) {
+        reviewErrorMsg.textContent = err.message;
+        reviewError.classList.add('visible');
+      }).finally(function() {
+        button.disabled = false;
+      });
+    });
+  }
+
+  if (btnRefreshReview) {
+    btnRefreshReview.addEventListener('click', loadReview);
   }
 
   /* =========================================================
@@ -2843,7 +3101,7 @@
 
   // Initial tab resolution based on URL hash (default to overview)
   const initialHash = (window.location.hash || '').replace(/^#/, '');
-  if (['overview', 'browse', 'ingest', 'trace', 'eval'].includes(initialHash)) {
+  if (['overview', 'browse', 'review', 'ingest', 'trace', 'eval'].includes(initialHash)) {
     switchTab(initialHash);
   } else {
     switchTab('overview');

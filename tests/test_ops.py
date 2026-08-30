@@ -326,7 +326,9 @@ def test_ops_trace_panel_wiring(test_settings: Settings) -> None:
     # Fetch wiring
     assert "fetch('/api/traces/ingestion')" in html or 'fetch("/api/traces/ingestion")' in html
     assert "fetch('/api/traces/query')" in html or 'fetch("/api/traces/query")' in html
-    assert "fetch('/api/traces/' + encodeURIComponent(" in html or 'fetch("/api/traces/" + encodeURIComponent(' in html
+    assert "fetch('/api/traces/' + encodeURIComponent(" in html or (
+        'fetch("/api/traces/" + encodeURIComponent(' in html
+    )
 
 
 def test_ops_eval_panel_wiring(test_settings: Settings) -> None:
@@ -401,19 +403,21 @@ def test_ops_trace_detail_api_contract(test_settings: Settings, tmp_path: Path) 
 
 
 def test_ops_five_capabilities_complete(test_settings: Settings) -> None:
-    """All five ops nav tabs are present and isolated from editor controls."""
+    """All six ops nav tabs are present and isolated from editor controls."""
     client = TestClient(create_app(test_settings))
     html = _ops_html(client)
 
-    # 5 nav tabs present
+    # 6 nav tabs present
     assert 'id="tab-overview"' in html
     assert 'id="tab-browse"' in html
+    assert 'id="tab-review"' in html
     assert 'id="tab-ingest"' in html
     assert 'id="tab-trace"' in html
     assert 'id="tab-eval"' in html
 
     assert "概览" in html
     assert "库览" in html
+    assert "待审" in html
     assert "入库" in html
     assert "追踪" in html
     assert "评测" in html
@@ -422,4 +426,146 @@ def test_ops_five_capabilities_complete(test_settings: Settings) -> None:
     assert 'id="ask-form"' not in html
     assert 'id="citation-drawer"' not in html
     assert 'id="question-input"' not in html
+
+
+def test_ops_review_panel_wiring(test_settings: Settings) -> None:
+    """Review panel: 待审 tab, list container, approve/reject fetch wiring."""
+    client = TestClient(create_app(test_settings))
+    html = _ops_html(client)
+
+    assert 'id="tab-review"' in html
+    assert 'id="ops-panel-review"' in html
+    assert 'id="review-list"' in html
+    assert 'id="btn-refresh-review"' in html
+    assert "fetch('/api/review/pending')" in html or 'fetch("/api/review/pending")' in html
+    assert "/api/review/" in html
+    assert "通过" in html
+    assert "驳回" in html
+    assert "chunk-preview-row--pending" in html
+
+
+def test_workbench_has_no_review_actions(test_settings: Settings) -> None:
+    """编辑工作台 must not expose review APIs or buttons."""
+    client = TestClient(create_app(test_settings))
+    workbench = client.get("/")
+    assert workbench.status_code == 200
+    html = workbench.text
+
+    assert "待审" not in html
+    assert "/api/review/" not in html
+    assert "btn-review-approve" not in html
+    assert "btn-review-reject" not in html
+
+
+def _plant_pending_doc(
+    app,
+    *,
+    document_id: str,
+    title: str,
+    culture_domain: str,
+    text: str,
+) -> None:
+    from wenmai.models import Chunk
+
+    app.state.knowledge.commit_document(
+        source_path=f"/tmp/{document_id}.md",
+        sha256=document_id,
+        document_id=document_id,
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id=f"{document_id}:0000",
+                document_id=document_id,
+                text=text,
+                metadata={
+                    "document_id": document_id,
+                    "title": title,
+                    "culture_domain": culture_domain,
+                },
+            ),
+        ],
+    )
+    app.state.knowledge.set_review_status(document_id, "待审")
+
+
+def test_review_pending_approve_reject_api_contract(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    """List pending, approve makes ask hit, reject removes from browse."""
+    app = create_app(test_settings)
+    _plant_pending_doc(
+        app,
+        document_id="doc-approve-me",
+        title="待审放行材料",
+        culture_domain="妈祖",
+        text="妈祖信仰发源于福建莆田湄洲岛，是沿海民间信俗。",
+    )
+    _plant_pending_doc(
+        app,
+        document_id="doc-reject-me",
+        title="待审驳回材料",
+        culture_domain="船政",
+        text="福建船政创办于1866年，培养近代海军人才。",
+    )
+
+    client = TestClient(app)
+
+    pending = client.get("/api/review/pending")
+    assert pending.status_code == 200
+    items = pending.json()
+    assert len(items) == 2
+    ids = {item["document_id"] for item in items}
+    assert ids == {"doc-approve-me", "doc-reject-me"}
+    for item in items:
+        assert "title" in item
+        assert "culture_domain" in item
+        assert item["chunk_count"] >= 1
+
+    missing = client.post("/api/review/unknown-doc/approve")
+    assert missing.status_code == 404
+
+    refused = client.post(
+        "/ask",
+        json={"question": "妈祖信仰发源于哪里？"},
+    )
+    assert refused.status_code == 200
+    assert refused.json()["refused"] is True
+
+    approve = client.post("/api/review/doc-approve-me/approve")
+    assert approve.status_code == 200
+    assert approve.json()["审阅状态"] == "已通过"
+
+    pending_after_approve = client.get("/api/review/pending")
+    assert pending_after_approve.status_code == 200
+    pending_ids = {item["document_id"] for item in pending_after_approve.json()}
+    assert "doc-approve-me" not in pending_ids
+    assert "doc-reject-me" in pending_ids
+
+    answered = client.post(
+        "/ask",
+        json={"question": "妈祖信仰发源于哪里？"},
+    )
+    assert answered.status_code == 200
+    body = answered.json()
+    assert body["refused"] is False
+    assert body["citations"]
+    assert body["citations"][0]["document_id"] == "doc-approve-me"
+
+    reject = client.post("/api/review/doc-reject-me/reject")
+    assert reject.status_code == 200
+    assert reject.json()["status"] == "deleted"
+
+    pending_final = client.get("/api/review/pending")
+    assert pending_final.status_code == 200
+    assert pending_final.json() == []
+
+    browse = client.get("/api/browse")
+    assert browse.status_code == 200
+    all_doc_ids = {
+        doc["document_id"]
+        for group in browse.json()
+        for doc in group["documents"]
+    }
+    assert "doc-reject-me" not in all_doc_ids
+    assert "doc-approve-me" in all_doc_ids
 
