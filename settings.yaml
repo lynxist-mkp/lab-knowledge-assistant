@@ -38,6 +38,7 @@ retrieval:
   rerank_top: 5
   rerank_enabled: true     # false = RRF fusion only (rrf ablation)
   rerank_timeout_seconds: 30
+  adjacent_n: 1            # ±N same-document neighbors expanded at generation
 
 bm25:
   k1: 1.5

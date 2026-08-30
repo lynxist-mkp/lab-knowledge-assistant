@@ -167,6 +167,8 @@ class QueryStage:
         output_summary: str,
         candidate_count: int,
         error: str | None = None,
+        expanded_from: list[str] | None = None,
+        expanded_chunk_ids: list[str] | None = None,
     ) -> StageRecord:
         return StageRecord(
             name="generation",
@@ -177,4 +179,6 @@ class QueryStage:
             output_summary=output_summary,
             candidate_count=candidate_count,
             error=error,
+            expanded_from=expanded_from,
+            expanded_chunk_ids=expanded_chunk_ids,
         )

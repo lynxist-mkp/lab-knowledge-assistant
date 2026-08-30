@@ -30,6 +30,8 @@ class StageRecord:
     fallback_reason: str | None = None
     rank_changes: list[dict[str, Any]] | None = None
     culture_domain: str | None = None
+    expanded_from: list[str] | None = None
+    expanded_chunk_ids: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -58,6 +60,10 @@ class StageRecord:
             payload["rank_changes"] = self.rank_changes
         if self.culture_domain is not None:
             payload["culture_domain"] = self.culture_domain
+        if self.expanded_from is not None:
+            payload["expanded_from"] = self.expanded_from
+        if self.expanded_chunk_ids is not None:
+            payload["expanded_chunk_ids"] = self.expanded_chunk_ids
         return payload
 
 
@@ -91,6 +97,8 @@ class TraceContext:
         fallback_reason: str | None = None,
         rank_changes: list[dict[str, Any]] | None = None,
         culture_domain: str | None = None,
+        expanded_from: list[str] | None = None,
+        expanded_chunk_ids: list[str] | None = None,
     ) -> None:
         record = StageRecord(
             name=name,
@@ -108,6 +116,8 @@ class TraceContext:
             fallback_reason=fallback_reason,
             rank_changes=rank_changes,
             culture_domain=culture_domain,
+            expanded_from=expanded_from,
+            expanded_chunk_ids=expanded_chunk_ids,
         )
         self.stages.append(record)
         if self._on_stage is not None:

@@ -147,8 +147,10 @@ def ingest_source(
                 chunk_id=f"{document.document_id}:{index:04d}",
                 document_id=document.document_id,
                 text=text,
+<<<<<<< HEAD
                 metadata=stamp_review_status(
                     {
+                        "chunk_index": index,
                         "document_id": document.document_id,
                         "title": document.title,
                         "url": document.url,
