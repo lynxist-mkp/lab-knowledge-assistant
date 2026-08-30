@@ -101,6 +101,7 @@ class Providers:
     reranker_model: str
     splitter: str
     vector_store: str
+    evaluator: str = "ragas_collections"
     caption_model: str = ""
 
 
