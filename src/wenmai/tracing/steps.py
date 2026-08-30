@@ -22,6 +22,7 @@ QUERY_LABELS: dict[str, str] = {
 }
 
 INGESTION_LABELS: dict[str, str] = {
+    "quality_gate": "入库质量门",
     "load": "读取",
     "integrity": "跳过判定",
     "split": "切分",

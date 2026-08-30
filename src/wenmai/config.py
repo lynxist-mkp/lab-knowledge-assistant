@@ -133,6 +133,12 @@ class Dolphin:
 
 
 @dataclass
+class QualityGate:
+    reject_below: float = 0.60
+    approve_above: float = 0.80
+
+
+@dataclass
 class PdfLoad:
     mode: str
     chars_per_page_threshold: int
@@ -175,6 +181,7 @@ class Settings:
     evaluation: Evaluation
     dolphin: Dolphin
     pdf_load: PdfLoad
+    quality_gate: QualityGate
     paddleocr: PaddleOCR
     gemma: Gemma
     fakes: dict[str, str] = field(default_factory=dict)
@@ -195,6 +202,7 @@ class Settings:
             evaluation=_build_evaluation(raw),
             dolphin=_build(Dolphin, raw["dolphin"]),
             pdf_load=_build(PdfLoad, raw["pdf_load"]),
+            quality_gate=_build(QualityGate, raw.get("quality_gate") or {}),
             paddleocr=_build(PaddleOCR, raw["paddleocr"]),
             gemma=_build(Gemma, raw["gemma"]),
             fakes=dict(raw.get("fakes") or {}),
