@@ -11,8 +11,9 @@ from fastapi.testclient import TestClient
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.eval import get_eval_dashboard, list_eval_runs, run_eval
-from wenmai.generation import GenerationError
-from wenmai.pipelines.query import ask_question
+from wenmai.eval import pipeline as eval_pipeline
+from wenmai.generation import GenerationError, generate
+from wenmai.retrieval import retrieve
 from wenmai.tracing.store import read_trace_records
 
 
@@ -92,21 +93,20 @@ def test_eval_retries_failed_item_then_succeeds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _prepare_eval(test_settings, tmp_path)
-    real_ask = ask_question
+    real_generate = generate
     seen = {"n": 0}
 
-    def flaky(question: str, settings: Settings, **kwargs: object):
-        if "发源地" in question and kwargs.get("retrieval_mode") == "dense_only":
+    def flaky(question: str, scored_chunks: list[object], settings: Settings):
+        if "发源地" in question and seen["n"] == 0:
             seen["n"] += 1
-            if seen["n"] == 1:
-                raise RuntimeError("generation failed")
-        return real_ask(question, settings, **kwargs)
+            raise GenerationError("generation failed", provider_name="fake")
+        return real_generate(question, scored_chunks, settings)
 
-    monkeypatch.setattr("wenmai.eval.runner.ask_question", flaky)
+    monkeypatch.setattr("wenmai.eval.pipeline.generate", flaky)
 
     run = run_eval(test_settings)
 
-    assert seen["n"] == 2
+    assert seen["n"] == 1
     assert run.failed_count == 0
     assert list_eval_runs(test_settings)[0].failed_count == 0
 
@@ -117,16 +117,43 @@ def test_eval_keeps_failure_after_retries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _prepare_eval(test_settings, tmp_path)
-    real_ask = ask_question
+    real_eval_item = eval_pipeline.eval_item
+    real_generate = generate
     seen = {"n": 0}
+    current_mode: list[str] = []
 
-    def always_fail_dense(question: str, settings: Settings, **kwargs: object):
-        if "发源地" in question and kwargs.get("retrieval_mode") == "dense_only":
+    def tracking_eval_item(
+        item: object,
+        settings: Settings,
+        *,
+        retrieval_mode: str,
+        rerank_enabled: bool,
+        knowledge: object,
+        retrieved_chunks: list[object] | None = None,
+    ):
+        current_mode.clear()
+        current_mode.append(retrieval_mode)
+        return real_eval_item(
+            item,
+            settings,
+            retrieval_mode=retrieval_mode,
+            rerank_enabled=rerank_enabled,
+            knowledge=knowledge,
+            retrieved_chunks=retrieved_chunks,
+        )
+
+    def always_fail_dense(question: str, scored_chunks: list[object], settings: Settings):
+        if (
+            "发源地" in question
+            and current_mode
+            and current_mode[0] == "dense_only"
+        ):
             seen["n"] += 1
-            raise RuntimeError("generation failed")
-        return real_ask(question, settings, **kwargs)
+            raise GenerationError("generation failed", provider_name="fake")
+        return real_generate(question, scored_chunks, settings)
 
-    monkeypatch.setattr("wenmai.eval.runner.ask_question", always_fail_dense)
+    monkeypatch.setattr("wenmai.eval.runner.eval_item", tracking_eval_item)
+    monkeypatch.setattr("wenmai.eval.pipeline.generate", always_fail_dense)
 
     run = run_eval(test_settings)
 
@@ -199,7 +226,7 @@ def test_run_eval_hit_at_5_survives_generation_failure(
     def fail_generate(*_args: object, **_kwargs: object) -> object:
         raise GenerationError("fake provider failed", provider_name="fake")
 
-    monkeypatch.setattr("wenmai.pipelines.query.generate", fail_generate)
+    monkeypatch.setattr("wenmai.eval.pipeline.generate", fail_generate)
 
     run = run_eval(test_settings)
 
@@ -209,3 +236,78 @@ def test_run_eval_hit_at_5_survives_generation_failure(
     metrics = artifact["groups"]["rrf_rerank"]["metrics"]
     assert metrics["hit_at_5"] == 1.0
     assert metrics["mrr"] == 1.0
+
+
+def test_eval_single_retrieve_per_item(
+    test_settings: Settings,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _prepare_eval(test_settings, tmp_path)
+    real_retrieve = retrieve
+    real_eval_item = eval_pipeline.eval_item
+    real_generate = generate
+    retrieve_calls: dict[tuple[str, str], int] = {}
+    generate_calls: dict[tuple[str, str], int] = {}
+    current_mode: list[str] = []
+
+    def counting_eval_item(
+        item: object,
+        settings: Settings,
+        *,
+        retrieval_mode: str,
+        rerank_enabled: bool,
+        knowledge: object,
+        retrieved_chunks: list[object] | None = None,
+    ):
+        current_mode.clear()
+        current_mode.append(retrieval_mode)
+        return real_eval_item(
+            item,
+            settings,
+            retrieval_mode=retrieval_mode,
+            rerank_enabled=rerank_enabled,
+            knowledge=knowledge,
+            retrieved_chunks=retrieved_chunks,
+        )
+
+    def counting_retrieve(
+        question: str,
+        settings: Settings,
+        *,
+        retrieval_mode: str | None = None,
+        rerank_enabled: bool | None = None,
+        **kwargs: object,
+    ):
+        key = (question, str(retrieval_mode))
+        retrieve_calls[key] = retrieve_calls.get(key, 0) + 1
+        return real_retrieve(
+            question,
+            settings,
+            retrieval_mode=retrieval_mode,
+            rerank_enabled=rerank_enabled,
+            **kwargs,
+        )
+
+    def flaky_generate(question: str, scored_chunks: list[object], settings: Settings):
+        mode = current_mode[0] if current_mode else ""
+        key = (question, mode)
+        generate_calls[key] = generate_calls.get(key, 0) + 1
+        if (
+            "发源地" in question
+            and mode == "dense_only"
+            and generate_calls[key] == 1
+        ):
+            raise GenerationError("generation failed", provider_name="fake")
+        return real_generate(question, scored_chunks, settings)
+
+    monkeypatch.setattr("wenmai.eval.runner.eval_item", counting_eval_item)
+    monkeypatch.setattr("wenmai.eval.pipeline.retrieve", counting_retrieve)
+    monkeypatch.setattr("wenmai.eval.pipeline.generate", flaky_generate)
+
+    run = run_eval(test_settings)
+
+    assert run.failed_count == 0
+    dense_key = ("妈祖信仰的发源地在哪里？", "dense_only")
+    assert retrieve_calls[dense_key] == 1
+    assert generate_calls[dense_key] == 2

@@ -16,11 +16,11 @@ from wenmai.eval.metrics import (
     refusal_accuracy,
     retrieval_item_snapshot,
 )
+from wenmai.eval.pipeline import eval_item
 from wenmai.eval.views import EvalRunView, FailedEvalItem, parse_eval_run
+from wenmai.generation import GenerationResult
 from wenmai.knowledge import Knowledge, create_knowledge
-from wenmai.models import AskResult, ScoredChunk
-from wenmai.pipelines.query import ask_question, normalize_question
-from wenmai.retrieval import retrieve
+from wenmai.models import ScoredChunk
 
 FAILURE_RETRIES = 3
 
@@ -32,58 +32,10 @@ def _runs_dir(settings: Settings) -> Path:
     return path
 
 
-def _ablation_kwargs(group: str) -> dict[str, str | bool]:
-    spec = resolve_ablation(group)
-    return {
-        "retrieval_mode": spec.mode,
-        "rerank_enabled": spec.rerank_enabled,
-    }
-
-
-def _retrieve_item(
-    item: GoldItem,
-    settings: Settings,
-    group: str,
-    knowledge: Knowledge,
-) -> list[ScoredChunk] | None:
-    kwargs = _ablation_kwargs(group)
-    try:
-        result = retrieve(
-            normalize_question(item.question),
-            settings,
-            retrieval_mode=str(kwargs["retrieval_mode"]),
-            rerank_enabled=bool(kwargs["rerank_enabled"]),
-            knowledge=knowledge,
-        )
-        return result.chunks
-    except Exception:
-        return None
-
-
-def _ask_item(
-    item: GoldItem,
-    settings: Settings,
-    group: str,
-    knowledge: Knowledge,
-) -> AskResult | None:
-    kwargs = _ablation_kwargs(group)
-    try:
-        return ask_question(
-            item.question,
-            settings,
-            retrieval_mode=str(kwargs["retrieval_mode"]),
-            rerank_enabled=bool(kwargs["rerank_enabled"]),
-            knowledge=knowledge,
-            record_trace=False,
-        )
-    except Exception:
-        return None
-
-
 def _metrics_payload(
     items: list[GoldItem],
     ranked_by_id: dict[str, list[str]],
-    generation_by_id: dict[str, AskResult],
+    generation_by_id: dict[str, GenerationResult],
 ) -> dict[str, Any]:
     hit_items: list[GoldItem] = []
     ranked_per_item: list[list[str]] = []
@@ -118,7 +70,7 @@ def _metrics_payload(
 def _item_snapshots(
     items: list[GoldItem],
     ranked_chunks_by_id: dict[str, list[ScoredChunk]],
-    generation_by_id: dict[str, AskResult],
+    generation_by_id: dict[str, GenerationResult],
 ) -> dict[str, dict[str, Any]]:
     snapshots: dict[str, dict[str, Any]] = {}
     for item in items:
@@ -134,6 +86,25 @@ def _item_snapshots(
     return snapshots
 
 
+def _run_eval_item(
+    item: GoldItem,
+    settings: Settings,
+    group: str,
+    knowledge: Knowledge,
+    existing_chunks: list[ScoredChunk] | None,
+) -> tuple[list[ScoredChunk] | None, GenerationResult | None]:
+    spec = resolve_ablation(group)
+    outcome = eval_item(
+        item,
+        settings,
+        retrieval_mode=spec.mode,
+        rerank_enabled=spec.rerank_enabled,
+        knowledge=knowledge,
+        retrieved_chunks=existing_chunks,
+    )
+    return outcome.chunks, outcome.generation
+
+
 def run_eval(
     settings: Settings,
     *,
@@ -143,7 +114,7 @@ def run_eval(
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     groups = list(settings.evaluation.ablations)
     ranked_chunks: dict[str, dict[str, list[ScoredChunk]]] = {name: {} for name in groups}
-    generation_results: dict[str, dict[str, AskResult]] = {name: {} for name in groups}
+    generation_results: dict[str, dict[str, GenerationResult]] = {name: {} for name in groups}
     resolved_knowledge = knowledge or create_knowledge(settings)
 
     pending: list[tuple[str, GoldItem]] = [
@@ -151,8 +122,7 @@ def run_eval(
     ]
     still: list[tuple[str, GoldItem]] = []
     for group, item in pending:
-        chunks = _retrieve_item(item, settings, group, resolved_knowledge)
-        result = _ask_item(item, settings, group, resolved_knowledge)
+        chunks, result = _run_eval_item(item, settings, group, resolved_knowledge, None)
         if chunks is not None:
             ranked_chunks[group][item.id] = chunks
         if result is not None:
@@ -165,16 +135,14 @@ def run_eval(
             break
         nxt: list[tuple[str, GoldItem]] = []
         for group, item in still:
-            chunks = ranked_chunks[group].get(item.id)
-            if chunks is None:
-                chunks = _retrieve_item(item, settings, group, resolved_knowledge)
-                if chunks is not None:
-                    ranked_chunks[group][item.id] = chunks
-            result = generation_results[group].get(item.id)
-            if result is None:
-                result = _ask_item(item, settings, group, resolved_knowledge)
-                if result is not None:
-                    generation_results[group][item.id] = result
+            existing = ranked_chunks[group].get(item.id)
+            chunks, result = _run_eval_item(
+                item, settings, group, resolved_knowledge, existing
+            )
+            if chunks is not None:
+                ranked_chunks[group][item.id] = chunks
+            if result is not None:
+                generation_results[group][item.id] = result
             if chunks is None or result is None:
                 nxt.append((group, item))
         still = nxt
