@@ -12,6 +12,8 @@ from wenmai.config import Settings
 from wenmai.eval import run_eval
 from wenmai.eval.corpus_ingest import ingest_corpus_manifest, load_corpus_manifest
 from wenmai.eval.phase_b import (
+    DEFAULT_BAD_CASES_PATH,
+    _resolve_bad_cases_path,
     append_bad_case_stubs,
     find_hit_at_5_misses,
     format_metrics_summary,
@@ -128,7 +130,7 @@ def test_ingest_corpus_manifest_exit_semantics_all_failed(
     def boom(*_args: object, **_kwargs: object) -> object:
         raise RuntimeError("ingest failed")
 
-    monkeypatch.setattr("wenmai.eval.corpus_ingest.ingest_source", boom)
+    monkeypatch.setattr("wenmai.eval.corpus_ingest.prepare_ingest_source", boom)
 
     result = ingest_corpus_manifest(test_settings, manifest, items_dir)
 
@@ -335,3 +337,10 @@ def test_run_phase_b_batch_skip_ingest(
     assert summary["phase"] == "B"
     assert "rewrite_compare" in summary["artifacts"]
     assert summary["ragas"]["status"] == "unavailable"
+
+
+def test_default_bad_cases_path_is_workspace_scratch(test_settings: Settings) -> None:
+    resolved = _resolve_bad_cases_path(test_settings, DEFAULT_BAD_CASES_PATH)
+    assert resolved == test_settings.root.parent / DEFAULT_BAD_CASES_PATH
+    custom = Path("notes/bad.md")
+    assert _resolve_bad_cases_path(test_settings, custom) == test_settings.root / custom

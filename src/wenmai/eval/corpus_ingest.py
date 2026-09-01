@@ -7,8 +7,15 @@ from typing import Any
 
 import yaml
 
+from wenmai.components.model_guard import ModelResource, begin_batch, end_batch
 from wenmai.config import Settings
-from wenmai.pipelines.ingestion import ingest_source
+from wenmai.knowledge import create_knowledge
+from wenmai.models import IngestResult
+from wenmai.pipelines.ingestion import (
+    PreparedIngest,
+    commit_prepared_ingest,
+    prepare_ingest_source,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +55,45 @@ def item_source_path(items_dir: Path, item_id: str) -> Path:
     return items_dir / f"{item_id}.md"
 
 
+def _record_terminal_result(
+    result: IngestResult,
+    *,
+    index: int,
+    total: int,
+    item_id: str,
+    ingested: int,
+    skipped: int,
+    failed: int,
+    errors: list[str],
+) -> tuple[int, int, int]:
+    if result.status == "skipped":
+        skipped += 1
+        logger.info(
+            "[%s/%s] SKIP %s: 未变更 (document_id=%s)",
+            index,
+            total,
+            item_id,
+            result.document_id[:12],
+        )
+    elif result.status == "rejected":
+        failed += 1
+        message = f"{item_id}: quality gate rejected"
+        errors.append(message)
+        logger.error("[%s/%s] REJECT %s", index, total, item_id)
+    else:
+        ingested += 1
+        logger.info(
+            "[%s/%s] OK %s: status=%s chunks=%s trace=%s",
+            index,
+            total,
+            item_id,
+            result.status,
+            result.chunk_count,
+            result.trace_id,
+        )
+    return ingested, skipped, failed
+
+
 def ingest_corpus_manifest(
     settings: Settings,
     manifest_path: Path,
@@ -55,10 +101,136 @@ def ingest_corpus_manifest(
     *,
     dry_run: bool = False,
     limit: int | None = None,
+    batched: bool = True,
 ) -> IngestManifestResult:
     """Ingest corpus items listed in manifest.yaml from items_dir/{id}.md."""
     items = load_corpus_manifest(manifest_path)
     selected = items if limit is None else items[:limit]
+
+    if batched and not dry_run:
+        return _ingest_corpus_manifest_batched(settings, selected, items_dir)
+
+    return _ingest_corpus_manifest_sequential(
+        settings, selected, items_dir, dry_run=dry_run
+    )
+
+
+def _ingest_corpus_manifest_batched(
+    settings: Settings,
+    selected: list[dict[str, Any]],
+    items_dir: Path,
+) -> IngestManifestResult:
+    knowledge = create_knowledge(settings)
+    attempted = 0
+    ingested = 0
+    skipped = 0
+    missing = 0
+    failed = 0
+    errors: list[str] = []
+    prepared_items: list[tuple[int, str, PreparedIngest]] = []
+
+    begin_batch(ModelResource.MLX_VLM)
+    try:
+        for index, item in enumerate(selected, start=1):
+            item_id = str(item.get("id") or "")
+            if not item_id:
+                logger.warning("[%s/%s] SKIP: manifest item missing id", index, len(selected))
+                continue
+
+            source_path = item_source_path(items_dir, item_id)
+            if not source_path.is_file():
+                logger.info(
+                    "[%s/%s] SKIP %s: 文件不存在 %s",
+                    index,
+                    len(selected),
+                    item_id,
+                    source_path,
+                )
+                missing += 1
+                continue
+
+            attempted += 1
+            try:
+                outcome = prepare_ingest_source(
+                    source_path, settings, knowledge=knowledge
+                )
+            except Exception as exc:  # noqa: BLE001 - batch ingest logs and continues
+                failed += 1
+                message = f"{item_id}: {exc}"
+                errors.append(message)
+                logger.error("[%s/%s] FAIL %s", index, len(selected), message)
+                continue
+
+            if isinstance(outcome, IngestResult):
+                ingested, skipped, failed = _record_terminal_result(
+                    outcome,
+                    index=index,
+                    total=len(selected),
+                    item_id=item_id,
+                    ingested=ingested,
+                    skipped=skipped,
+                    failed=failed,
+                    errors=errors,
+                )
+                continue
+
+            prepared_items.append((index, item_id, outcome))
+            logger.info(
+                "[%s/%s] PREPARED %s: %s chunks",
+                index,
+                len(selected),
+                item_id,
+                len(outcome.chunks),
+            )
+    finally:
+        end_batch()
+
+    begin_batch(ModelResource.BGE_M3)
+    try:
+        for index, item_id, prepared in prepared_items:
+            try:
+                result = commit_prepared_ingest(
+                    prepared, settings, knowledge=knowledge
+                )
+            except Exception as exc:  # noqa: BLE001 - batch ingest logs and continues
+                failed += 1
+                message = f"{item_id}: {exc}"
+                errors.append(message)
+                logger.error("[%s/%s] FAIL %s", index, len(selected), message)
+                continue
+
+            ingested, skipped, failed = _record_terminal_result(
+                result,
+                index=index,
+                total=len(selected),
+                item_id=item_id,
+                ingested=ingested,
+                skipped=skipped,
+                failed=failed,
+                errors=errors,
+            )
+    finally:
+        end_batch()
+
+    return IngestManifestResult(
+        total=len(selected),
+        attempted=attempted,
+        ingested=ingested,
+        skipped=skipped,
+        missing=missing,
+        failed=failed,
+        errors=errors,
+    )
+
+
+def _ingest_corpus_manifest_sequential(
+    settings: Settings,
+    selected: list[dict[str, Any]],
+    items_dir: Path,
+    *,
+    dry_run: bool,
+) -> IngestManifestResult:
+    from wenmai.pipelines.ingestion import ingest_source
 
     attempted = 0
     ingested = 0
@@ -105,31 +277,16 @@ def ingest_corpus_manifest(
             logger.error("[%s/%s] FAIL %s", index, len(selected), message)
             continue
 
-        if result.status == "skipped":
-            skipped += 1
-            logger.info(
-                "[%s/%s] SKIP %s: 未变更 (document_id=%s)",
-                index,
-                len(selected),
-                item_id,
-                result.document_id[:12],
-            )
-        elif result.status == "rejected":
-            failed += 1
-            message = f"{item_id}: quality gate rejected"
-            errors.append(message)
-            logger.error("[%s/%s] REJECT %s", index, len(selected), item_id)
-        else:
-            ingested += 1
-            logger.info(
-                "[%s/%s] OK %s: status=%s chunks=%s trace=%s",
-                index,
-                len(selected),
-                item_id,
-                result.status,
-                result.chunk_count,
-                result.trace_id,
-            )
+        ingested, skipped, failed = _record_terminal_result(
+            result,
+            index=index,
+            total=len(selected),
+            item_id=item_id,
+            ingested=ingested,
+            skipped=skipped,
+            failed=failed,
+            errors=errors,
+        )
 
     return IngestManifestResult(
         total=len(selected),

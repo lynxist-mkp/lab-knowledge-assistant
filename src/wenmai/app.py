@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
@@ -11,6 +12,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
+from wenmai.components.model_guard import in_batch, release_all_resources
 from wenmai.config import Settings
 from wenmai.eval import list_eval_runs, run_eval
 from wenmai.knowledge.document_card import DocumentNotFoundError, build_document_card
@@ -54,13 +56,73 @@ def _templates_dir(settings: Settings) -> Path:
     return templates
 
 
+_idle_lock = threading.RLock()
+_in_flight = 0
+_idle_timer: threading.Timer | None = None
+
+
+def _cancel_idle_timer() -> None:
+    global _idle_timer
+    if _idle_timer is not None:
+        _idle_timer.cancel()
+        _idle_timer = None
+
+
+def _on_idle_timer_fire() -> None:
+    global _idle_timer
+    with _idle_lock:
+        _idle_timer = None
+        if _in_flight > 0:
+            return
+    if in_batch():
+        return
+    release_all_resources()
+
+
+def _schedule_idle_timer(timeout_seconds: float) -> None:
+    global _idle_timer
+    with _idle_lock:
+        _cancel_idle_timer()
+        _idle_timer = threading.Timer(timeout_seconds, _on_idle_timer_fire)
+        _idle_timer.daemon = True
+        _idle_timer.start()
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    yield
+    with _idle_lock:
+        _cancel_idle_timer()
+    release_all_resources()
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     runtime = create_runtime(settings)
     resolved = runtime.settings
-    app = FastAPI(title=resolved.product.name)
+    app = FastAPI(title=resolved.product.name, lifespan=_lifespan)
     app.state.settings = resolved
     app.state.knowledge = runtime.knowledge
     templates = Jinja2Templates(directory=str(_templates_dir(resolved)))
+
+    if resolved.resources.process_idle_unload:
+
+        @app.middleware("http")
+        async def process_idle_unload_middleware(
+            request: Request, call_next
+        ):  # type: ignore[no-untyped-def]
+            global _in_flight
+            with _idle_lock:
+                _cancel_idle_timer()
+                _in_flight += 1
+            try:
+                return await call_next(request)
+            finally:
+                with _idle_lock:
+                    _in_flight -= 1
+                    if _in_flight == 0:
+                        _schedule_idle_timer(
+                            resolved.resources.process_idle_timeout_seconds
+                        )
 
     @app.post("/ingest")
     def ingest(request: IngestRequest) -> dict[str, object]:

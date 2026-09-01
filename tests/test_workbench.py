@@ -131,6 +131,8 @@ def test_workbench_ask_flow_uses_ask_endpoint(test_settings: Settings) -> None:
     html = _workbench_html(client)
 
     assert "fetch('/ask'" in html or "fetch(\"/ask\"" in html
+    assert "ASK_TIMEOUT_MS" in html
+    assert "AbortController" in html
     assert "ask-form" in html
     assert "拒答" in html or "已拒答" in html or "refused" in html
 

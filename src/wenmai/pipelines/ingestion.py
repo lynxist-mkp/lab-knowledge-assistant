@@ -3,8 +3,10 @@ from __future__ import annotations
 import hashlib
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
+from wenmai.components.model_guard import ModelResource, begin_batch, end_batch
 from wenmai.config import Settings
 from wenmai.factories import splitter as splitter_factory
 from wenmai.ingestion.gray_review import run_gray_review
@@ -17,6 +19,19 @@ from wenmai.models import Chunk, IngestResult
 from wenmai.storage.document_images import IMAGE_PLACEHOLDER_RE
 from wenmai.tracing import StageRecord, TraceContext, save_trace
 from wenmai.tracing.stages.ingestion import IngestionStage
+
+
+@dataclass
+class PreparedIngest:
+    trace: TraceContext
+    source_path: Path
+    document_id: str
+    document_title: str
+    document_source_path: str
+    status: str
+    gray_review: bool
+    chunks: list[Chunk]
+    previous_document_id: str | None
 
 
 def _chunks_with_images(chunks: list[Chunk]) -> int:
@@ -48,6 +63,7 @@ def _set_trace_summary(
 def _finish_rejected_ingest(
     trace: TraceContext,
     source_path: Path,
+    settings: Settings,
     *,
     document_source_path: str,
 ) -> IngestResult:
@@ -62,6 +78,7 @@ def _finish_rejected_ingest(
         chunks_with_images=0,
     )
     trace.close()
+    save_trace(settings, trace)
     return IngestResult(
         document_id=document_id,
         chunk_count=0,
@@ -71,23 +88,52 @@ def _finish_rejected_ingest(
     )
 
 
-def ingest_source(
+def _chunk_metadata(
+    *,
+    document: LoadedDocument,
+    index: int,
+    gray_review: bool,
+) -> dict[str, object]:
+    metadata: dict[str, object] = {
+        "chunk_index": index,
+        "document_id": document.document_id,
+        "title": document.title,
+        "url": document.url,
+        "page": document.page,
+        "source_path": document.source_path,
+        **{
+            key: value
+            for key, value in document.extra.items()
+            if isinstance(value, (str, int, float, bool))
+        },
+    }
+    if gray_review:
+        metadata[REVIEW_STATUS_FIELD] = REVIEW_PENDING
+    else:
+        stamp_review_status(metadata)
+    return metadata
+
+
+def prepare_ingest_source(
     source_path: Path,
     settings: Settings,
     *,
     pdf_load_mode: str | None = None,
     on_stage: Callable[[StageRecord], None] | None = None,
     knowledge: Knowledge | None = None,
-) -> IngestResult:
+) -> PreparedIngest | IngestResult:
+    """Phase-1 ingest: quality gate through transform; no embed/upsert."""
     trace = TraceContext(trace_type="ingestion")
     trace._on_stage = on_stage
     knowledge = knowledge or create_knowledge(settings)
-    chunks: list[Chunk] = []
-    status = "ingested"
+    gray_review = False
     document_id = ""
     document_title = ""
     document_source_path = str(source_path)
-    gray_review = False
+    status = "ingested"
+    previous_document_id: str | None = None
+    chunks: list[Chunk] = []
+
     try:
         with trace.stage(
             "quality_gate",
@@ -107,17 +153,22 @@ def ingest_source(
             if source_peek.defer_reject and gate_result.band == "gray":
                 gate_info["output_summary"] += " defer=scanned_pdf"
             gate_info["candidate_count"] = 1
-            if gate_result.band == "reject":
+            rejected = gate_result.band == "reject"
+            if rejected:
                 gate_info["error"] = (
                     f"effective_char_ratio {gate_result.ratio:.2f} "
                     f"below {settings.quality_gate.reject_below:.2f}"
                 )
-                return _finish_rejected_ingest(
-                    trace,
-                    source_path,
-                    document_source_path=document_source_path,
-                )
-            gray_review = gate_result.band == "gray"
+            else:
+                gray_review = gate_result.band == "gray"
+
+        if rejected:
+            return _finish_rejected_ingest(
+                trace,
+                source_path,
+                settings,
+                document_source_path=document_source_path,
+            )
 
         if gray_review and settings.quality_gate.gray_review:
             review_started = time.perf_counter()
@@ -136,6 +187,7 @@ def ingest_source(
                 return _finish_rejected_ingest(
                     trace,
                     source_path,
+                    settings,
                     document_source_path=document_source_path,
                 )
             gray_review = outcome.pending
@@ -181,7 +233,9 @@ def ingest_source(
                 document_id=document.document_id,
             )
             status = prepared.status
-            if status == "skipped":
+            previous_document_id = prepared.previous_document_id
+            skipped = status == "skipped"
+            if skipped:
                 integrity_info["output_summary"] = "skipped: unchanged sha256"
                 integrity_info["candidate_count"] = 0
             elif status == "rebuilt":
@@ -194,7 +248,7 @@ def ingest_source(
                 integrity_info["output_summary"] = "new file"
                 integrity_info["candidate_count"] = 1
 
-        if status == "skipped":
+        if skipped:
             _set_trace_summary(
                 trace,
                 source_path=document_source_path,
@@ -205,6 +259,7 @@ def ingest_source(
                 chunks_with_images=0,
             )
             trace.close()
+            save_trace(settings, trace)
             return IngestResult(
                 document_id=document_id,
                 chunk_count=0,
@@ -240,22 +295,49 @@ def ingest_source(
 
         chunks = prepare_chunks(chunks, settings, trace)
 
+        return PreparedIngest(
+            trace=trace,
+            source_path=source_path,
+            document_id=document_id,
+            document_title=document_title,
+            document_source_path=document_source_path,
+            status=status,
+            gray_review=gray_review,
+            chunks=chunks,
+            previous_document_id=previous_document_id,
+        )
+    except Exception:
+        save_trace(settings, trace)
+        raise
+
+
+def commit_prepared_ingest(
+    prepared: PreparedIngest,
+    settings: Settings,
+    *,
+    knowledge: Knowledge | None = None,
+) -> IngestResult:
+    """Phase-2 ingest: embed + upsert for a prepared document."""
+    knowledge = knowledge or create_knowledge(settings)
+    trace = prepared.trace
+
+    try:
         _set_trace_summary(
             trace,
-            source_path=document_source_path,
-            document_id=document_id,
-            title=document_title,
-            status=status,
-            chunk_count=len(chunks),
-            chunks_with_images=_chunks_with_images(chunks),
+            source_path=prepared.document_source_path,
+            document_id=prepared.document_id,
+            title=prepared.document_title,
+            status=prepared.status,
+            chunk_count=len(prepared.chunks),
+            chunks_with_images=_chunks_with_images(prepared.chunks),
         )
 
         upserted = knowledge.commit_document(
-            source_path=document.source_path,
-            sha256=document.document_id,
-            document_id=document.document_id,
-            status=status,
-            chunks=chunks,
+            source_path=prepared.document_source_path,
+            sha256=prepared.document_id,
+            document_id=prepared.document_id,
+            status=prepared.status,
+            chunks=prepared.chunks,
             previous_document_id=prepared.previous_document_id,
         )
         trace.append_stage(
@@ -273,39 +355,61 @@ def ingest_source(
                 chunk_count=upserted.chunk_count,
             )
         )
+        trace.close()
     finally:
         save_trace(settings, trace)
 
     return IngestResult(
-        document_id=document.document_id,
-        chunk_count=len(chunks),
+        document_id=prepared.document_id,
+        chunk_count=len(prepared.chunks),
         elapsed_ms=trace.total_elapsed_ms,
         trace_id=trace.trace_id,
-        status=status,
+        status=prepared.status,
     )
 
 
-def _chunk_metadata(
+def ingest_source(
+    source_path: Path,
+    settings: Settings,
     *,
-    document: LoadedDocument,
-    index: int,
-    gray_review: bool,
-) -> dict[str, object]:
-    metadata: dict[str, object] = {
-        "chunk_index": index,
-        "document_id": document.document_id,
-        "title": document.title,
-        "url": document.url,
-        "page": document.page,
-        "source_path": document.source_path,
-        **{
-            key: value
-            for key, value in document.extra.items()
-            if isinstance(value, (str, int, float, bool))
-        },
-    }
-    if gray_review:
-        metadata[REVIEW_STATUS_FIELD] = REVIEW_PENDING
-    else:
-        stamp_review_status(metadata)
-    return metadata
+    pdf_load_mode: str | None = None,
+    on_stage: Callable[[StageRecord], None] | None = None,
+    knowledge: Knowledge | None = None,
+) -> IngestResult:
+    """Single-document ingest: Phase-1 (VLM/transform) then Phase-2 (embed)."""
+    from wenmai.pipelines.ingest_batch import (
+        get_ingest_coordinator,
+        ingest_window_batch_enabled,
+    )
+
+    if ingest_window_batch_enabled(settings):
+        return get_ingest_coordinator(settings).submit(
+            source_path,
+            settings,
+            pdf_load_mode=pdf_load_mode,
+            on_stage=on_stage,
+            knowledge=knowledge,
+        )
+
+    knowledge = knowledge or create_knowledge(settings)
+
+    begin_batch(ModelResource.MLX_VLM)
+    try:
+        prepared = prepare_ingest_source(
+            source_path,
+            settings,
+            pdf_load_mode=pdf_load_mode,
+            on_stage=on_stage,
+            knowledge=knowledge,
+        )
+    finally:
+        end_batch()
+
+    if isinstance(prepared, IngestResult):
+        return prepared
+
+    begin_batch(ModelResource.BGE_M3)
+    try:
+        return commit_prepared_ingest(prepared, settings, knowledge=knowledge)
+    finally:
+        end_batch()

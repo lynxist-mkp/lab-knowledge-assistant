@@ -7,10 +7,12 @@
 ## 本周范围
 
 - 文本 + 图转文 + 本地 `bge-m3` Dense + jieba BM25 + **RRF（已默认）** + Cross-Encoder 精排 + 文化域过滤（#16、#19 ✅）
+- 入库质量门（60/80 三档）+ 灰区复判 + 审阅状态 / 待审（#34–37 ✅）；生成前相邻块扩展（#38 ✅）
 - 生成：本地 Gemma MLX（`mlx_vlm.server` :8120），回答带引用，无依据则拒答
-- 服务与监测：FastAPI + Jinja2；**编辑工作台**（`/`）与**运维看板**（`/ops`）双面骨架已挂上（内容库族蓝白 token）；旧六页根路径 HTML 已废除。提问主路径与运维子页按 #4–#7 续做。
-- 评测：黄金集 50 条（#25 ✅）；Hit@5/MRR + 四组消融（#26 ✅，`scripts/run_eval_ablation.py`）；Ragas collections（#27 ✅，缺钥降级）
-- 音频（Dolphin 转写）放在文本、图、监测、评测都完成之后（#31）
+- 提问处理：术语归一 + Multi-Query（#42、#43 ✅；失败回退原问）
+- 服务与监测：FastAPI + Jinja2；**编辑工作台**（`/`）与**运维看板**（`/ops`，含待审与 P50/P95）；MCP `ask_wenmai` + `get_document_summary`
+- 评测：黄金集 100 条（#41 ✅）；Hit@5/MRR + 四组消融 + 改写对照（`scripts/run_eval_ablation.py` / `scripts/run_phase_b_batch.py`）；Ragas collections（缺钥降级）
+- 演示音频端到端（#31）无限期搁置；Dolphin 适配器（#30）保留
 
 **进度快照**见 `.scratch/fuyun-wenmai/map.md` 的 Checkpoint 段。
 
@@ -40,6 +42,7 @@ uv pip install -e ".[dev]"
 uv run pytest
 
 uv run uvicorn wenmai.app:app --factory --host 127.0.0.1 --port 8000
+./scripts/stop_server.sh
 ```
 
 ```bash
@@ -49,3 +52,11 @@ curl -X POST http://127.0.0.1:8000/ingest \
 ```
 
 成功时返回 `document_id`、`chunk_count`、`elapsed_ms`、`trace_id`。Trace 追加写入 `logs/traces.jsonl`。
+
+Phase B 本机跑批（真实模型，一次只跑一条重链路）：
+
+```bash
+PYTHONPATH=src python scripts/ingest_corpus_manifest.py
+PYTHONPATH=src python scripts/run_phase_b_batch.py
+# 已入库：--skip-ingest
+```

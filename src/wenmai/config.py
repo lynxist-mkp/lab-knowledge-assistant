@@ -184,6 +184,18 @@ class Gemma:
 
 
 @dataclass
+class Resources:
+    single_model_exclusive: bool = True
+    query_phase_batch: bool = True
+    query_window_batch: bool = False
+    ingest_window_batch: bool = True
+    batch_window_seconds: float = 3.0
+    batch_window_max_size: int = 4
+    process_idle_timeout_seconds: float = 60.0
+    process_idle_unload: bool = True
+
+
+@dataclass
 class Settings:
     product: Product
     paths: Paths
@@ -201,6 +213,7 @@ class Settings:
     quality_gate: QualityGate
     paddleocr: PaddleOCR
     gemma: Gemma
+    resources: Resources = field(default_factory=Resources)
     fakes: dict[str, str] = field(default_factory=dict)
     root: Path = field(default_factory=lambda: Path("."))
 
@@ -225,6 +238,7 @@ class Settings:
             quality_gate=_build(QualityGate, raw.get("quality_gate") or {}),
             paddleocr=_build(PaddleOCR, raw["paddleocr"]),
             gemma=_build(Gemma, raw["gemma"]),
+            resources=_build(Resources, raw.get("resources") or {}),
             fakes=dict(raw.get("fakes") or {}),
             root=Path(root) if root is not None else Path("."),
         )

@@ -1,3 +1,11 @@
-from wenmai.pipelines.ingestion import ingest_source
+from wenmai.pipelines.ingestion import (
+    commit_prepared_ingest,
+    ingest_source,
+    prepare_ingest_source,
+)
 
-__all__ = ["ingest_source"]
+__all__ = [
+    "commit_prepared_ingest",
+    "ingest_source",
+    "prepare_ingest_source",
+]

@@ -43,6 +43,14 @@ def _resolve_repo_path(settings: Settings, path: Path) -> Path:
     return path if path.is_absolute() else settings.root / path
 
 
+def _resolve_bad_cases_path(settings: Settings, path: Path) -> Path:
+    if path.is_absolute():
+        return path
+    if path.as_posix() == DEFAULT_BAD_CASES_PATH.as_posix():
+        return settings.root.parent / path
+    return settings.root / path
+
+
 def find_hit_at_5_misses(
     artifact: dict[str, Any],
     items: list[GoldItem],
@@ -220,7 +228,7 @@ def run_phase_b_batch(
 ) -> PhaseBRunResult:
     resolved_manifest = _resolve_repo_path(settings, manifest_path)
     resolved_items = _resolve_repo_path(settings, items_dir)
-    resolved_bad_cases = _resolve_repo_path(settings, bad_cases_path)
+    resolved_bad_cases = _resolve_bad_cases_path(settings, bad_cases_path)
 
     ingest_result: IngestManifestResult | None = None
     if not skip_ingest:

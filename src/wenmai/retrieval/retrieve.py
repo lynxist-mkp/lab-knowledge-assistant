@@ -45,7 +45,7 @@ def retrieve(
     stages = _stages_from_fusion(knowledge, settings, fusion_result, culture_domain)
 
     if do_rerank:
-        chunks, rerank_stage = _rerank_chunks(settings, question, chunks)
+        chunks, rerank_stage = rerank_chunks(settings, question, chunks)
         if rerank_stage is not None:
             stages = [*stages, rerank_stage]
     return RetrievalResult(
@@ -190,7 +190,7 @@ def _apply_rerank_rankings(
     return reranked
 
 
-def _rerank_chunks(
+def rerank_chunks(
     settings: Settings,
     query: str,
     fused_chunks: list[ScoredChunk],
@@ -235,3 +235,14 @@ def _rerank_chunks(
             rerank_top=rerank_top,
             reason=reason,
         )
+
+
+def resolve_retrieval_mode(
+    settings: Settings,
+    retrieval_mode: str | None,
+    rerank_enabled: bool | None,
+) -> tuple[str, bool]:
+    return _resolve_retrieval(settings, retrieval_mode, rerank_enabled)
+
+
+__all__ = ["rerank_chunks", "resolve_retrieval_mode", "retrieve"]

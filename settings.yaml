@@ -106,10 +106,12 @@ quality_gate:
 paddleocr:
   python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.venvs/paddleocr-env/bin/python"
   script: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/scripts/paddleocr_parse_pdf.py"
-  mlx_python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.venvs/paddleocr-env/bin/python"
+  # mlx stack 与 Gemma 共用 minicpm-probe venv（paddleocr-env 的 mlx_vlm 已损坏）
+  mlx_python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.scratch/minicpm-probe/.venv/bin/python3.12"
   # ModelScope repo ids — runtime downloads via scripts/resolve_modelscope_model.py (not HuggingFace).
-  mlx_model: "mlx-community/PaddleOCR-VL-1.6-5bit"
-  mlx_fallback_model: "PaddlePaddle/PaddleOCR-VL-1.6"
+  # 已缓存则直接用本地目录（避免 minicpm-probe venv 缺 modelscope）
+  mlx_model: "/Users/linkslinks/.cache/modelscope/models/mlx-community--PaddleOCR-VL-1.6-5bit/snapshots/master"
+  mlx_fallback_model: "/Users/linkslinks/.cache/modelscope/models/PaddlePaddle--PaddleOCR-VL-1.6/snapshots/master"
   server_port: 8111
   server_url: "http://127.0.0.1:8111/"
   vl_rec_api_model_name: "mlx-community/PaddleOCR-VL-1.6-5bit"
@@ -124,3 +126,13 @@ gemma:
   server_port: 8120
   server_url: "http://127.0.0.1:8120/"
   idle_timeout_seconds: 60
+
+resources:
+  single_model_exclusive: true  # 同一时刻只驻留一个大权重（Gemma / PaddleOCR / bge-m3 / reranker 互斥）
+  query_phase_batch: true       # 策略 A：单次 ask 内按模型阶段 batch
+  query_window_batch: false     # 策略 B：时间窗合并多条 ask（默认关，eval 时可开）
+  ingest_window_batch: true     # 策略 B：时间窗合并多条 HTTP ingest
+  batch_window_seconds: 3.0
+  batch_window_max_size: 4
+  process_idle_timeout_seconds: 60.0  # 最后一次 HTTP 请求结束后 N 秒卸载进程内权重
+  process_idle_unload: true           # 空闲超时自动调用 release_all_resources()

@@ -27,6 +27,7 @@ def test_generate_text_posts_chat_completion_and_touches_server() -> None:
 
     with (
         patch("wenmai.components.gemma.client.get_mlx_vlm_manager", return_value=mock_manager),
+        patch("wenmai.components.gemma.client.is_exclusive", return_value=False),
         patch("httpx.post", return_value=mock_response) as post,
     ):
         text = GemmaMlxClient(settings).generate_text("妈祖信仰的发源地在哪里？")

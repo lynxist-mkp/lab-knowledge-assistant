@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from wenmai.config import Settings
+from wenmai.components.model_guard import configure
 from wenmai.eval.corpus_ingest import (
     DEFAULT_ITEMS_DIR,
     DEFAULT_MANIFEST,
@@ -20,7 +21,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="按语料清单批量入库 Markdown 正文（顺序执行，支持幂等跳过）"
+        description="按语料清单批量入库 Markdown 正文（两阶段同模型批次，支持幂等跳过）"
     )
     parser.add_argument(
         "--manifest",
@@ -51,6 +52,7 @@ def main() -> None:
         raise SystemExit(2)
 
     settings = Settings.load(repo_root / "settings.yaml")
+    configure(exclusive=settings.resources.single_model_exclusive)
     result = ingest_corpus_manifest(
         settings,
         manifest_path,

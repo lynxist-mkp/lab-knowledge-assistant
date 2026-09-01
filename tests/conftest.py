@@ -47,6 +47,9 @@ def test_settings(tmp_path: Path) -> Settings:
         "lexicon": str(repo_settings.parent / "data/lexicon/synonyms.yaml"),
         "multi_query": False,
     }
+    raw["resources"] = dict(raw.get("resources") or {})
+    raw["resources"]["query_window_batch"] = False
+    raw["resources"]["ingest_window_batch"] = False
     if "gemma" not in raw:
         raw["gemma"] = {
             "mlx_python": "python3",

@@ -67,6 +67,15 @@ def test_start_server_tries_fallback_model_when_primary_resolve_fails() -> None:
     assert cmd[-1] == "/tmp/fallback"
 
 
+def test_force_shutdown_kills_port_listeners_when_process_untracked() -> None:
+    manager = MlxVlmServerManager(config=_config())
+    with patch.object(manager, "_kill_process") as kill_process:
+        with patch.object(manager, "_kill_port_listeners") as kill_port:
+            manager.force_shutdown()
+    kill_process.assert_called_once()
+    kill_port.assert_called_once()
+
+
 def test_paddle_and_gemma_configs_keep_separate_ports(test_settings: Settings) -> None:
     repo = Path(__file__).resolve().parents[1]
     settings = Settings.load(repo / "settings.yaml")

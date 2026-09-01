@@ -1842,6 +1842,8 @@
   /* =========================================================
      Ask Submission Flow (#4)
      ========================================================= */
+  const ASK_TIMEOUT_MS = 180000; // local MLX stack P95 ~96s; allow headroom
+
   async function handleAsk() {
     const question = questionInput.value.trim();
     if (!question) {
@@ -1863,13 +1865,24 @@
     }
 
     try {
-      const response = await fetch('/ask', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(function() {
+        controller.abort();
+      }, ASK_TIMEOUT_MS);
+
+      let response;
+      try {
+        response = await fetch('/ask', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -1913,7 +1926,11 @@
         });
       }
     } catch (err) {
-      showError('网络请求失败: ' + err.message, null);
+      if (err && err.name === 'AbortError') {
+        showError('提问超时：本机模型响应较慢，请稍后在 Trace 面板查看是否已完成', null);
+      } else {
+        showError('网络请求失败: ' + err.message, null);
+      }
     } finally {
       submitBtn.disabled = false;
       submitBtn.querySelector('.btn-text').textContent = originalText;

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from wenmai.components.mlx.server import MlxVlmProcessConfig, get_mlx_vlm_manager
+from wenmai.components.model_guard import ModelResource, hold, in_batch, is_exclusive
 from wenmai.config import PaddleOCR
 from wenmai.storage.document_images import DocumentImages
 
@@ -132,25 +133,32 @@ def parse_scanned_pdf(
     pdf = Path(pdf_path)
     run = runner or _default_runner
     manager = server_manager or _get_paddle_mlx_manager(config)
-    manager.ensure_running()
-    active_model = getattr(manager, "active_mlx_model", None)
-    vl_model = active_model or config.vl_rec_api_model_name
 
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as handle:
         output_path = Path(handle.name)
 
     try:
-        result = run(
-            _build_command(pdf, output_path, config, vl_rec_api_model_name=vl_model)
-        )
-        if result.returncode != 0:
-            excerpt = _stderr_excerpt(result.stderr or "")
-            detail = f" (stderr: {excerpt})" if excerpt else ""
-            raise RuntimeError(
-                f"PaddleOCR-VL parsing failed with exit code {result.returncode}{detail}"
+        with hold(ModelResource.MLX_VLM):
+            manager.ensure_running()
+            active_model = getattr(manager, "active_mlx_model", None)
+            vl_model = active_model or config.vl_rec_api_model_name
+            result = run(
+                _build_command(pdf, output_path, config, vl_rec_api_model_name=vl_model)
             )
-        payload = json.loads(output_path.read_text(encoding="utf-8"))
-        manager.touch()
-        return payload
+            if result.returncode != 0:
+                excerpt = _stderr_excerpt(result.stderr or "")
+                detail = f" (stderr: {excerpt})" if excerpt else ""
+                raise RuntimeError(
+                    f"PaddleOCR-VL parsing failed with exit code {result.returncode}{detail}"
+                )
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+            if not in_batch():
+                if is_exclusive():
+                    from wenmai.components.mlx.server import shutdown_all_mlx_vlm_managers
+
+                    shutdown_all_mlx_vlm_managers()
+                else:
+                    manager.touch()
+            return payload
     finally:
         output_path.unlink(missing_ok=True)

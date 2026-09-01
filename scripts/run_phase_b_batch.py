@@ -88,7 +88,7 @@ def main() -> None:
         print(f"Phase B 失败: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
 
-    summary_payload = json.loads(summary)
+    summary_payload = json.loads(result.summary_path.read_text(encoding="utf-8"))
     print(format_metrics_summary(summary_payload))
     print(f"phase_b_summary={result.summary_path}")
     print(

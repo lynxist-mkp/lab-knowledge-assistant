@@ -148,6 +148,35 @@ class MlxVlmServerManager:
         self._idle_timer.daemon = True
         self._idle_timer.start()
 
+    def force_shutdown(self) -> None:
+        """Terminate owned subprocess and any listener still bound to our port."""
+        with self._lock:
+            self._cancel_idle_timer()
+            self._kill_process()
+            self._kill_port_listeners()
+            self._active_model_path = None
+            self._idle_timer = None
+
+    def _kill_port_listeners(self) -> None:
+        port = self.config.server_port
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", f"tcp:{port}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            return
+        for token in result.stdout.strip().split():
+            if not token.isdigit():
+                continue
+            pid = int(token)
+            try:
+                subprocess.run(["kill", "-TERM", str(pid)], check=False)
+            except OSError:
+                continue
+
     def _kill_process(self) -> None:
         if self._process is not None and self._process.poll() is None:
             self._process.terminate()
@@ -175,3 +204,19 @@ def get_mlx_vlm_manager(config: MlxVlmProcessConfig) -> MlxVlmServerManager:
             manager = MlxVlmServerManager(config=config)
             _REGISTRY[key] = manager
         return manager
+
+
+def shutdown_all_mlx_vlm_managers() -> None:
+    with _REGISTRY_LOCK:
+        managers = list(_REGISTRY.values())
+    for manager in managers:
+        manager.force_shutdown()
+
+
+def _register_model_guard_unload() -> None:
+    from wenmai.components.model_guard import ModelResource, register_unload
+
+    register_unload(ModelResource.MLX_VLM, shutdown_all_mlx_vlm_managers)
+
+
+_register_model_guard_unload()

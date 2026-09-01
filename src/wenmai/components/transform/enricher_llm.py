@@ -10,14 +10,36 @@ from wenmai.factories.transform import registry
 from wenmai.models import Chunk
 from wenmai.tracing.context import TraceContext
 
+_DIGEST_CHAR_LIMIT = 8000
+_CHUNK_EXCERPT_CHARS = 500
+
 
 def _load_prompt(settings: Settings) -> str:
     prompt_path = settings.root / settings.transform.enricher_prompt
     return prompt_path.read_text(encoding="utf-8")
 
 
-def _build_prompt(template: str, chunk_text: str, domains: list[str]) -> str:
-    return template.format(chunk_text=chunk_text, domains="、".join(domains))
+def _build_prompt(template: str, document_digest: str, domains: list[str]) -> str:
+    return template.format(chunk_text=document_digest, domains="、".join(domains))
+
+
+def _build_document_digest(chunks: list[Chunk]) -> str:
+    lines: list[str] = []
+    first = chunks[0].metadata if chunks else {}
+    for key in ("title", "url", "culture_domain", "space", "source_path"):
+        value = first.get(key)
+        if isinstance(value, str) and value.strip():
+            lines.append(f"{key}: {value.strip()}")
+    if lines:
+        lines.append("")
+    for index, chunk in enumerate(chunks, start=1):
+        excerpt = chunk.text[:_CHUNK_EXCERPT_CHARS].strip()
+        if excerpt:
+            lines.append(f"[chunk {index}] {excerpt}")
+    digest = "\n".join(lines).strip()
+    if len(digest) > _DIGEST_CHAR_LIMIT:
+        return digest[:_DIGEST_CHAR_LIMIT] + "…"
+    return digest
 
 
 def _parse_response(raw: str, domains: list[str]) -> dict[str, object]:
@@ -62,35 +84,34 @@ class LlmEnricher(BaseTransform):
         self._domains = list(settings.transform.domains)
 
     def apply(self, chunks: list[Chunk], trace: TraceContext) -> list[Chunk]:
+        if not chunks:
+            return chunks
+
         started = time.perf_counter()
-        failures: list[str] = []
-        enriched_count = 0
-
-        for chunk in chunks:
-            try:
-                prompt = _build_prompt(self._template, chunk.text, self._domains)
-                raw = self._llm.generate(prompt)
-                parsed = _parse_response(raw, self._domains)
-                if parsed:
-                    chunk.metadata.update(parsed)
-                    enriched_count += 1
-            except Exception as exc:
-                failures.append(f"{chunk.chunk_id}: {type(exc).__name__}: {exc}")
-
-        output_summary = f"enriched {enriched_count}/{len(chunks)} chunks"
         stage_error: str | None = None
-        if failures:
-            output_summary += f"; {len(failures)} failed"
-            stage_error = failures[0]
-            if len(failures) > 1:
-                stage_error += f" (+{len(failures) - 1} more)"
+        enriched_count = 0
+        output_summary = "enriched 0 chunks"
+
+        try:
+            digest = _build_document_digest(chunks)
+            prompt = _build_prompt(self._template, digest, self._domains)
+            raw = self._llm.generate(prompt)
+            parsed = _parse_response(raw, self._domains)
+            if parsed:
+                for chunk in chunks:
+                    chunk.metadata.update(parsed)
+                enriched_count = len(chunks)
+            output_summary = f"enriched document ({enriched_count}/{len(chunks)} chunks)"
+        except Exception as exc:
+            stage_error = f"{type(exc).__name__}: {exc}"
+            output_summary = f"document enrich failed: {stage_error}"
 
         trace.record_stage(
             name="enricher",
             method="llm",
             provider=self._llm.provider_name,
             elapsed_ms=(time.perf_counter() - started) * 1000,
-            input_summary=f"{len(chunks)} chunks",
+            input_summary=f"{len(chunks)} chunks (document-level)",
             output_summary=output_summary,
             candidate_count=len(chunks),
             error=stage_error,
