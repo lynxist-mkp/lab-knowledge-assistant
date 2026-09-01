@@ -382,7 +382,7 @@ def test_eval_single_retrieve_per_item(
         return real_generate(question, scored_chunks, settings)
 
     monkeypatch.setattr(eval_pipeline, "run_eval_group_batched", tracking_batched)
-    monkeypatch.setattr("wenmai.eval.pipeline.retrieve", counting_retrieve)
+    monkeypatch.setattr("wenmai.pipelines.query_orchestration.retrieve", counting_retrieve)
     monkeypatch.setattr("wenmai.eval.pipeline.generate", flaky_generate)
 
     run = run_eval(test_settings)
@@ -408,7 +408,7 @@ def test_run_eval_group_batched_sets_active_resource(
         seen.append(active_resource())
         return retrieve(*args, **kwargs)
 
-    monkeypatch.setattr(eval_pipeline, "retrieve", spy_retrieve)
+    monkeypatch.setattr("wenmai.pipelines.query_orchestration.retrieve", spy_retrieve)
     golden_items = [
         eval_pipeline.EvalGroupItem(
             item=GoldItem(
@@ -447,7 +447,7 @@ def test_run_eval_group_batched_sets_cross_encoder_during_rerank(
         seen.append(active_resource())
         return real_rerank(*args, **kwargs)
 
-    monkeypatch.setattr(eval_pipeline, "rerank_chunks", spy_rerank)
+    monkeypatch.setattr("wenmai.pipelines.query_orchestration.rerank_chunks", spy_rerank)
     golden_items = [
         eval_pipeline.EvalGroupItem(
             item=GoldItem(

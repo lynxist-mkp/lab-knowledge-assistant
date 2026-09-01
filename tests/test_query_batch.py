@@ -50,7 +50,7 @@ def test_run_ask_pipeline_phase_batch_sets_active_resource(
         seen.append(active_resource())
         return retrieve_mod(*args, **kwargs)
 
-    monkeypatch.setattr("wenmai.pipelines.query_core.retrieve", spy_retrieve)
+    monkeypatch.setattr("wenmai.pipelines.query_orchestration.retrieve", spy_retrieve)
     run_ask_pipeline([Job()], phase_batch=True, batch_meta=None)
     assert ModelResource.BGE_M3 in seen
 

@@ -128,7 +128,7 @@ def test_run_eval_passes_empty_extra_queries(
         seen.append(extra_queries)
         return real_retrieve(question, settings, extra_queries=extra_queries, **kwargs)
 
-    monkeypatch.setattr(eval_pipeline, "retrieve", tracking_retrieve)
+    monkeypatch.setattr("wenmai.pipelines.query_orchestration.retrieve", tracking_retrieve)
     run_eval(test_settings, knowledge=knowledge)
     assert seen == [[]]
 
