@@ -9,10 +9,10 @@ from pathlib import Path
 from wenmai.components.model_guard import ModelResource, begin_batch, end_batch
 from wenmai.config import Settings
 from wenmai.factories import splitter as splitter_factory
-from wenmai.ingestion.gray_review import run_gray_review
+from wenmai.ingestion.admission import AdmissionGate
 from wenmai.ingestion.loaders import LoadedDocument, SourceLoadError, load_source
 from wenmai.ingestion.prepare import prepare_chunks
-from wenmai.ingestion.quality import evaluate_quality_gate, peek_source
+from wenmai.ingestion.quality import peek_source
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.knowledge.domain import REVIEW_PENDING, REVIEW_STATUS_FIELD, stamp_review_status
 from wenmai.models import Chunk, IngestResult
@@ -126,7 +126,7 @@ def prepare_ingest_source(
     trace = TraceContext(trace_type="ingestion")
     trace._on_stage = on_stage
     knowledge = knowledge or create_knowledge(settings)
-    gray_review = False
+    stamp_pending_chunks = False
     document_id = ""
     document_title = ""
     document_source_path = str(source_path)
@@ -135,34 +135,40 @@ def prepare_ingest_source(
     chunks: list[Chunk] = []
 
     try:
+        source_peek = peek_source(source_path, settings)
+        admission_gate = AdmissionGate(settings)
+        admission = admission_gate.decide(source_path, source_peek)
+
         with trace.stage(
             "quality_gate",
             method="effective_char_ratio",
             provider="config",
             input_summary=str(source_path),
         ) as gate_info:
-            source_peek = peek_source(source_path, settings)
-            gate_result = evaluate_quality_gate(
-                source_peek.text,
-                settings.quality_gate,
-                defer_reject=source_peek.defer_reject,
-            )
+            gate_result = admission.gate_result
             gate_info["output_summary"] = (
                 f"ratio={gate_result.ratio:.2f} band={gate_result.band}"
             )
             if source_peek.defer_reject and gate_result.band == "gray":
                 gate_info["output_summary"] += " defer=scanned_pdf"
             gate_info["candidate_count"] = 1
-            rejected = gate_result.band == "reject"
-            if rejected:
+            if admission.decision == "rejected" and admission.gray_outcome is None:
                 gate_info["error"] = (
                     f"effective_char_ratio {gate_result.ratio:.2f} "
                     f"below {settings.quality_gate.reject_below:.2f}"
                 )
-            else:
-                gray_review = gate_result.band == "gray"
 
-        if rejected:
+        if admission.decision == "rejected":
+            if admission.gray_outcome is not None:
+                trace.append_stage(
+                    IngestionStage.gray_review(
+                        provider=admission.gray_outcome.provider,
+                        method=admission.gray_outcome.method,
+                        elapsed_ms=admission.gray_elapsed_ms or 0.0,
+                        output_summary=admission.gray_outcome.output_summary,
+                        error=admission.gray_outcome.error,
+                    )
+                )
             return _finish_rejected_ingest(
                 trace,
                 source_path,
@@ -170,27 +176,18 @@ def prepare_ingest_source(
                 document_source_path=document_source_path,
             )
 
-        if gray_review and settings.quality_gate.gray_review:
-            review_started = time.perf_counter()
-            outcome = run_gray_review(source_path, source_peek, settings)
-            elapsed_ms = (time.perf_counter() - review_started) * 1000
+        if admission.gray_outcome is not None:
             trace.append_stage(
                 IngestionStage.gray_review(
-                    provider=outcome.provider,
-                    method=outcome.method,
-                    elapsed_ms=elapsed_ms,
-                    output_summary=outcome.output_summary,
-                    error=outcome.error,
+                    provider=admission.gray_outcome.provider,
+                    method=admission.gray_outcome.method,
+                    elapsed_ms=admission.gray_elapsed_ms or 0.0,
+                    output_summary=admission.gray_outcome.output_summary,
+                    error=admission.gray_outcome.error,
                 )
             )
-            if outcome.hard_reject:
-                return _finish_rejected_ingest(
-                    trace,
-                    source_path,
-                    settings,
-                    document_source_path=document_source_path,
-                )
-            gray_review = outcome.pending
+
+        stamp_pending_chunks = admission.stamp_pending_chunks
 
         with trace.stage(
             "load",
@@ -287,7 +284,7 @@ def prepare_ingest_source(
                 metadata=_chunk_metadata(
                     document=document,
                     index=index,
-                    gray_review=gray_review,
+                    gray_review=stamp_pending_chunks,
                 ),
             )
             for index, text in enumerate(texts)
@@ -302,7 +299,7 @@ def prepare_ingest_source(
             document_title=document_title,
             document_source_path=document_source_path,
             status=status,
-            gray_review=gray_review,
+            gray_review=stamp_pending_chunks,
             chunks=chunks,
             previous_document_id=previous_document_id,
         )

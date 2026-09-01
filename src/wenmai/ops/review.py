@@ -2,14 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from wenmai.knowledge.document_card import DocumentNotFoundError
-from wenmai.knowledge.domain import (
-    REVIEW_APPROVED,
-    REVIEW_PENDING,
-    culture_domain,
-    review_status,
-    title,
-)
+from wenmai.knowledge.store import Knowledge
 
 
 @dataclass(frozen=True)
@@ -29,34 +22,20 @@ class PendingDocument:
 
 
 def list_pending_documents(knowledge: Knowledge) -> list[PendingDocument]:
-    by_document: dict[str, list] = {}
-    for chunk in knowledge.list_all():
-        if review_status(chunk) != REVIEW_PENDING:
-            continue
-        by_document.setdefault(chunk.document_id, []).append(chunk)
-
-    pending: list[PendingDocument] = []
-    for document_id in sorted(by_document):
-        chunks = by_document[document_id]
-        first = chunks[0]
-        pending.append(
-            PendingDocument(
-                document_id=document_id,
-                title=title(first),
-                culture_domain=culture_domain(first),
-                chunk_count=len(chunks),
-            )
+    return [
+        PendingDocument(
+            document_id=item.document_id,
+            title=item.title,
+            culture_domain=item.culture_domain,
+            chunk_count=item.chunk_count,
         )
-    return pending
+        for item in knowledge.list_pending_review_documents()
+    ]
 
 
 def approve_document(knowledge: Knowledge, document_id: str) -> None:
-    if not knowledge.get_by_document_id(document_id):
-        raise DocumentNotFoundError(document_id)
-    knowledge.set_review_status(document_id, REVIEW_APPROVED)
+    knowledge.approve_review(document_id)
 
 
 def reject_document(knowledge: Knowledge, document_id: str) -> None:
-    if not knowledge.get_by_document_id(document_id):
-        raise DocumentNotFoundError(document_id)
-    knowledge.delete_document(document_id)
+    knowledge.reject_review(document_id)
