@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -21,13 +22,16 @@ from wenmai.eval.metrics import (
     refusal_accuracy,
     retrieval_item_snapshot,
 )
-from wenmai.eval.pipeline import eval_item
+from wenmai.eval.pipeline import EvalGroupItem
+from wenmai.eval import pipeline as eval_pipeline
 from wenmai.eval.ragas_metrics import attach_ragas_to_artifact, should_run_ragas
 from wenmai.eval.views import EvalRunView, FailedEvalItem, parse_eval_run
 from wenmai.generation import GenerationResult
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import ScoredChunk
 from wenmai.tracing.latency import query_latency_percentiles
+
+logger = logging.getLogger(__name__)
 
 FAILURE_RETRIES = 3
 
@@ -99,46 +103,67 @@ def _item_snapshots(
     return snapshots
 
 
-def _run_eval_item(
-    item: GoldItem,
+def _run_group_batched(
+    items: list[GoldItem],
     settings: Settings,
     group: str,
     knowledge: Knowledge,
-    existing_chunks: list[ScoredChunk] | None,
     *,
+    retrieval_mode: str,
+    rerank_enabled: bool,
     query_rewrite: bool = False,
-) -> tuple[list[ScoredChunk] | None, GenerationResult | None]:
-    spec = resolve_ablation(group)
-    outcome = eval_item(
-        item,
-        settings,
-        retrieval_mode=spec.mode,
-        rerank_enabled=spec.rerank_enabled,
-        knowledge=knowledge,
-        retrieved_chunks=existing_chunks,
-        query_rewrite=query_rewrite,
-    )
-    return outcome.chunks, outcome.generation
+) -> tuple[
+    dict[str, list[ScoredChunk]],
+    dict[str, GenerationResult],
+    list[FailedEvalItem],
+]:
+    """Run one ablation group with phase batching and generation retries."""
+    ranked_chunks: dict[str, list[ScoredChunk]] = {}
+    generation_results: dict[str, GenerationResult] = {}
+    pending: list[GoldItem] = list(items)
 
+    for attempt in range(FAILURE_RETRIES + 1):
+        if not pending:
+            break
+        group_inputs: list[EvalGroupItem] = []
+        for item in pending:
+            existing = ranked_chunks.get(item.id)
+            group_inputs.append(
+                EvalGroupItem(item=item, existing_chunks=existing)
+            )
 
-def _run_compare_item(
-    item: GoldItem,
-    settings: Settings,
-    group: str,
-    knowledge: Knowledge,
-    existing_chunks: list[ScoredChunk] | None,
-) -> tuple[list[ScoredChunk] | None, GenerationResult | None]:
-    query_rewrite = REWRITE_COMPARE_FLAGS[group]
-    outcome = eval_item(
-        item,
-        settings,
-        retrieval_mode="rrf",
-        rerank_enabled=True,
-        knowledge=knowledge,
-        retrieved_chunks=existing_chunks,
-        query_rewrite=query_rewrite,
-    )
-    return outcome.chunks, outcome.generation
+        logger.info(
+            "eval group=%s attempt=%d/%d items=%d",
+            group,
+            attempt + 1,
+            FAILURE_RETRIES + 1,
+            len(group_inputs),
+        )
+        outcomes = eval_pipeline.run_eval_group_batched(
+            group_inputs,
+            settings,
+            retrieval_mode=retrieval_mode,
+            rerank_enabled=rerank_enabled,
+            knowledge=knowledge,
+            query_rewrite=query_rewrite,
+        )
+        for item in pending:
+            chunks, result = outcomes.get(item.id, (None, None))
+            if chunks is not None:
+                ranked_chunks[item.id] = chunks
+            if result is not None:
+                generation_results[item.id] = result
+
+        pending = [
+            item
+            for item in pending
+            if item.id not in ranked_chunks or item.id not in generation_results
+        ]
+
+    failures = [
+        FailedEvalItem(group=group, item_id=item.id) for item in pending
+    ]
+    return ranked_chunks, generation_results, failures
 
 
 def _run_grouped_eval(
@@ -146,7 +171,9 @@ def _run_grouped_eval(
     settings: Settings,
     groups: list[str],
     knowledge: Knowledge,
-    run_item: object,
+    *,
+    query_rewrite_by_group: dict[str, bool] | None = None,
+    spec_by_group: dict[str, tuple[str, bool]] | None = None,
 ) -> tuple[
     dict[str, dict[str, list[ScoredChunk]]],
     dict[str, dict[str, GenerationResult]],
@@ -158,38 +185,51 @@ def _run_grouped_eval(
     generation_results: dict[str, dict[str, GenerationResult]] = {
         name: {} for name in groups
     }
+    failures: list[FailedEvalItem] = []
+    total_ops = len(groups) * len(items)
+    completed = 0
 
-    pending: list[tuple[str, GoldItem]] = [
-        (group, item) for group in groups for item in items
-    ]
-    still: list[tuple[str, GoldItem]] = []
-    for group, item in pending:
-        chunks, result = run_item(item, settings, group, knowledge, None)
-        if chunks is not None:
-            ranked_chunks[group][item.id] = chunks
-        if result is not None:
-            generation_results[group][item.id] = result
-        if chunks is None or result is None:
-            still.append((group, item))
+    for group_index, group in enumerate(groups, start=1):
+        if spec_by_group is not None:
+            retrieval_mode, rerank_enabled = spec_by_group[group]
+        else:
+            spec = resolve_ablation(group)
+            retrieval_mode = spec.mode
+            rerank_enabled = spec.rerank_enabled
+        query_rewrite = (
+            query_rewrite_by_group.get(group, False)
+            if query_rewrite_by_group
+            else False
+        )
 
-    for _ in range(FAILURE_RETRIES):
-        if not still:
-            break
-        nxt: list[tuple[str, GoldItem]] = []
-        for group, item in still:
-            existing = ranked_chunks[group].get(item.id)
-            chunks, result = run_item(item, settings, group, knowledge, existing)
-            if chunks is not None:
-                ranked_chunks[group][item.id] = chunks
-            if result is not None:
-                generation_results[group][item.id] = result
-            if chunks is None or result is None:
-                nxt.append((group, item))
-        still = nxt
+        logger.info(
+            "eval starting group=%s (%d/%d) items=%d",
+            group,
+            group_index,
+            len(groups),
+            len(items),
+        )
+        group_ranked, group_generation, group_failures = _run_group_batched(
+            items,
+            settings,
+            group,
+            knowledge,
+            retrieval_mode=retrieval_mode,
+            rerank_enabled=rerank_enabled,
+            query_rewrite=query_rewrite,
+        )
+        ranked_chunks[group] = group_ranked
+        generation_results[group] = group_generation
+        failures.extend(group_failures)
+        completed += len(items)
+        logger.info(
+            "eval progress %d/%d item×group ops group=%s failed=%d",
+            completed,
+            total_ops,
+            group,
+            len(group_failures),
+        )
 
-    failures = [
-        FailedEvalItem(group=group, item_id=item.id) for group, item in still
-    ]
     return ranked_chunks, generation_results, failures
 
 
@@ -206,24 +246,12 @@ def run_eval(
     groups = list(settings.evaluation.ablations)
     resolved_knowledge = knowledge or create_knowledge(settings)
 
-    def run_item(
-        item: GoldItem,
-        settings: Settings,
-        group: str,
-        knowledge: Knowledge,
-        existing_chunks: list[ScoredChunk] | None,
-    ) -> tuple[list[ScoredChunk] | None, GenerationResult | None]:
-        return _run_eval_item(
-            item,
-            settings,
-            group,
-            knowledge,
-            existing_chunks,
-            query_rewrite=query_rewrite,
-        )
-
     ranked_chunks, generation_results, failures = _run_grouped_eval(
-        items, settings, groups, resolved_knowledge, run_item
+        items,
+        settings,
+        groups,
+        resolved_knowledge,
+        query_rewrite_by_group={name: query_rewrite for name in groups},
     )
     latency_ms = query_latency_percentiles(settings, started_at_min=run_started)
     artifact = {
@@ -285,7 +313,8 @@ def run_rewrite_compare(
         settings,
         groups,
         resolved_knowledge,
-        _run_compare_item,
+        query_rewrite_by_group=REWRITE_COMPARE_FLAGS,
+        spec_by_group={name: ("rrf", True) for name in groups},
     )
     latency_ms = query_latency_percentiles(settings, started_at_min=run_started)
     artifact = {

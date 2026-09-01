@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import logging
 
 from wenmai.config import Settings
 from wenmai.eval import run_eval, run_rewrite_compare
 
+logger = logging.getLogger(__name__)
+
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Run golden-set evaluation.")
     parser.add_argument(
         "--rewrite-compare",

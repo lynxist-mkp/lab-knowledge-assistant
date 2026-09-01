@@ -11,12 +11,22 @@ import pytest
 from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
+from wenmai.components.model_guard import ModelResource, active_resource, end_batch
 from wenmai.config import Settings
 from wenmai.eval import get_eval_dashboard, list_eval_runs, run_eval
 from wenmai.eval import pipeline as eval_pipeline
+from wenmai.eval.golden import GoldItem
 from wenmai.generation import GenerationError, generate
+from wenmai.knowledge import create_knowledge
 from wenmai.retrieval import retrieve
 from wenmai.tracing.store import read_trace_records
+
+
+@pytest.fixture(autouse=True)
+def _reset_model_guard() -> None:
+    end_batch()
+    yield
+    end_batch()
 
 
 def _write_jsonl(path: Path, lines: list[str]) -> Path:
@@ -117,33 +127,34 @@ def test_eval_keeps_failure_after_retries(
     test_settings: Settings,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    without_ragas_judge_key: None,
 ) -> None:
     _prepare_eval(test_settings, tmp_path)
-    real_eval_item = eval_pipeline.eval_item
     real_generate = generate
     seen = {"n": 0}
     current_mode: list[str] = []
+    original_batched = eval_pipeline.run_eval_group_batched
 
-    def tracking_eval_item(
-        item: object,
+    def tracking_batched(
+        group_items: list[eval_pipeline.EvalGroupItem],
         settings: Settings,
         *,
         retrieval_mode: str,
         rerank_enabled: bool,
         knowledge: object,
-        retrieved_chunks: list[object] | None = None,
         query_rewrite: bool = False,
+        phase_batch: bool | None = None,
     ):
         current_mode.clear()
         current_mode.append(retrieval_mode)
-        return real_eval_item(
-            item,
+        return original_batched(
+            group_items,
             settings,
             retrieval_mode=retrieval_mode,
             rerank_enabled=rerank_enabled,
             knowledge=knowledge,
-            retrieved_chunks=retrieved_chunks,
             query_rewrite=query_rewrite,
+            phase_batch=phase_batch,
         )
 
     def always_fail_dense(question: str, scored_chunks: list[object], settings: Settings):
@@ -156,7 +167,7 @@ def test_eval_keeps_failure_after_retries(
             raise GenerationError("generation failed", provider_name="fake")
         return real_generate(question, scored_chunks, settings)
 
-    monkeypatch.setattr("wenmai.eval.runner.eval_item", tracking_eval_item)
+    monkeypatch.setattr(eval_pipeline, "run_eval_group_batched", tracking_batched)
     monkeypatch.setattr("wenmai.eval.pipeline.generate", always_fail_dense)
 
     run = run_eval(test_settings)
@@ -308,35 +319,36 @@ def test_eval_single_retrieve_per_item(
     test_settings: Settings,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    without_ragas_judge_key: None,
 ) -> None:
     _prepare_eval(test_settings, tmp_path)
     real_retrieve = retrieve
-    real_eval_item = eval_pipeline.eval_item
     real_generate = generate
     retrieve_calls: dict[tuple[str, str], int] = {}
     generate_calls: dict[tuple[str, str], int] = {}
     current_mode: list[str] = []
+    original_batched = eval_pipeline.run_eval_group_batched
 
-    def counting_eval_item(
-        item: object,
+    def tracking_batched(
+        group_items: list[eval_pipeline.EvalGroupItem],
         settings: Settings,
         *,
         retrieval_mode: str,
         rerank_enabled: bool,
         knowledge: object,
-        retrieved_chunks: list[object] | None = None,
         query_rewrite: bool = False,
+        phase_batch: bool | None = None,
     ):
         current_mode.clear()
         current_mode.append(retrieval_mode)
-        return real_eval_item(
-            item,
+        return original_batched(
+            group_items,
             settings,
             retrieval_mode=retrieval_mode,
             rerank_enabled=rerank_enabled,
             knowledge=knowledge,
-            retrieved_chunks=retrieved_chunks,
             query_rewrite=query_rewrite,
+            phase_batch=phase_batch,
         )
 
     def counting_retrieve(
@@ -369,7 +381,7 @@ def test_eval_single_retrieve_per_item(
             raise GenerationError("generation failed", provider_name="fake")
         return real_generate(question, scored_chunks, settings)
 
-    monkeypatch.setattr("wenmai.eval.runner.eval_item", counting_eval_item)
+    monkeypatch.setattr(eval_pipeline, "run_eval_group_batched", tracking_batched)
     monkeypatch.setattr("wenmai.eval.pipeline.retrieve", counting_retrieve)
     monkeypatch.setattr("wenmai.eval.pipeline.generate", flaky_generate)
 
@@ -379,3 +391,91 @@ def test_eval_single_retrieve_per_item(
     dense_key = ("妈祖信仰的发源地在哪里？", "dense_only")
     assert retrieve_calls[dense_key] == 1
     assert generate_calls[dense_key] == 2
+
+
+def test_run_eval_group_batched_sets_active_resource(
+    test_settings: Settings,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    without_ragas_judge_key: None,
+) -> None:
+    _prepare_eval(test_settings, tmp_path)
+    test_settings.resources.query_phase_batch = True
+    seen: list[ModelResource | None] = []
+    knowledge = create_knowledge(test_settings)
+
+    def spy_retrieve(*args, **kwargs):
+        seen.append(active_resource())
+        return retrieve(*args, **kwargs)
+
+    monkeypatch.setattr(eval_pipeline, "retrieve", spy_retrieve)
+    golden_items = [
+        eval_pipeline.EvalGroupItem(
+            item=GoldItem(
+                id="g001",
+                question="妈祖信仰的发源地在哪里？",
+                evidence_doc_ids=["matsu-intro"],
+                answerable=True,
+                reference_answer="湄洲岛。",
+                category="单跳事实",
+            )
+        )
+    ]
+    eval_pipeline.run_eval_group_batched(
+        golden_items,
+        test_settings,
+        retrieval_mode="dense_only",
+        rerank_enabled=False,
+        knowledge=knowledge,
+    )
+    assert ModelResource.BGE_M3 in seen
+
+
+def test_run_eval_group_batched_sets_cross_encoder_during_rerank(
+    test_settings: Settings,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    without_ragas_judge_key: None,
+) -> None:
+    _prepare_eval(test_settings, tmp_path)
+    test_settings.resources.query_phase_batch = True
+    seen: list[ModelResource | None] = []
+    knowledge = create_knowledge(test_settings)
+    real_rerank = eval_pipeline.rerank_chunks
+
+    def spy_rerank(*args, **kwargs):
+        seen.append(active_resource())
+        return real_rerank(*args, **kwargs)
+
+    monkeypatch.setattr(eval_pipeline, "rerank_chunks", spy_rerank)
+    golden_items = [
+        eval_pipeline.EvalGroupItem(
+            item=GoldItem(
+                id="g001",
+                question="妈祖信仰的发源地在哪里？",
+                evidence_doc_ids=["matsu-intro"],
+                answerable=True,
+                reference_answer="湄洲岛。",
+                category="单跳事实",
+            )
+        ),
+        eval_pipeline.EvalGroupItem(
+            item=GoldItem(
+                id="g002",
+                question="船政学堂是什么时候创办的？",
+                evidence_doc_ids=[],
+                answerable=False,
+                reference_answer="",
+                category="明确不可答",
+            )
+        ),
+    ]
+    eval_pipeline.run_eval_group_batched(
+        golden_items,
+        test_settings,
+        retrieval_mode="rrf",
+        rerank_enabled=True,
+        knowledge=knowledge,
+    )
+    assert seen
+    assert all(resource == ModelResource.CROSS_ENCODER for resource in seen)
