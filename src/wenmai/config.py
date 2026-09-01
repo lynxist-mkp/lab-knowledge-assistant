@@ -125,6 +125,7 @@ class RagasJudge:
     model: str
     base_url: str
     api_key_env: str
+    max_tokens: int = 4096
 
 
 @dataclass
@@ -300,6 +301,8 @@ def resolve_ragas_judge(raw: dict[str, Any] | None) -> RagasJudge:
     for key in ("model", "base_url", "api_key_env"):
         if key in payload:
             resolved[key] = str(payload[key])
+    max_tokens_raw = payload.get("max_tokens", 4096)
+    resolved["max_tokens"] = int(max_tokens_raw)
     return RagasJudge(**resolved)
 
 

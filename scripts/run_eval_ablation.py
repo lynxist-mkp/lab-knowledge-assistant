@@ -20,6 +20,23 @@ def main() -> None:
         action="store_true",
         help="Compare rewrite off vs on (RRF+Rerank backbone only).",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Score only the first N golden items (for smoke / CE batch checks).",
+    )
+    parser.add_argument(
+        "--groups",
+        nargs="+",
+        default=None,
+        help="Ablation groups to run (default: all from settings).",
+    )
+    parser.add_argument(
+        "--no-ragas",
+        action="store_true",
+        help="Skip Ragas judge scoring.",
+    )
     args = parser.parse_args()
     settings = Settings.load()
     if args.rewrite_compare:
@@ -29,7 +46,13 @@ def main() -> None:
             f"failed={run.failed_count}"
         )
         return
-    run = run_eval(settings)
+    ragas = False if args.no_ragas else None
+    run = run_eval(
+        settings,
+        ragas=ragas,
+        item_limit=args.limit,
+        groups=args.groups,
+    )
     print(
         f"eval run {run.timestamp} items={run.item_count} failed={run.failed_count}"
     )

@@ -83,6 +83,7 @@ evaluation:
   # Ragas LLM-as-judge（Faithfulness / Context Precision）；密钥只走环境变量
   ragas_judge:
     provider: zhipu
+    max_tokens: 4096
 
 dolphin:
   python: "/Users/linkslinks/project/fjgd/音频清洗/tools/envs/dolphin-env/bin/python"

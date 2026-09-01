@@ -33,7 +33,7 @@ def build_ragas_judge_llm(settings: Settings) -> tuple[Faithfulness, ContextPrec
         raise ValueError(f"{judge.api_key_env} is not set")
 
     client = AsyncOpenAI(api_key=api_key, base_url=judge.base_url)
-    llm = llm_factory(judge.model, client=client)
+    llm = llm_factory(judge.model, client=client, max_tokens=judge.max_tokens)
     return Faithfulness(llm=llm), ContextPrecision(llm=llm)
 
 

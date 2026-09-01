@@ -239,25 +239,29 @@ def run_eval(
     knowledge: Knowledge | None = None,
     query_rewrite: bool = False,
     ragas: bool | None = None,
+    item_limit: int | None = None,
+    groups: list[str] | None = None,
 ) -> EvalRunView:
     items = load_golden_set_from_settings(settings)
+    if item_limit is not None:
+        items = items[:item_limit]
     run_started = datetime.now(UTC).isoformat()
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    groups = list(settings.evaluation.ablations)
+    resolved_groups = list(groups or settings.evaluation.ablations)
     resolved_knowledge = knowledge or create_knowledge(settings)
 
     ranked_chunks, generation_results, failures = _run_grouped_eval(
         items,
         settings,
-        groups,
+        resolved_groups,
         resolved_knowledge,
-        query_rewrite_by_group={name: query_rewrite for name in groups},
+        query_rewrite_by_group={name: query_rewrite for name in resolved_groups},
     )
     latency_ms = query_latency_percentiles(settings, started_at_min=run_started)
     artifact = {
         "timestamp": timestamp,
         "golden_set": settings.evaluation.golden_set,
-        "ablations": groups,
+        "ablations": resolved_groups,
         "item_count": len(items),
         "failures": [item.as_dict() for item in failures],
         "latency_ms": latency_ms,
@@ -274,10 +278,10 @@ def run_eval(
                 ),
                 "items": _item_snapshots(items, ranked_chunks[name], generation_results[name]),
             }
-            for name in groups
+            for name in resolved_groups
         },
     }
-    if should_run_ragas(settings, ragas):
+    if should_run_ragas(settings, ragas) and "rrf_rerank" in resolved_groups:
         attach_ragas_to_artifact(
             artifact,
             items,
