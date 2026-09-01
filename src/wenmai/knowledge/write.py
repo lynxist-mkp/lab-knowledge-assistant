@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
-from wenmai.knowledge.domain import stamp_review_status
+from wenmai.knowledge.domain import REVIEW_STATUS_FIELD, stamp_review_status
 from wenmai.models import Chunk
 from wenmai.storage.fingerprints import FingerprintRecord
 
@@ -82,6 +82,14 @@ class WritePath:
             self._compensate_document_write(document_id)
             self._restore_fingerprint(previous_fingerprint, source_path)
             raise
+
+    def update_review_status(self, document_id: str, status: str) -> None:
+        chunks = self._store.get_by_document_id(document_id)
+        if not chunks:
+            return
+        for chunk in chunks:
+            chunk.metadata[REVIEW_STATUS_FIELD] = status
+        self._upsert_chunks(chunks)
 
     def delete_document(self, document_id: str) -> None:
         backup = self._store.get_by_document_id(document_id)

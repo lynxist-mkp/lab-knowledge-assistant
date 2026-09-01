@@ -342,6 +342,28 @@ def test_commit_rebuild_delete_failure_restores_fingerprint(
     assert plan.status == "skipped"
 
 
+def test_set_review_status_delegates_to_write_path(
+    test_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-review", "审阅状态委托测试片段")
+
+    called: dict[str, str] = {}
+
+    def fake_update_review_status(document_id: str, status: str) -> None:
+        called["document_id"] = document_id
+        called["status"] = status
+
+    monkeypatch.setattr(
+        knowledge._write, "update_review_status", fake_update_review_status
+    )
+
+    knowledge.set_review_status("doc-review", "待审")
+
+    assert called == {"document_id": "doc-review", "status": "待审"}
+
+
 def test_pending_chunks_excluded_from_dense_and_sparse_search(
     test_settings: Settings,
 ) -> None:

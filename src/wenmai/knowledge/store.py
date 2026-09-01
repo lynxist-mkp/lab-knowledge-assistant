@@ -144,12 +144,7 @@ class Knowledge:
         return _take_searchable(scored, top_k)
 
     def set_review_status(self, document_id: str, status: str) -> None:
-        chunks = self.get_by_document_id(document_id)
-        if not chunks:
-            return
-        for chunk in chunks:
-            chunk.metadata["审阅状态"] = status
-        self._write._upsert_chunks(chunks)
+        self._write.update_review_status(document_id, status)
 
     def get_by_document_id(self, document_id: str) -> list[Chunk]:
         return self._store.get_by_document_id(document_id)
