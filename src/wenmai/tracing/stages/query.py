@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from wenmai.config import Settings
-from wenmai.knowledge import Knowledge
 from wenmai.models import ScoredChunk
+
+if TYPE_CHECKING:
+    from wenmai.knowledge import Knowledge
 from wenmai.tracing.context import StageRecord
 
 
