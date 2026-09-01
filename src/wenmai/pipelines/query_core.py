@@ -20,8 +20,7 @@ from wenmai.pipelines.query_orchestration import (
 )
 from wenmai.query_processing import multi_query
 from wenmai.query_processing.extras import CollectedExtras
-from wenmai.tracing import TraceContext, save_trace
-from wenmai.tracing.stages.query import QueryStage
+from wenmai.tracing import TraceRecorder
 
 if TYPE_CHECKING:
     from wenmai.pipelines.query_batch import _AskJob
@@ -190,11 +189,12 @@ def _finish_job(
     settings = job.settings
     question = job.question
     normalized = work.normalized
-    trace = TraceContext(trace_type="query", metadata={"question": question})
-    if job.batch_id:
-        trace.metadata["batch_id"] = job.batch_id
-        trace.metadata["batch_size"] = job.batch_size
-        trace.metadata["batch_wait_ms"] = round(job.batch_wait_ms, 1)
+    trace = TraceRecorder(
+        question=question,
+        batch_id=job.batch_id,
+        batch_size=job.batch_size,
+        batch_wait_ms=job.batch_wait_ms,
+    )
 
     try:
         from wenmai.factories import query_rewrite as query_rewrite_factory
@@ -206,24 +206,20 @@ def _finish_job(
             if settings.query_processing.multi_query
             else None
         )
-        trace.append_stage(
-            QueryStage.query_processing(
-                question=question,
-                normalized=normalized,
-                elapsed_ms=(time.perf_counter() - processing_started) * 1000,
-                culture_domain=job.culture_domain,
-                term_extras=work.term_extras,
-                multi_query_extras=work.multi_query_extras,
-                rewriter=rewriter.provider_name,
-                multi_query_provider=mq_provider,
-            )
+        trace.record_query_processing(
+            question=question,
+            normalized=normalized,
+            elapsed_ms=(time.perf_counter() - processing_started) * 1000,
+            culture_domain=job.culture_domain,
+            term_extras=work.term_extras,
+            multi_query_extras=work.multi_query_extras,
+            rewriter=rewriter.provider_name,
+            multi_query_provider=mq_provider,
         )
 
         assert work.retrieval_result is not None
-        for stage in work.retrieval_result.stages:
-            trace.append_stage(stage)
-        for stage in work.rerank_stages:
-            trace.append_stage(stage)
+        trace.append_retrieval_stages(work.retrieval_result.stages)
+        trace.append_rerank_stages(work.rerank_stages)
 
         scored_chunks = work.chunks or []
         knowledge = job.knowledge or create_knowledge(settings)
@@ -239,38 +235,34 @@ def _finish_job(
             gen_result = generate(normalized, expanded_chunks, settings)
         except GenerationError as exc:
             generation_error = f"{type(exc).__name__}: {exc}"
-            trace.append_stage(
-                QueryStage.generation(
-                    provider=exc.provider_name,
-                    elapsed_ms=(time.perf_counter() - generation_started) * 1000,
-                    input_summary=generation_input,
-                    output_summary="generation failed",
-                    candidate_count=0,
-                    error=generation_error,
-                    expanded_from=expanded_from,
-                    expanded_chunk_ids=expanded_chunk_ids,
-                )
+            trace.record_generation(
+                provider=exc.provider_name,
+                elapsed_ms=(time.perf_counter() - generation_started) * 1000,
+                input_summary=generation_input,
+                output_summary="generation failed",
+                candidate_count=0,
+                error=generation_error,
+                expanded_from=expanded_from,
+                expanded_chunk_ids=expanded_chunk_ids,
             )
             trace.error = generation_error
             raise QueryGenerationError(str(exc), trace.trace_id) from exc
 
-        trace.append_stage(
-            QueryStage.generation(
-                provider=gen_result.provider_name,
-                elapsed_ms=(time.perf_counter() - generation_started) * 1000,
-                input_summary=generation_input,
-                output_summary=gen_result.output_summary,
-                candidate_count=gen_result.candidate_count,
-                expanded_from=expanded_from,
-                expanded_chunk_ids=expanded_chunk_ids,
-            )
+        trace.record_generation(
+            provider=gen_result.provider_name,
+            elapsed_ms=(time.perf_counter() - generation_started) * 1000,
+            input_summary=generation_input,
+            output_summary=gen_result.output_summary,
+            candidate_count=gen_result.candidate_count,
+            expanded_from=expanded_from,
+            expanded_chunk_ids=expanded_chunk_ids,
         )
 
-        trace.metadata["outcome"] = {
-            "refused": gen_result.refused,
-            "refusal_reason": gen_result.refusal_reason,
-            "citation_count": len(gen_result.citations),
-        }
+        trace.set_outcome(
+            refused=gen_result.refused,
+            refusal_reason=gen_result.refusal_reason,
+            citation_count=len(gen_result.citations),
+        )
 
         return AskResult(
             answer=gen_result.answer,
@@ -282,7 +274,7 @@ def _finish_job(
         )
     finally:
         if job.record_trace:
-            save_trace(settings, trace)
+            trace.save(settings)
 
 
 __all__ = [
