@@ -365,7 +365,6 @@ def test_eval_single_retrieve_per_item(
             question,
             settings,
             retrieval_mode=retrieval_mode,
-            rerank_enabled=rerank_enabled,
             **kwargs,
         )
 

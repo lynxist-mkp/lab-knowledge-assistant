@@ -9,8 +9,8 @@ from wenmai.factories import embedding as embedding_factory
 from wenmai.factories import vector_store as vector_store_factory
 from wenmai.factories.loader import ensure_providers
 from wenmai.knowledge.browse import CultureDomainGroup, chunk_detail_from_chunk
-from wenmai.knowledge.domain import REVIEW_APPROVED, is_searchable
-from wenmai.knowledge.review import PendingReviewDocument, list_pending_from_catalog
+from wenmai.knowledge.read import ReadPath
+from wenmai.knowledge.review import PendingReviewDocument
 from wenmai.knowledge.write import WritePath
 from wenmai.models import Chunk, ScoredChunk
 from wenmai.storage.catalog import DocumentCatalog
@@ -47,6 +47,12 @@ class Knowledge:
         self._images = DocumentImages(settings)
         self._fingerprints = FingerprintStore.from_settings(settings)
         self._catalog = DocumentCatalog.from_settings(settings)
+        self._read = ReadPath(
+            embedder=self._embedder,
+            store=self._store,
+            bm25=self._bm25,
+            catalog=self._catalog,
+        )
         self._write = WritePath(
             embedder=self._embedder,
             store=self._store,
@@ -54,6 +60,7 @@ class Knowledge:
             images=self._images,
             fingerprints=self._fingerprints,
             catalog=self._catalog,
+            read=self._read,
         )
 
     @property
@@ -112,14 +119,11 @@ class Knowledge:
         top_k: int,
         culture_domain: str | None = None,
     ) -> list[ScoredChunk]:
-        vector = self._embedder.embed_query(query)
-        fetch_k = max(top_k * 3, top_k)
-        hits = self._store.query(
-            vector,
-            top_k=fetch_k,
-            where=_metadata_filter(culture_domain),
+        return self._read.dense_search(
+            query,
+            top_k=top_k,
+            culture_domain=culture_domain,
         )
-        return _take_searchable(hits, top_k)
 
     def sparse_search(
         self,
@@ -128,50 +132,32 @@ class Knowledge:
         top_k: int,
         culture_domain: str | None = None,
     ) -> list[ScoredChunk]:
-        fetch_k = max(top_k * 3, top_k)
-        hits = self._bm25.search(
+        return self._read.sparse_search(
             query,
-            top_k=fetch_k,
+            top_k=top_k,
             culture_domain=culture_domain,
         )
-        chunk_ids = [hit.chunk_id for hit in hits]
-        chunks = self._store.get_by_ids(chunk_ids)
-        chunk_by_id = {chunk.chunk_id: chunk for chunk in chunks}
-        scored = [
-            ScoredChunk(chunk=chunk_by_id[hit.chunk_id], score=hit.score)
-            for hit in hits
-            if hit.chunk_id in chunk_by_id
-        ]
-        return _take_searchable(scored, top_k)
 
     def set_review_status(self, document_id: str, status: str) -> None:
         self._write.update_review_status(document_id, status)
 
     def list_pending_review_documents(self) -> list[PendingReviewDocument]:
-        return list_pending_from_catalog(self._catalog)
+        return self._read.list_pending_review_documents()
 
     def approve_review(self, document_id: str) -> None:
-        from wenmai.knowledge.document_card import DocumentNotFoundError
-
-        if not self.get_by_document_id(document_id):
-            raise DocumentNotFoundError(document_id)
-        self.set_review_status(document_id, REVIEW_APPROVED)
+        self._write.approve_review(document_id)
 
     def reject_review(self, document_id: str) -> None:
-        from wenmai.knowledge.document_card import DocumentNotFoundError
-
-        if not self.get_by_document_id(document_id):
-            raise DocumentNotFoundError(document_id)
-        self.delete_document(document_id)
+        self._write.reject_review(document_id)
 
     def get_by_document_id(self, document_id: str) -> list[Chunk]:
-        return self._store.get_by_document_id(document_id)
+        return self._read.get_by_document_id(document_id)
 
     def get_by_chunk_id(self, chunk_id: str) -> Chunk | None:
-        return self._store.get_by_chunk_id(chunk_id)
+        return self._read.get_by_chunk_id(chunk_id)
 
     def list_all(self) -> list[Chunk]:
-        return self._store.list_all()
+        return self._read.list_all()
 
     def browse_by_culture_domain(self) -> list[CultureDomainGroup]:
         return self._catalog.browse_groups()
@@ -186,14 +172,3 @@ class Knowledge:
 def create_knowledge(settings: Settings) -> Knowledge:
     ensure_providers()
     return Knowledge(settings)
-
-
-def _metadata_filter(culture_domain: str | None) -> dict[str, Any] | None:
-    if culture_domain is None:
-        return None
-    return {"culture_domain": culture_domain}
-
-
-def _take_searchable(hits: list[ScoredChunk], top_k: int) -> list[ScoredChunk]:
-    filtered = [hit for hit in hits if is_searchable(hit.chunk)]
-    return filtered[:top_k]

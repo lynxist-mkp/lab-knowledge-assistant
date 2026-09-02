@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from wenmai.config import Settings
 from wenmai.models import AskResult
-from wenmai.pipelines.query_core import run_ask_pipeline
+from wenmai.pipelines.query_orchestration import run_ask_pipeline
 from wenmai.pipelines.window_batch import WindowBatchCoordinator
 
 if TYPE_CHECKING:

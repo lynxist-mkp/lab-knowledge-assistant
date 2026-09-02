@@ -4,12 +4,12 @@ from wenmai.config import Settings
 from wenmai.generation import QueryGenerationError
 from wenmai.knowledge import Knowledge
 from wenmai.models import AskResult
-from wenmai.pipelines.query_core import (
+from wenmai.pipelines.query_batch import get_query_coordinator, window_batch_enabled
+from wenmai.pipelines.query_orchestration import (
     AskPipelineInput,
     ask_pipeline_single,
     normalize_question,
 )
-from wenmai.pipelines.query_batch import get_query_coordinator, window_batch_enabled
 
 __all__ = ["QueryGenerationError", "ask_question", "normalize_question"]
 

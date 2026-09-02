@@ -7,8 +7,9 @@ from pathlib import Path
 import pytest
 
 from wenmai.config import Settings
+from wenmai.knowledge import create_knowledge
 from wenmai.pipelines.ingestion import ingest_source
-from wenmai.retrieval import retrieve
+from wenmai.retrieval import attach_retrieval_trace_stages, retrieve
 
 
 def _write_minpai_markdown(path: Path) -> Path:
@@ -25,11 +26,34 @@ culture_domain: 妈祖
     return path
 
 
+def _retrieve_with_stages(
+    question: str,
+    settings: Settings,
+    *,
+    retrieval_mode: str | None = None,
+    knowledge=None,
+    extra_queries: list[str] | None = None,
+):
+    knowledge = knowledge or create_knowledge(settings)
+    fusion = retrieve(
+        question,
+        settings,
+        retrieval_mode=retrieval_mode,
+        knowledge=knowledge,
+        extra_queries=extra_queries,
+    )
+    return attach_retrieval_trace_stages(
+        fusion,
+        settings,
+        knowledge=knowledge,
+    )
+
+
 def test_rrf_retrieve_returns_chunks_and_fusion_stage(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     ingest_source(_write_minpai_markdown(tmp_path / "matsu.md"), test_settings)
-    result = retrieve("妈祖信仰的发源地在哪里？", test_settings, retrieval_mode="rrf")
+    result = _retrieve_with_stages("妈祖信仰的发源地在哪里？", test_settings, retrieval_mode="rrf")
     assert result.chunks
     names = [stage.name for stage in result.stages]
     assert names[:3] == ["dense", "sparse", "fusion"]
@@ -40,7 +64,7 @@ def test_sparse_only_omits_dense_stage(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     ingest_source(_write_minpai_markdown(tmp_path / "matsu.md"), test_settings)
-    result = retrieve(
+    result = _retrieve_with_stages(
         "妈祖信仰的发源地在哪里？",
         test_settings,
         retrieval_mode="sparse_only",
@@ -53,7 +77,7 @@ def test_dense_only_omits_sparse_stage(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     ingest_source(_write_minpai_markdown(tmp_path / "matsu.md"), test_settings)
-    result = retrieve(
+    result = _retrieve_with_stages(
         "妈祖信仰的发源地在哪里？",
         test_settings,
         retrieval_mode="dense_only",
@@ -74,7 +98,7 @@ def test_rerank_failure_still_returns_fused_chunks(
 
     test_settings.fakes["reranker"] = "error"
     ingest_source(_write_minpai_markdown(tmp_path / "matsu.md"), test_settings)
-    result = retrieve("妈祖信仰的发源地在哪里？", test_settings)
+    result = _retrieve_with_stages("妈祖信仰的发源地在哪里？", test_settings)
     assert result.chunks
     assert not any(stage.name == "rerank" for stage in result.stages)
 
@@ -92,8 +116,6 @@ def test_rerank_failure_still_returns_fused_chunks(
 def test_retrieve_excludes_pending_chunks_until_approved(
     test_settings: Settings, tmp_path: Path
 ) -> None:
-    from wenmai.knowledge import create_knowledge
-
     source = _write_minpai_markdown(tmp_path / "matsu.md")
     result = ingest_source(source, test_settings)
     knowledge = create_knowledge(test_settings)

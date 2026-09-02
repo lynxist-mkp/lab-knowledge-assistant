@@ -9,10 +9,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from wenmai.components.model_guard import ModelResource, phase_batch as model_phase_batch
 from wenmai.config import Settings
 from wenmai.models import IngestResult
-from wenmai.pipelines.ingestion import commit_prepared_ingest, prepare_ingest_source
+from wenmai.pipelines.ingestion import run_prepare_commit_batch
 from wenmai.pipelines.window_batch import WindowBatchCoordinator
 from wenmai.tracing.context import StageRecord
 
@@ -40,52 +39,7 @@ class _IngestJob:
 
 
 def _process_ingest_batch(jobs: list[_IngestJob], batch_meta: dict[str, object]) -> None:
-    batch_id = str(batch_meta["batch_id"])
-    prepared_jobs: list[tuple[_IngestJob, object]] = []
-    with model_phase_batch(ModelResource.MLX_VLM, True):
-        for job in jobs:
-            try:
-                from wenmai.knowledge import create_knowledge
-
-                knowledge = job.knowledge or create_knowledge(job.settings)
-                prepared = prepare_ingest_source(
-                    job.source_path,
-                    job.settings,
-                    pdf_load_mode=job.pdf_load_mode,
-                    on_stage=job.on_stage,
-                    knowledge=knowledge,
-                )
-                prepared_jobs.append((job, prepared))
-            except BaseException as exc:
-                job.error = exc
-
-    commit_jobs: list[tuple[_IngestJob, object]] = []
-    for job, prepared in prepared_jobs:
-        if job.error is not None:
-            continue
-        if isinstance(prepared, IngestResult):
-            job.result = prepared
-        else:
-            commit_jobs.append((job, prepared))
-
-    if commit_jobs:
-        with model_phase_batch(ModelResource.BGE_M3, True):
-            for job, prepared in commit_jobs:
-                try:
-                    from wenmai.knowledge import create_knowledge
-
-                    knowledge = job.knowledge or create_knowledge(job.settings)
-                    job.result = commit_prepared_ingest(
-                        prepared,
-                        job.settings,
-                        knowledge=knowledge,
-                    )
-                except BaseException as exc:
-                    job.error = exc
-
-    for job in jobs:
-        if job.result is None and job.error is None:
-            job.error = RuntimeError(f"ingest batch {batch_id} produced no result")
+    run_prepare_commit_batch(jobs, batch_id=str(batch_meta["batch_id"]))
 
 
 class IngestBatchCoordinator:

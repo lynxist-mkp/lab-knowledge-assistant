@@ -3,9 +3,9 @@ from __future__ import annotations
 import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
+from dataclasses import replace
 
 from wenmai.config import Settings
-from wenmai.factories import query_rewrite as query_rewrite_factory
 from wenmai.factories import reranker as reranker_factory
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import ScoredChunk
@@ -25,43 +25,31 @@ def retrieve(
     retrieval_mode: str | None = None,
     knowledge: Knowledge | None = None,
     extra_queries: list[str] | None = None,
-    include_trace_stages: bool = True,
-    rerank_enabled: bool | None = None,
 ) -> RetrievalResult:
-    """Return fused chunks and timing metrics. Rerank runs in 提问编排 phase 3."""
-    _ = rerank_enabled
+    """Pure fusion: no trace stages, no implicit extra-query collection."""
     mode = _resolve_mode(settings, retrieval_mode)
     knowledge = knowledge or create_knowledge(settings)
-    resolved_extras = extra_queries
-    if resolved_extras is None:
-        rewriter = query_rewrite_factory.create(settings)
-        resolved_extras = rewriter.extra_queries(question)
-
-    fusion_result = run_fusion(
+    return run_fusion(
         knowledge,
         question,
         mode=mode,
         settings=settings,
         culture_domain=culture_domain,
-        extra_queries=resolved_extras,
+        extra_queries=extra_queries or [],
     )
-    stages: list[StageRecord] = []
-    if include_trace_stages:
-        stages = stages_from_fusion(
-            knowledge, settings, fusion_result, culture_domain
-        )
 
-    return RetrievalResult(
-        chunks=fusion_result.chunks,
-        mode=fusion_result.mode,
-        stages=stages,
-        dense_chunks=fusion_result.dense_chunks,
-        sparse_chunks=fusion_result.sparse_chunks,
-        dense_elapsed_ms=fusion_result.dense_elapsed_ms,
-        sparse_elapsed_ms=fusion_result.sparse_elapsed_ms,
-        fusion_elapsed_ms=fusion_result.fusion_elapsed_ms,
-        query_path_counts=fusion_result.query_path_counts,
-    )
+
+def attach_retrieval_trace_stages(
+    result: RetrievalResult,
+    settings: Settings,
+    *,
+    knowledge: Knowledge | None = None,
+    culture_domain: str | None = None,
+) -> RetrievalResult:
+    """Attach fusion trace stages at the 提问编排 seam."""
+    knowledge = knowledge or create_knowledge(settings)
+    stages = stages_from_fusion(knowledge, settings, result, culture_domain)
+    return replace(result, stages=stages)
 
 
 def _resolve_mode(settings: Settings, retrieval_mode: str | None) -> str:
@@ -192,4 +180,9 @@ def rerank_chunks(
         )
 
 
-__all__ = ["rerank_chunks", "resolve_retrieval_mode", "retrieve"]
+__all__ = [
+    "attach_retrieval_trace_stages",
+    "rerank_chunks",
+    "resolve_retrieval_mode",
+    "retrieve",
+]
