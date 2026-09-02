@@ -11,11 +11,7 @@ from wenmai.generation import GenerationResult, generate
 from wenmai.knowledge import Knowledge
 from wenmai.models import ScoredChunk
 from wenmai.pipelines.query import normalize_question
-from wenmai.pipelines.query_orchestration import (
-    OrchestrationWork,
-    _run_generation_phase,
-    _run_phases,
-)
+from wenmai.pipelines.query_orchestration import OrchestrationWork, run_eval_works
 from wenmai.retrieval import retrieve
 from wenmai.retrieval.retrieve import rerank_chunks, resolve_retrieval_mode
 
@@ -89,25 +85,16 @@ def run_eval_group_batched(
             )
         )
 
-    _run_phases(works, phase_batch=use_batch, tolerate_retrieval_errors=True)
-
-    def _eval_generate(
-        normalized: str,
-        expanded_chunks: list[ScoredChunk],
-        gen_settings: Settings,
-    ) -> GenerationResult:
-        return generate(normalized, expanded_chunks, gen_settings)
-
-    _run_generation_phase(
+    results = run_eval_works(
         works,
         phase_batch=use_batch,
-        tolerate_generation_errors=True,
-        generate_fn=_eval_generate,
+        tolerate_errors=True,
+        generate_fn=generate,
     )
 
     return {
-        entry.item.id: (work.chunks, work.generation)
-        for entry, work in zip(group_items, works, strict=True)
+        entry.item.id: result
+        for entry, result in zip(group_items, results, strict=True)
     }
 
 

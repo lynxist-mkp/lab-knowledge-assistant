@@ -127,3 +127,108 @@ class TraceRecorder:
 
     def save(self, settings: Settings) -> None:
         JsonlTraceWriter(store_path(settings, "traces")).write_payload(self.to_dict())
+
+    def finalize_ask_generation_error(
+        self,
+        *,
+        work: object,
+        question: str,
+        culture_domain: str | None,
+        error: object,
+    ) -> None:
+        from wenmai.factories import query_rewrite as query_rewrite_factory
+
+        assert work.retrieval_result is not None
+        rewriter = query_rewrite_factory.create(work.settings)
+        mq_provider = (
+            work.settings.providers.multimodal
+            if work.settings.query_processing.multi_query
+            else None
+        )
+        self.record_query_processing(
+            question=question,
+            normalized=work.normalized,
+            elapsed_ms=work.extras_elapsed_ms,
+            culture_domain=culture_domain,
+            term_extras=work.term_extras,
+            multi_query_extras=work.multi_query_extras,
+            rewriter=rewriter.provider_name,
+            multi_query_provider=mq_provider,
+        )
+        self.append_retrieval_stages(work.retrieval_result.stages)
+        self.append_rerank_stages(work.rerank_stages)
+
+        scored_chunks = work.chunks or []
+        generation_input = f"{len(work.expanded_chunks or scored_chunks)} chunks"
+        generation_error = f"{type(error).__name__}: {error}"
+        self.record_generation(
+            provider=error.provider_name,
+            elapsed_ms=0.0,
+            input_summary=generation_input,
+            output_summary="generation failed",
+            candidate_count=0,
+            error=generation_error,
+            expanded_from=work.expanded_from,
+            expanded_chunk_ids=work.expanded_chunk_ids,
+        )
+        self.error = generation_error
+
+    def finalize_ask_work(
+        self,
+        *,
+        work: object,
+        question: str,
+        culture_domain: str | None,
+    ) -> object:
+        """Assemble query trace from orchestration work and return AskResult."""
+        from wenmai.factories import query_rewrite as query_rewrite_factory
+        from wenmai.generation import GenerationError, QueryGenerationError
+        from wenmai.models import AskResult
+
+        assert work.retrieval_result is not None
+        rewriter = query_rewrite_factory.create(work.settings)
+        mq_provider = (
+            work.settings.providers.multimodal
+            if work.settings.query_processing.multi_query
+            else None
+        )
+        self.record_query_processing(
+            question=question,
+            normalized=work.normalized,
+            elapsed_ms=work.extras_elapsed_ms,
+            culture_domain=culture_domain,
+            term_extras=work.term_extras,
+            multi_query_extras=work.multi_query_extras,
+            rewriter=rewriter.provider_name,
+            multi_query_provider=mq_provider,
+        )
+        self.append_retrieval_stages(work.retrieval_result.stages)
+        self.append_rerank_stages(work.rerank_stages)
+
+        scored_chunks = work.chunks or []
+        generation_input = f"{len(work.expanded_chunks or [])} chunks"
+        assert work.generation is not None
+        gen_result = work.generation
+
+        self.record_generation(
+            provider=gen_result.provider_name,
+            elapsed_ms=0.0,
+            input_summary=generation_input,
+            output_summary=gen_result.output_summary,
+            candidate_count=gen_result.candidate_count,
+            expanded_from=work.expanded_from,
+            expanded_chunk_ids=work.expanded_chunk_ids,
+        )
+        self.set_outcome(
+            refused=gen_result.refused,
+            refusal_reason=gen_result.refusal_reason,
+            citation_count=len(gen_result.citations),
+        )
+        return AskResult(
+            answer=gen_result.answer,
+            citations=gen_result.citations,
+            trace_id=self.trace_id,
+            refused=gen_result.refused,
+            refusal_reason=gen_result.refusal_reason,
+            ranked_chunks=scored_chunks,
+        )

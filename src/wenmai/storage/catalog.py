@@ -7,7 +7,7 @@ from typing import Any
 
 from wenmai.config import Settings
 from wenmai.knowledge.browse import ChunkSummary, CultureDomainGroup, DocumentSummary
-from wenmai.knowledge.domain import culture_domain, preview, review_status, title
+from wenmai.knowledge.domain import REVIEW_PENDING, culture_domain, preview, review_status, title
 from wenmai.models import Chunk
 from wenmai.storage.paths import store_path
 
@@ -135,3 +135,15 @@ class DocumentCatalog:
                 )
             )
         return groups
+
+    def list_pending_documents(self) -> list[CatalogDocument]:
+        """Return documents with at least one 待审 chunk (catalog-backed, no list_all)."""
+        pending: list[CatalogDocument] = []
+        for document_id in sorted(self._documents):
+            entry = self._parse_document(document_id, self._documents[document_id])
+            if any(chunk.review_status == REVIEW_PENDING for chunk in entry.chunks):
+                pending.append(entry)
+        return pending
+
+
+__all__ = ["CatalogDocument", "DocumentCatalog"]

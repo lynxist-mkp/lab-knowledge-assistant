@@ -10,7 +10,7 @@ from wenmai.factories import vector_store as vector_store_factory
 from wenmai.factories.loader import ensure_providers
 from wenmai.knowledge.browse import CultureDomainGroup, chunk_detail_from_chunk
 from wenmai.knowledge.domain import REVIEW_APPROVED, is_searchable
-from wenmai.knowledge.review import PendingReviewDocument, collect_pending_review_documents
+from wenmai.knowledge.review import PendingReviewDocument, list_pending_from_catalog
 from wenmai.knowledge.write import WritePath
 from wenmai.models import Chunk, ScoredChunk
 from wenmai.storage.catalog import DocumentCatalog
@@ -148,7 +148,7 @@ class Knowledge:
         self._write.update_review_status(document_id, status)
 
     def list_pending_review_documents(self) -> list[PendingReviewDocument]:
-        return collect_pending_review_documents(self.list_all())
+        return list_pending_from_catalog(self._catalog)
 
     def approve_review(self, document_id: str) -> None:
         from wenmai.knowledge.document_card import DocumentNotFoundError

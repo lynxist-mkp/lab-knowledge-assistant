@@ -3,24 +3,17 @@
 from __future__ import annotations
 
 import re
-import time
-from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING
 
-from wenmai.components.model_guard import ModelResource, begin_batch, end_batch
 from wenmai.config import Settings
-from wenmai.generation import GenerationError, QueryGenerationError, generate
-from wenmai.knowledge import Knowledge, create_knowledge
+from wenmai.knowledge import Knowledge
 from wenmai.models import AskResult
 from wenmai.pipelines.query_orchestration import (
+    AskWorkContext,
     OrchestrationWork,
-    _run_phases,
-    prepare_generation_context,
+    run_ask_works,
 )
-from wenmai.query_processing import multi_query
-from wenmai.query_processing.extras import CollectedExtras
-from wenmai.tracing import TraceRecorder
 
 if TYPE_CHECKING:
     from wenmai.pipelines.query_batch import _AskJob
@@ -29,34 +22,6 @@ if TYPE_CHECKING:
 def normalize_question(question: str) -> str:
     collapsed = re.sub(r"\s+", " ", question.strip())
     return collapsed
-
-
-@contextmanager
-def _phase(resource: ModelResource, enabled: bool) -> Iterator[None]:
-    if enabled:
-        begin_batch(resource)
-    try:
-        yield
-    finally:
-        if enabled:
-            end_batch()
-
-
-def _collect_extras(
-    question: str,
-    settings: Settings,
-    *,
-    phase_batch: bool,
-) -> CollectedExtras:
-    from wenmai.factories import query_rewrite as query_rewrite_factory
-
-    rewriter = query_rewrite_factory.create(settings)
-    term_extras = rewriter.extra_queries(question)
-    mq_extras: list[str] = []
-    if settings.query_processing.multi_query:
-        with _phase(ModelResource.MLX_VLM, phase_batch):
-            mq_extras = multi_query.expand(question, settings)
-    return CollectedExtras(term_extras=term_extras, multi_query_extras=mq_extras)
 
 
 @dataclass
@@ -142,139 +107,31 @@ def run_ask_pipeline(
             job.batch_id = batch_id
             job.batch_size = batch_size
 
-    any_multi_query = any(job.settings.query_processing.multi_query for job in jobs)
-    with _phase(ModelResource.MLX_VLM, phase_batch and any_multi_query):
-        extras_by_job: list[CollectedExtras] = []
-        for job in jobs:
-            extras_by_job.append(
-                _collect_extras(
-                    normalize_question(job.question),
-                    job.settings,
-                    phase_batch=False,
-                )
-            )
-
-    works: list[OrchestrationWork] = []
-    for job, extras in zip(jobs, extras_by_job, strict=True):
-        works.append(
-            OrchestrationWork(
-                normalized=normalize_question(job.question),
-                settings=job.settings,
-                culture_domain=job.culture_domain,
-                retrieval_mode=job.retrieval_mode,
-                rerank_enabled=job.rerank_enabled,
-                knowledge=job.knowledge,
-                extra_queries=extras.combined,
-                term_extras=extras.term_extras,
-                multi_query_extras=extras.multi_query_extras,
-                collect_extras=False,
-            )
-        )
-
-    _run_phases(works, phase_batch=phase_batch, tolerate_retrieval_errors=False)
-
-    with _phase(ModelResource.MLX_VLM, phase_batch):
-        for job, work in zip(jobs, works, strict=True):
-            try:
-                job.result = _finish_job(job, work=work)
-            except BaseException as exc:
-                job.error = exc
-
-
-def _finish_job(
-    job: _AskJob | _SingleJob,
-    *,
-    work: OrchestrationWork,
-) -> AskResult:
-    settings = job.settings
-    question = job.question
-    normalized = work.normalized
-    trace = TraceRecorder(
-        question=question,
-        batch_id=job.batch_id,
-        batch_size=job.batch_size,
-        batch_wait_ms=job.batch_wait_ms,
-    )
-
-    try:
-        from wenmai.factories import query_rewrite as query_rewrite_factory
-
-        rewriter = query_rewrite_factory.create(settings)
-        processing_started = time.perf_counter()
-        mq_provider = (
-            settings.providers.multimodal
-            if settings.query_processing.multi_query
-            else None
-        )
-        trace.record_query_processing(
-            question=question,
+    pairs: list[tuple[OrchestrationWork, AskWorkContext]] = []
+    for job in jobs:
+        normalized = normalize_question(job.question)
+        work = OrchestrationWork(
             normalized=normalized,
-            elapsed_ms=(time.perf_counter() - processing_started) * 1000,
+            settings=job.settings,
             culture_domain=job.culture_domain,
-            term_extras=work.term_extras,
-            multi_query_extras=work.multi_query_extras,
-            rewriter=rewriter.provider_name,
-            multi_query_provider=mq_provider,
+            retrieval_mode=job.retrieval_mode,
+            rerank_enabled=job.rerank_enabled,
+            knowledge=job.knowledge,
+            collect_extras=True,
         )
-
-        assert work.retrieval_result is not None
-        trace.append_retrieval_stages(work.retrieval_result.stages)
-        trace.append_rerank_stages(work.rerank_stages)
-
-        scored_chunks = work.chunks or []
-        knowledge = job.knowledge or create_knowledge(settings)
-        expanded_chunks, expanded_from, expanded_chunk_ids = prepare_generation_context(
-            scored_chunks,
-            knowledge,
-            settings,
+        context = AskWorkContext(
+            question=job.question,
+            record_trace=job.record_trace,
+            batch_id=job.batch_id,
+            batch_size=job.batch_size,
+            batch_wait_ms=job.batch_wait_ms,
         )
+        pairs.append((work, context))
 
-        generation_started = time.perf_counter()
-        generation_input = f"{len(expanded_chunks)} chunks"
-        try:
-            gen_result = generate(normalized, expanded_chunks, settings)
-        except GenerationError as exc:
-            generation_error = f"{type(exc).__name__}: {exc}"
-            trace.record_generation(
-                provider=exc.provider_name,
-                elapsed_ms=(time.perf_counter() - generation_started) * 1000,
-                input_summary=generation_input,
-                output_summary="generation failed",
-                candidate_count=0,
-                error=generation_error,
-                expanded_from=expanded_from,
-                expanded_chunk_ids=expanded_chunk_ids,
-            )
-            trace.error = generation_error
-            raise QueryGenerationError(str(exc), trace.trace_id) from exc
-
-        trace.record_generation(
-            provider=gen_result.provider_name,
-            elapsed_ms=(time.perf_counter() - generation_started) * 1000,
-            input_summary=generation_input,
-            output_summary=gen_result.output_summary,
-            candidate_count=gen_result.candidate_count,
-            expanded_from=expanded_from,
-            expanded_chunk_ids=expanded_chunk_ids,
-        )
-
-        trace.set_outcome(
-            refused=gen_result.refused,
-            refusal_reason=gen_result.refusal_reason,
-            citation_count=len(gen_result.citations),
-        )
-
-        return AskResult(
-            answer=gen_result.answer,
-            citations=gen_result.citations,
-            trace_id=trace.trace_id,
-            refused=gen_result.refused,
-            refusal_reason=gen_result.refusal_reason,
-            ranked_chunks=scored_chunks,
-        )
-    finally:
-        if job.record_trace:
-            trace.save(settings)
+    outcomes = run_ask_works(pairs, phase_batch=phase_batch)
+    for job, outcome in zip(jobs, outcomes, strict=True):
+        job.result = outcome.result
+        job.error = outcome.error
 
 
 __all__ = [
