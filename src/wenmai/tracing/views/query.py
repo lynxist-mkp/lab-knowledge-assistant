@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from wenmai.tracing.stage_result import normalize_query_stages
 from wenmai.tracing.steps import QUERY_LABELS, QUERY_STAGE_ORDER, stage_label
 
 
@@ -95,9 +96,7 @@ class QueryTraceDetail:
 
 
 def _stage_by_name(record: dict[str, Any], name: str) -> dict[str, Any] | None:
-    for stage in record.get("stages") or []:
-        if not isinstance(stage, dict):
-            continue
+    for stage in normalize_query_stages(record):
         if stage.get("name") == name:
             return stage
     return None
@@ -203,8 +202,8 @@ def _rank_changes(record: dict[str, Any]) -> list[RankChange]:
 def list_stage_latencies(record: dict[str, Any]) -> list[StageLatency]:
     stage_by_name = {
         stage.get("name"): stage
-        for stage in record.get("stages") or []
-        if isinstance(stage, dict) and isinstance(stage.get("name"), str)
+        for stage in normalize_query_stages(record)
+        if isinstance(stage.get("name"), str)
     }
     latencies: list[StageLatency] = []
     for name in QUERY_STAGE_ORDER:

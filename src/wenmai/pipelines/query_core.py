@@ -11,21 +11,19 @@ from typing import TYPE_CHECKING, Iterator
 from wenmai.components.model_guard import ModelResource, begin_batch, end_batch
 from wenmai.config import Settings
 from wenmai.generation import GenerationError, QueryGenerationError, generate
-from wenmai.generation.expand import expand_for_generation
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import AskResult
+from wenmai.pipelines.query_orchestration import (
+    OrchestrationWork,
+    _run_phases,
+    prepare_generation_context,
+)
 from wenmai.query_processing import multi_query
 from wenmai.query_processing.extras import CollectedExtras
-from wenmai.retrieval import retrieve
-from wenmai.retrieval.retrieve import rerank_chunks, resolve_retrieval_mode
-from wenmai.tracing import TraceContext, save_trace
-from wenmai.tracing.stages.query import QueryStage
+from wenmai.tracing import TraceRecorder
 
 if TYPE_CHECKING:
     from wenmai.pipelines.query_batch import _AskJob
-
-
-_DENSE_MODES = frozenset({"dense_only", "rrf"})
 
 
 def normalize_question(question: str) -> str:
@@ -42,10 +40,6 @@ def _phase(resource: ModelResource, enabled: bool) -> Iterator[None]:
     finally:
         if enabled:
             end_batch()
-
-
-def _needs_dense_embedding(mode: str) -> bool:
-    return mode in _DENSE_MODES
 
 
 def _collect_extras(
@@ -141,7 +135,6 @@ def run_ask_pipeline(
     if not jobs:
         return
 
-    settings = jobs[0].settings
     if batch_meta:
         batch_id = str(batch_meta["batch_id"])
         batch_size = int(batch_meta["batch_size"])  # type: ignore[arg-type]
@@ -149,7 +142,6 @@ def run_ask_pipeline(
             job.batch_id = batch_id
             job.batch_size = batch_size
 
-    # Phase 1: multi-query (MLX)
     any_multi_query = any(job.settings.query_processing.multi_query for job in jobs)
     with _phase(ModelResource.MLX_VLM, phase_batch and any_multi_query):
         extras_by_job: list[CollectedExtras] = []
@@ -162,60 +154,29 @@ def run_ask_pipeline(
                 )
             )
 
-    # Phase 2: retrieval embeddings (BGE when dense path is used)
-    modes = [
-        resolve_retrieval_mode(
-            job.settings, job.retrieval_mode, job.rerank_enabled
-        )
-        for job in jobs
-    ]
-    needs_bge = any(_needs_dense_embedding(mode) for mode, _ in modes)
-    retrieved_by_job: list[tuple[object, bool, CollectedExtras]] = []
-    with _phase(ModelResource.BGE_M3, phase_batch and needs_bge):
-        for job, (mode, do_rerank), extras in zip(jobs, modes, extras_by_job, strict=True):
-            retrieved = retrieve(
-                normalize_question(job.question),
-                job.settings,
+    works: list[OrchestrationWork] = []
+    for job, extras in zip(jobs, extras_by_job, strict=True):
+        works.append(
+            OrchestrationWork(
+                normalized=normalize_question(job.question),
+                settings=job.settings,
                 culture_domain=job.culture_domain,
-                retrieval_mode=mode,
-                rerank_enabled=False,
+                retrieval_mode=job.retrieval_mode,
+                rerank_enabled=job.rerank_enabled,
                 knowledge=job.knowledge,
                 extra_queries=extras.combined,
+                term_extras=extras.term_extras,
+                multi_query_extras=extras.multi_query_extras,
+                collect_extras=False,
             )
-            retrieved_by_job.append((retrieved, do_rerank, extras))
+        )
 
-    # Phase 3: rerank (CrossEncoder)
-    any_rerank = any(do_rerank for _, do_rerank, _ in retrieved_by_job)
-    reranked_by_job: list[tuple[list, list]] = []
-    with _phase(ModelResource.CROSS_ENCODER, phase_batch and any_rerank):
-        for job, (retrieved, do_rerank, _extras) in zip(
-            jobs, retrieved_by_job, strict=True
-        ):
-            chunks = retrieved.chunks
-            extra_stages: list = []
-            if do_rerank:
-                chunks, rerank_stage = rerank_chunks(
-                    job.settings,
-                    normalize_question(job.question),
-                    chunks,
-                )
-                if rerank_stage is not None:
-                    extra_stages.append(rerank_stage)
-            reranked_by_job.append((chunks, extra_stages))
+    _run_phases(works, phase_batch=phase_batch, tolerate_retrieval_errors=False)
 
-    # Phase 4: generation (MLX) — per job trace assembly
     with _phase(ModelResource.MLX_VLM, phase_batch):
-        for job, (retrieved, _do_rerank, extras), (scored_chunks, rerank_stages) in zip(
-            jobs, retrieved_by_job, reranked_by_job, strict=True
-        ):
+        for job, work in zip(jobs, works, strict=True):
             try:
-                job.result = _finish_job(
-                    job,
-                    extras=extras,
-                    retrieved=retrieved,
-                    rerank_stages=rerank_stages,
-                    scored_chunks=scored_chunks,
-                )
+                job.result = _finish_job(job, work=work)
             except BaseException as exc:
                 job.error = exc
 
@@ -223,19 +184,17 @@ def run_ask_pipeline(
 def _finish_job(
     job: _AskJob | _SingleJob,
     *,
-    extras: CollectedExtras,
-    retrieved: object,
-    rerank_stages: list,
-    scored_chunks: list,
+    work: OrchestrationWork,
 ) -> AskResult:
     settings = job.settings
     question = job.question
-    normalized = normalize_question(question)
-    trace = TraceContext(trace_type="query", metadata={"question": question})
-    if job.batch_id:
-        trace.metadata["batch_id"] = job.batch_id
-        trace.metadata["batch_size"] = job.batch_size
-        trace.metadata["batch_wait_ms"] = round(job.batch_wait_ms, 1)
+    normalized = work.normalized
+    trace = TraceRecorder(
+        question=question,
+        batch_id=job.batch_id,
+        batch_size=job.batch_size,
+        batch_wait_ms=job.batch_wait_ms,
+    )
 
     try:
         from wenmai.factories import query_rewrite as query_rewrite_factory
@@ -247,29 +206,27 @@ def _finish_job(
             if settings.query_processing.multi_query
             else None
         )
-        trace.append_stage(
-            QueryStage.query_processing(
-                question=question,
-                normalized=normalized,
-                elapsed_ms=(time.perf_counter() - processing_started) * 1000,
-                culture_domain=job.culture_domain,
-                term_extras=extras.term_extras,
-                multi_query_extras=extras.multi_query_extras,
-                rewriter=rewriter.provider_name,
-                multi_query_provider=mq_provider,
-            )
+        trace.record_query_processing(
+            question=question,
+            normalized=normalized,
+            elapsed_ms=(time.perf_counter() - processing_started) * 1000,
+            culture_domain=job.culture_domain,
+            term_extras=work.term_extras,
+            multi_query_extras=work.multi_query_extras,
+            rewriter=rewriter.provider_name,
+            multi_query_provider=mq_provider,
         )
 
-        for stage in retrieved.stages:
-            trace.append_stage(stage)
-        for stage in rerank_stages:
-            trace.append_stage(stage)
+        assert work.retrieval_result is not None
+        trace.append_retrieval_stages(work.retrieval_result.stages)
+        trace.append_rerank_stages(work.rerank_stages)
 
+        scored_chunks = work.chunks or []
         knowledge = job.knowledge or create_knowledge(settings)
-        expanded_chunks, expanded_from, expanded_chunk_ids = expand_for_generation(
+        expanded_chunks, expanded_from, expanded_chunk_ids = prepare_generation_context(
             scored_chunks,
             knowledge,
-            settings.retrieval.adjacent_n,
+            settings,
         )
 
         generation_started = time.perf_counter()
@@ -278,38 +235,34 @@ def _finish_job(
             gen_result = generate(normalized, expanded_chunks, settings)
         except GenerationError as exc:
             generation_error = f"{type(exc).__name__}: {exc}"
-            trace.append_stage(
-                QueryStage.generation(
-                    provider=exc.provider_name,
-                    elapsed_ms=(time.perf_counter() - generation_started) * 1000,
-                    input_summary=generation_input,
-                    output_summary="generation failed",
-                    candidate_count=0,
-                    error=generation_error,
-                    expanded_from=expanded_from,
-                    expanded_chunk_ids=expanded_chunk_ids,
-                )
+            trace.record_generation(
+                provider=exc.provider_name,
+                elapsed_ms=(time.perf_counter() - generation_started) * 1000,
+                input_summary=generation_input,
+                output_summary="generation failed",
+                candidate_count=0,
+                error=generation_error,
+                expanded_from=expanded_from,
+                expanded_chunk_ids=expanded_chunk_ids,
             )
             trace.error = generation_error
             raise QueryGenerationError(str(exc), trace.trace_id) from exc
 
-        trace.append_stage(
-            QueryStage.generation(
-                provider=gen_result.provider_name,
-                elapsed_ms=(time.perf_counter() - generation_started) * 1000,
-                input_summary=generation_input,
-                output_summary=gen_result.output_summary,
-                candidate_count=gen_result.candidate_count,
-                expanded_from=expanded_from,
-                expanded_chunk_ids=expanded_chunk_ids,
-            )
+        trace.record_generation(
+            provider=gen_result.provider_name,
+            elapsed_ms=(time.perf_counter() - generation_started) * 1000,
+            input_summary=generation_input,
+            output_summary=gen_result.output_summary,
+            candidate_count=gen_result.candidate_count,
+            expanded_from=expanded_from,
+            expanded_chunk_ids=expanded_chunk_ids,
         )
 
-        trace.metadata["outcome"] = {
-            "refused": gen_result.refused,
-            "refusal_reason": gen_result.refusal_reason,
-            "citation_count": len(gen_result.citations),
-        }
+        trace.set_outcome(
+            refused=gen_result.refused,
+            refusal_reason=gen_result.refusal_reason,
+            citation_count=len(gen_result.citations),
+        )
 
         return AskResult(
             answer=gen_result.answer,
@@ -321,7 +274,7 @@ def _finish_job(
         )
     finally:
         if job.record_trace:
-            save_trace(settings, trace)
+            trace.save(settings)
 
 
 __all__ = [

@@ -26,7 +26,7 @@ def retrieve(
     knowledge: Knowledge | None = None,
     extra_queries: list[str] | None = None,
 ) -> RetrievalResult:
-    mode, do_rerank = _resolve_retrieval(settings, retrieval_mode, rerank_enabled)
+    mode, _do_rerank = _resolve_retrieval(settings, retrieval_mode, rerank_enabled)
     knowledge = knowledge or create_knowledge(settings)
     resolved_extras = extra_queries
     if resolved_extras is None:
@@ -44,10 +44,6 @@ def retrieve(
     chunks = fusion_result.chunks
     stages = _stages_from_fusion(knowledge, settings, fusion_result, culture_domain)
 
-    if do_rerank:
-        chunks, rerank_stage = rerank_chunks(settings, question, chunks)
-        if rerank_stage is not None:
-            stages = [*stages, rerank_stage]
     return RetrievalResult(
         chunks=chunks,
         mode=fusion_result.mode,

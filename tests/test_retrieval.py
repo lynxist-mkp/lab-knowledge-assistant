@@ -70,13 +70,23 @@ def test_unknown_retrieval_mode_raises(test_settings: Settings) -> None:
 def test_rerank_failure_still_returns_fused_chunks(
     test_settings: Settings, tmp_path: Path
 ) -> None:
+    from wenmai.retrieval.retrieve import rerank_chunks
+
     test_settings.fakes["reranker"] = "error"
     ingest_source(_write_minpai_markdown(tmp_path / "matsu.md"), test_settings)
     result = retrieve("妈祖信仰的发源地在哪里？", test_settings, rerank_enabled=True)
     assert result.chunks
-    rerank = next(stage for stage in result.stages if stage.name == "rerank")
-    assert rerank.method == "rrf_fallback"
-    assert rerank.fallback_reason
+    assert not any(stage.name == "rerank" for stage in result.stages)
+
+    reranked, rerank_stage = rerank_chunks(
+        test_settings,
+        "妈祖信仰的发源地在哪里？",
+        result.chunks,
+    )
+    assert reranked
+    assert rerank_stage is not None
+    assert rerank_stage.method == "rrf_fallback"
+    assert rerank_stage.fallback_reason
 
 
 def test_retrieve_excludes_pending_chunks_until_approved(

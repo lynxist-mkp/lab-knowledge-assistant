@@ -9,7 +9,8 @@ from wenmai.factories import embedding as embedding_factory
 from wenmai.factories import vector_store as vector_store_factory
 from wenmai.factories.loader import ensure_providers
 from wenmai.knowledge.browse import CultureDomainGroup, chunk_detail_from_chunk
-from wenmai.knowledge.domain import is_searchable
+from wenmai.knowledge.domain import REVIEW_APPROVED, is_searchable
+from wenmai.knowledge.review import PendingReviewDocument, collect_pending_review_documents
 from wenmai.knowledge.write import WritePath
 from wenmai.models import Chunk, ScoredChunk
 from wenmai.storage.catalog import DocumentCatalog
@@ -144,12 +145,24 @@ class Knowledge:
         return _take_searchable(scored, top_k)
 
     def set_review_status(self, document_id: str, status: str) -> None:
-        chunks = self.get_by_document_id(document_id)
-        if not chunks:
-            return
-        for chunk in chunks:
-            chunk.metadata["审阅状态"] = status
-        self._write._upsert_chunks(chunks)
+        self._write.update_review_status(document_id, status)
+
+    def list_pending_review_documents(self) -> list[PendingReviewDocument]:
+        return collect_pending_review_documents(self.list_all())
+
+    def approve_review(self, document_id: str) -> None:
+        from wenmai.knowledge.document_card import DocumentNotFoundError
+
+        if not self.get_by_document_id(document_id):
+            raise DocumentNotFoundError(document_id)
+        self.set_review_status(document_id, REVIEW_APPROVED)
+
+    def reject_review(self, document_id: str) -> None:
+        from wenmai.knowledge.document_card import DocumentNotFoundError
+
+        if not self.get_by_document_id(document_id):
+            raise DocumentNotFoundError(document_id)
+        self.delete_document(document_id)
 
     def get_by_document_id(self, document_id: str) -> list[Chunk]:
         return self._store.get_by_document_id(document_id)
