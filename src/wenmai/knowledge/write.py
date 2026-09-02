@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
-from wenmai.knowledge.domain import REVIEW_STATUS_FIELD, stamp_review_status
+from wenmai.knowledge.domain import REVIEW_APPROVED, REVIEW_STATUS_FIELD, stamp_review_status
 from wenmai.models import Chunk
 from wenmai.storage.fingerprints import FingerprintRecord
 
@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from wenmai.components.bm25.index import Bm25Index
     from wenmai.components.embedding.base import BaseEmbedding
     from wenmai.components.vector_store.base import BaseVectorStore
+    from wenmai.knowledge.read import ReadPath
     from wenmai.knowledge.store import IngestStatus, PrepareResult, UpsertResult
     from wenmai.storage.catalog import DocumentCatalog
     from wenmai.storage.document_images import DocumentImages
@@ -29,6 +30,7 @@ class WritePath:
         images: DocumentImages,
         fingerprints: FingerprintStore,
         catalog: DocumentCatalog,
+        read: ReadPath,
     ) -> None:
         self._embedder = embedder
         self._store = store
@@ -36,6 +38,7 @@ class WritePath:
         self._images = images
         self._fingerprints = fingerprints
         self._catalog = catalog
+        self._read = read
 
     def plan_document(
         self,
@@ -90,6 +93,20 @@ class WritePath:
         for chunk in chunks:
             chunk.metadata[REVIEW_STATUS_FIELD] = status
         self._upsert_chunks(chunks)
+
+    def approve_review(self, document_id: str) -> None:
+        from wenmai.knowledge.document_card import DocumentNotFoundError
+
+        if not self._read.get_by_document_id(document_id):
+            raise DocumentNotFoundError(document_id)
+        self.update_review_status(document_id, REVIEW_APPROVED)
+
+    def reject_review(self, document_id: str) -> None:
+        from wenmai.knowledge.document_card import DocumentNotFoundError
+
+        if not self._read.get_by_document_id(document_id):
+            raise DocumentNotFoundError(document_id)
+        self.delete_document(document_id)
 
     def delete_document(self, document_id: str) -> None:
         backup = self._store.get_by_document_id(document_id)

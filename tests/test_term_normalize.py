@@ -10,6 +10,7 @@ from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
 from wenmai.pipelines.query import ask_question
+from wenmai.query_processing.extras import collect_extra_queries
 from wenmai.retrieval import retrieve
 from wenmai.tracing.store import get_trace_record
 
@@ -64,14 +65,12 @@ def test_miss_lexicon_identical_retrieval(test_settings: Settings, tmp_path: Pat
     control = retrieve(
         "船政学堂哪年办的？",
         test_settings,
-        rerank_enabled=False,
         knowledge=knowledge,
     )
     _settings_with_lexicon(test_settings, tmp_path, rewriter="none")
     disabled = retrieve(
         "船政学堂哪年办的？",
         test_settings,
-        rerank_enabled=False,
         knowledge=knowledge,
     )
 
@@ -106,7 +105,6 @@ def test_synonym_extra_path_hits_fusion(test_settings: Settings, tmp_path: Path)
     missed = retrieve(
         "马尾学堂哪年办的？",
         without,
-        rerank_enabled=False,
         retrieval_mode="sparse_only",
         knowledge=knowledge,
     )
@@ -121,9 +119,9 @@ def test_synonym_extra_path_hits_fusion(test_settings: Settings, tmp_path: Path)
     hit = retrieve(
         "马尾学堂哪年办的？",
         with_lexicon,
-        rerank_enabled=False,
         retrieval_mode="sparse_only",
         knowledge=knowledge,
+        extra_queries=collect_extra_queries("马尾学堂哪年办的？", with_lexicon).combined,
     )
     assert hit.chunks
     assert hit.chunks[0].chunk.chunk_id == "doc-ship:0000"

@@ -71,7 +71,6 @@ def test_multi_query_extra_path_hits_fusion(test_settings: Settings, tmp_path: P
     disabled = retrieve(
         "这所院校始于哪一年？",
         test_settings,
-        rerank_enabled=False,
         retrieval_mode="sparse_only",
         knowledge=knowledge,
         extra_queries=[],
@@ -81,7 +80,6 @@ def test_multi_query_extra_path_hits_fusion(test_settings: Settings, tmp_path: P
     enabled = retrieve(
         "这所院校始于哪一年？",
         test_settings,
-        rerank_enabled=False,
         retrieval_mode="sparse_only",
         knowledge=knowledge,
         extra_queries=["马尾船政学堂是哪年创立的？"],

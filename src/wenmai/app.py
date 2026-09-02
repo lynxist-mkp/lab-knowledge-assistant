@@ -17,11 +17,6 @@ from wenmai.config import Settings
 from wenmai.eval import list_eval_runs, run_eval
 from wenmai.knowledge.document_card import DocumentNotFoundError, build_document_card
 from wenmai.ops.overview import build_overview_stats
-from wenmai.ops.review import (
-    approve_document,
-    list_pending_documents,
-    reject_document,
-)
 from wenmai.pipelines.ingestion import ingest_source
 from wenmai.pipelines.query import QueryGenerationError, ask_question
 from wenmai.runtime import create_runtime
@@ -188,13 +183,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def api_review_pending() -> list[dict[str, object]]:
         return [
             item.as_dict()
-            for item in list_pending_documents(app.state.knowledge)
+            for item in app.state.knowledge.list_pending_review_documents()
         ]
 
     @app.post("/api/review/{document_id}/approve")
     def api_review_approve(document_id: str) -> dict[str, str]:
         try:
-            approve_document(app.state.knowledge, document_id)
+            app.state.knowledge.approve_review(document_id)
         except DocumentNotFoundError as exc:
             raise HTTPException(status_code=404, detail="document not found") from exc
         return {"document_id": document_id, "审阅状态": "已通过"}
@@ -202,7 +197,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/review/{document_id}/reject")
     def api_review_reject(document_id: str) -> dict[str, str]:
         try:
-            reject_document(app.state.knowledge, document_id)
+            app.state.knowledge.reject_review(document_id)
         except DocumentNotFoundError as exc:
             raise HTTPException(status_code=404, detail="document not found") from exc
         return {"document_id": document_id, "审阅状态": "已驳回"}

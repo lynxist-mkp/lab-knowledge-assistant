@@ -180,7 +180,7 @@ def _ingest_corpus_manifest_batched(
                 index,
                 len(selected),
                 item_id,
-                len(outcome.chunks),
+                len(outcome.body.chunks),
             )
     finally:
         end_batch()

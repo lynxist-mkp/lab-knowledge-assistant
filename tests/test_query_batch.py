@@ -11,7 +11,7 @@ from wenmai.components.model_guard import ModelResource, active_resource, end_ba
 from wenmai.models import AskResult
 from wenmai.pipelines.query import ask_question
 from wenmai.pipelines.query_batch import QueryBatchCoordinator, reset_query_coordinator
-from wenmai.pipelines.query_core import run_ask_pipeline
+from wenmai.pipelines.query_orchestration import run_ask_pipeline
 
 
 @pytest.fixture(autouse=True)

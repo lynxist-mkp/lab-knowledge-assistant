@@ -3,28 +3,40 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from wenmai.components.model_guard import ModelResource, phase_batch as model_phase_batch
 from wenmai.config import Settings
 from wenmai.generation import GenerationError, GenerationResult, QueryGenerationError, generate
+from wenmai.generation.expand import expand_for_generation
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import AskResult, ScoredChunk
 from wenmai.query_processing.extras import collect_extra_queries
 from wenmai.retrieval import retrieve
 from wenmai.retrieval.fusion import RetrievalResult
-from wenmai.retrieval.retrieve import rerank_chunks, resolve_retrieval_mode
-from wenmai.tracing import TraceRecorder
+from wenmai.retrieval.retrieve import (
+    attach_retrieval_trace_stages,
+    rerank_chunks,
+    resolve_retrieval_mode,
+)
+from wenmai.tracing.query_trace import QueryTrace
 
-from wenmai.generation.expand import expand_for_generation
+if TYPE_CHECKING:
+    from wenmai.pipelines.query_batch import _AskJob
 
 logger = logging.getLogger(__name__)
 
 _DENSE_MODES = frozenset({"dense_only", "rrf"})
 
 GenerateFn = Callable[[str, list[ScoredChunk], Settings], GenerationResult]
+
+
+def normalize_question(question: str) -> str:
+    collapsed = re.sub(r"\s+", " ", question.strip())
+    return collapsed
 
 
 def prepare_generation_context(
@@ -93,30 +105,70 @@ class AskWorkOutcome:
     error: BaseException | None = None
 
 
-def _collect_extras_for_work(work: OrchestrationWork, *, phase_batch: bool) -> None:
-    started = time.perf_counter()
-    extras = collect_extra_queries(work.normalized, work.settings)
-    work.term_extras = extras.term_extras
-    work.multi_query_extras = extras.multi_query_extras
-    work.extra_queries = extras.combined
-    work.extras_elapsed_ms = (time.perf_counter() - started) * 1000
+@dataclass
+class AskPipelineInput:
+    question: str
+    settings: Settings
+    culture_domain: str | None = None
+    retrieval_mode: str | None = None
+    rerank_enabled: bool | None = None
+    knowledge: Knowledge | None = None
+    record_trace: bool = True
+    batch_id: str | None = None
+    batch_size: int = 1
+    batch_wait_ms: float = 0.0
 
 
-def _run_phases(
-    works: list[OrchestrationWork],
-    *,
-    phase_batch: bool,
-    tolerate_retrieval_errors: bool = False,
-) -> None:
-    if not works:
-        return
+@dataclass
+class _SingleJob:
+    """Minimal job adapter for single-request pipeline runs."""
 
-    retrieval_works = [work for work in works if not work.skip_retrieval]
-    for work in works:
-        if work.skip_retrieval:
-            work.chunks = work.pre_chunks
+    payload: AskPipelineInput
+    result: AskResult | None = None
+    error: BaseException | None = None
+    batch_id: str | None = None
+    batch_size: int = 1
+    batch_wait_ms: float = 0.0
 
-    if retrieval_works:
+    @property
+    def question(self) -> str:
+        return self.payload.question
+
+    @property
+    def settings(self) -> Settings:
+        return self.payload.settings
+
+    @property
+    def culture_domain(self) -> str | None:
+        return self.payload.culture_domain
+
+    @property
+    def retrieval_mode(self) -> str | None:
+        return self.payload.retrieval_mode
+
+    @property
+    def rerank_enabled(self) -> bool | None:
+        return self.payload.rerank_enabled
+
+    @property
+    def knowledge(self) -> Knowledge | None:
+        return self.payload.knowledge
+
+    @property
+    def record_trace(self) -> bool:
+        return self.payload.record_trace
+
+
+class ExtrasPhase:
+    def run(
+        self,
+        works: list[OrchestrationWork],
+        *,
+        phase_batch: bool,
+    ) -> None:
+        retrieval_works = [work for work in works if not work.skip_retrieval]
+        if not retrieval_works:
+            return
         any_multi_query = any(
             work.collect_extras and work.settings.query_processing.multi_query
             for work in retrieval_works
@@ -124,8 +176,25 @@ def _run_phases(
         with model_phase_batch(ModelResource.MLX_VLM, phase_batch and any_multi_query):
             for work in retrieval_works:
                 if work.collect_extras:
-                    _collect_extras_for_work(work, phase_batch=False)
+                    started = time.perf_counter()
+                    extras = collect_extra_queries(work.normalized, work.settings)
+                    work.term_extras = extras.term_extras
+                    work.multi_query_extras = extras.multi_query_extras
+                    work.extra_queries = extras.combined
+                    work.extras_elapsed_ms = (time.perf_counter() - started) * 1000
 
+
+class RetrievalPhase:
+    def run(
+        self,
+        works: list[OrchestrationWork],
+        *,
+        phase_batch: bool,
+        tolerate_errors: bool,
+    ) -> None:
+        retrieval_works = [work for work in works if not work.skip_retrieval]
+        if not retrieval_works:
+            return
         modes = [
             resolve_retrieval_mode(
                 work.settings, work.retrieval_mode, work.rerank_enabled
@@ -139,18 +208,24 @@ def _run_phases(
             ):
                 work._do_rerank = do_rerank
                 try:
-                    result = retrieve(
+                    knowledge = work.knowledge or create_knowledge(work.settings)
+                    fusion = retrieve(
                         work.normalized,
                         work.settings,
                         culture_domain=work.culture_domain,
                         retrieval_mode=mode,
-                        knowledge=work.knowledge,
+                        knowledge=knowledge,
                         extra_queries=work.extra_queries,
                     )
-                    work.retrieval_result = result
-                    work.chunks = result.chunks
+                    work.retrieval_result = attach_retrieval_trace_stages(
+                        fusion,
+                        work.settings,
+                        knowledge=knowledge,
+                        culture_domain=work.culture_domain,
+                    )
+                    work.chunks = work.retrieval_result.chunks
                 except Exception:
-                    if tolerate_retrieval_errors:
+                    if tolerate_errors:
                         logger.warning(
                             "orchestration retrieval failed question=%r mode=%s",
                             work.normalized,
@@ -161,6 +236,18 @@ def _run_phases(
                     else:
                         raise
 
+
+class RerankPhase:
+    def run(
+        self,
+        works: list[OrchestrationWork],
+        *,
+        phase_batch: bool,
+        tolerate_errors: bool,
+    ) -> None:
+        retrieval_works = [work for work in works if not work.skip_retrieval]
+        if not retrieval_works:
+            return
         any_rerank = any(
             work._do_rerank and work.chunks is not None for work in retrieval_works
         )
@@ -178,7 +265,7 @@ def _run_phases(
                     if rerank_stage is not None:
                         work.rerank_stages.append(rerank_stage)
                 except Exception:
-                    if tolerate_retrieval_errors:
+                    if tolerate_errors:
                         logger.warning(
                             "orchestration rerank failed question=%r",
                             work.normalized,
@@ -189,6 +276,82 @@ def _run_phases(
                         raise
 
 
+class GenerationPhase:
+    def run(
+        self,
+        works: list[OrchestrationWork],
+        *,
+        phase_batch: bool,
+        tolerate_errors: bool = False,
+        generate_fn: GenerateFn | None = None,
+    ) -> None:
+        pending = [work for work in works if work.chunks is not None]
+        if not pending:
+            return
+
+        gen = generate_fn or generate
+        with model_phase_batch(ModelResource.MLX_VLM, phase_batch):
+            for work in pending:
+                knowledge = work.knowledge or create_knowledge(work.settings)
+                expanded, expanded_from, expanded_chunk_ids = prepare_generation_context(
+                    work.chunks,
+                    knowledge,
+                    work.settings,
+                )
+                work.expanded_chunks = expanded
+                work.expanded_from = expanded_from
+                work.expanded_chunk_ids = expanded_chunk_ids
+                try:
+                    work.generation = gen(
+                        work.normalized,
+                        expanded,
+                        work.settings,
+                    )
+                except GenerationError as exc:
+                    work.generation_error = exc
+                    work.generation = None
+                except Exception:
+                    if tolerate_errors:
+                        logger.warning(
+                            "orchestration generation failed question=%r",
+                            work.normalized,
+                            exc_info=True,
+                        )
+                        work.generation = None
+                    else:
+                        raise
+
+
+_EXTRAS_PHASE = ExtrasPhase()
+_RETRIEVAL_PHASE = RetrievalPhase()
+_RERANK_PHASE = RerankPhase()
+_GENERATION_PHASE = GenerationPhase()
+
+
+def _run_phases(
+    works: list[OrchestrationWork],
+    *,
+    phase_batch: bool,
+    tolerate_retrieval_errors: bool = False,
+) -> None:
+    if not works:
+        return
+    for work in works:
+        if work.skip_retrieval:
+            work.chunks = work.pre_chunks
+    _EXTRAS_PHASE.run(works, phase_batch=phase_batch)
+    _RETRIEVAL_PHASE.run(
+        works,
+        phase_batch=phase_batch,
+        tolerate_errors=tolerate_retrieval_errors,
+    )
+    _RERANK_PHASE.run(
+        works,
+        phase_batch=phase_batch,
+        tolerate_errors=tolerate_retrieval_errors,
+    )
+
+
 def _run_generation_phase(
     works: list[OrchestrationWork],
     *,
@@ -196,41 +359,12 @@ def _run_generation_phase(
     tolerate_generation_errors: bool = False,
     generate_fn: GenerateFn | None = None,
 ) -> None:
-    pending = [work for work in works if work.chunks is not None]
-    if not pending:
-        return
-
-    gen = generate_fn or generate
-    with model_phase_batch(ModelResource.MLX_VLM, phase_batch):
-        for work in pending:
-            knowledge = work.knowledge or create_knowledge(work.settings)
-            expanded, expanded_from, expanded_chunk_ids = prepare_generation_context(
-                work.chunks,
-                knowledge,
-                work.settings,
-            )
-            work.expanded_chunks = expanded
-            work.expanded_from = expanded_from
-            work.expanded_chunk_ids = expanded_chunk_ids
-            try:
-                work.generation = gen(
-                    work.normalized,
-                    expanded,
-                    work.settings,
-                )
-            except GenerationError as exc:
-                work.generation_error = exc
-                work.generation = None
-            except Exception:
-                if tolerate_generation_errors:
-                    logger.warning(
-                        "orchestration generation failed question=%r",
-                        work.normalized,
-                        exc_info=True,
-                    )
-                    work.generation = None
-                else:
-                    raise
+    _GENERATION_PHASE.run(
+        works,
+        phase_batch=phase_batch,
+        tolerate_errors=tolerate_generation_errors,
+        generate_fn=generate_fn,
+    )
 
 
 def run_eval_works(
@@ -256,7 +390,7 @@ def run_ask_works(
     *,
     phase_batch: bool,
 ) -> list[AskWorkOutcome]:
-    """提问入口：四阶段编排 + TraceRecorder 组装 AskResult。"""
+    """提问入口：四阶段编排 + QueryTrace 组装 AskResult。"""
     works = [work for work, _ in pairs]
     _run_phases(works, phase_batch=phase_batch, tolerate_retrieval_errors=False)
     _run_generation_phase(works, phase_batch=phase_batch, tolerate_generation_errors=False)
@@ -264,7 +398,7 @@ def run_ask_works(
     outcomes: list[AskWorkOutcome] = []
     for work, context in pairs:
         outcome = AskWorkOutcome(work=work, context=context)
-        recorder = TraceRecorder(
+        trace = QueryTrace.begin(
             question=context.question,
             batch_id=context.batch_id,
             batch_size=context.batch_size,
@@ -272,7 +406,7 @@ def run_ask_works(
         )
         try:
             if work.generation_error is not None:
-                recorder.finalize_ask_generation_error(
+                trace.finalize_generation_error(
                     work=work,
                     question=context.question,
                     culture_domain=work.culture_domain,
@@ -280,9 +414,9 @@ def run_ask_works(
                 )
                 raise QueryGenerationError(
                     str(work.generation_error),
-                    recorder.trace_id,
+                    trace.trace_id,
                 ) from work.generation_error
-            outcome.result = recorder.finalize_ask_work(
+            outcome.result = trace.finalize_ask_work(
                 work=work,
                 question=context.question,
                 culture_domain=work.culture_domain,
@@ -290,29 +424,98 @@ def run_ask_works(
         except QueryGenerationError as exc:
             outcome.error = exc
             if context.record_trace:
-                recorder.save(work.settings)
+                trace.save(work.settings)
             outcomes.append(outcome)
             continue
         except BaseException as exc:
             outcome.error = exc
             if context.record_trace:
-                recorder.save(work.settings)
+                trace.save(work.settings)
             outcomes.append(outcome)
             continue
 
         if context.record_trace:
-            recorder.save(work.settings)
+            trace.save(work.settings)
         outcomes.append(outcome)
     return outcomes
 
 
+def ask_pipeline_single(
+    payload: AskPipelineInput,
+    *,
+    phase_batch: bool,
+) -> AskResult:
+    job_like = _SingleJob(payload)
+    run_ask_pipeline([job_like], phase_batch=phase_batch, batch_meta=None)
+    if job_like.error is not None:
+        raise job_like.error
+    assert job_like.result is not None
+    return job_like.result
+
+
+def run_ask_pipeline(
+    jobs: list[_AskJob | _SingleJob],
+    *,
+    phase_batch: bool,
+    batch_meta: dict[str, object] | None,
+) -> None:
+    if not jobs:
+        return
+
+    if batch_meta:
+        batch_id = str(batch_meta["batch_id"])
+        batch_size = int(batch_meta["batch_size"])  # type: ignore[arg-type]
+        for job in jobs:
+            job.batch_id = batch_id
+            job.batch_size = batch_size
+
+    pairs: list[tuple[OrchestrationWork, AskWorkContext]] = []
+    for job in jobs:
+        normalized = normalize_question(job.question)
+        work = OrchestrationWork(
+            normalized=normalized,
+            settings=job.settings,
+            culture_domain=job.culture_domain,
+            retrieval_mode=job.retrieval_mode,
+            rerank_enabled=job.rerank_enabled,
+            knowledge=job.knowledge,
+            collect_extras=True,
+        )
+        context = AskWorkContext(
+            question=job.question,
+            record_trace=job.record_trace,
+            batch_id=job.batch_id,
+            batch_size=job.batch_size,
+            batch_wait_ms=job.batch_wait_ms,
+        )
+        pairs.append((work, context))
+
+    outcomes = run_ask_works(pairs, phase_batch=phase_batch)
+    for job, outcome in zip(jobs, outcomes, strict=True):
+        job.result = outcome.result
+        job.error = outcome.error
+
+
 __all__ = [
+    "AskPipelineInput",
     "AskWorkContext",
     "AskWorkOutcome",
+    "ExtrasPhase",
+    "GenerationPhase",
     "OrchestrationWork",
+    "RerankPhase",
+    "RetrievalPhase",
+    "ask_pipeline_single",
+    "normalize_question",
     "prepare_generation_context",
+    "run_ask_pipeline",
     "run_ask_works",
     "run_eval_works",
+    "run_ask",
+    "run_eval",
     "_run_generation_phase",
     "_run_phases",
 ]
+
+run_ask = run_ask_works
+run_eval = run_eval_works

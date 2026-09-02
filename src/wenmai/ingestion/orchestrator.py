@@ -1,4 +1,4 @@
-"""入库编排 — phased prepare flow with optional trace adapter."""
+"""入库编排 — phased prepare flow with PrepareTraceRecorder at pipeline seam."""
 
 from __future__ import annotations
 
@@ -17,13 +17,15 @@ from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.knowledge.domain import REVIEW_PENDING, REVIEW_STATUS_FIELD, stamp_review_status
 from wenmai.models import Chunk, IngestResult
 from wenmai.storage.document_images import IMAGE_PLACEHOLDER_RE
-from wenmai.tracing import StageRecord, TraceContext, save_trace
+from wenmai.tracing import StageRecord
+from wenmai.tracing.prepare_recorder import PrepareTraceRecorder
 from wenmai.tracing.stages.ingestion import IngestionStage
 
 
 @dataclass
-class PreparedIngest:
-    trace: TraceContext
+class PrepareBody:
+    """Domain result from prepare phase — no trace."""
+
     source_path: Path
     document_id: str
     document_title: str
@@ -34,42 +36,27 @@ class PreparedIngest:
     previous_document_id: str | None
 
 
-def _chunks_with_images(chunks: list[Chunk]) -> int:
+@dataclass
+class PreparedIngest:
+    """Prepared document plus trace recorder owned by pipeline."""
+
+    body: PrepareBody
+    recorder: PrepareTraceRecorder
+
+
+def count_chunks_with_images(chunks: list[Chunk]) -> int:
     return sum(1 for chunk in chunks if IMAGE_PLACEHOLDER_RE.search(chunk.text))
 
 
-def _set_trace_summary(
-    trace: TraceContext,
-    *,
-    source_path: str,
-    document_id: str,
-    title: str,
-    status: str,
-    chunk_count: int,
-    chunks_with_images: int,
-) -> None:
-    trace.metadata.update(
-        {
-            "source_path": source_path,
-            "document_id": document_id,
-            "title": title,
-            "status": status,
-            "chunk_count": chunk_count,
-            "chunks_with_images": chunks_with_images,
-        }
-    )
-
-
 def _finish_rejected_ingest(
-    trace: TraceContext,
+    recorder: PrepareTraceRecorder,
     source_path: Path,
     settings: Settings,
     *,
     document_source_path: str,
 ) -> IngestResult:
     document_id = hashlib.sha256(source_path.read_bytes()).hexdigest()
-    _set_trace_summary(
-        trace,
+    recorder.set_summary(
         source_path=document_source_path,
         document_id=document_id,
         title=source_path.stem,
@@ -77,13 +64,12 @@ def _finish_rejected_ingest(
         chunk_count=0,
         chunks_with_images=0,
     )
-    trace.close()
-    save_trace(settings, trace)
+    recorder.close_and_save(settings)
     return IngestResult(
         document_id=document_id,
         chunk_count=0,
-        elapsed_ms=trace.total_elapsed_ms,
-        trace_id=trace.trace_id,
+        elapsed_ms=recorder.trace_context.total_elapsed_ms,
+        trace_id=recorder.trace_id,
         status="rejected",
     )
 
@@ -121,10 +107,10 @@ def prepare_ingest(
     pdf_load_mode: str | None = None,
     on_stage: Callable[[StageRecord], None] | None = None,
     knowledge: Knowledge | None = None,
+    recorder: PrepareTraceRecorder | None = None,
 ) -> PreparedIngest | IngestResult:
     """Phase-1 ingest: 入库准入 through transform; no embed/upsert."""
-    trace = TraceContext(trace_type="ingestion")
-    trace._on_stage = on_stage
+    trace_recorder = recorder or PrepareTraceRecorder(on_stage=on_stage)
     knowledge = knowledge or create_knowledge(settings)
     document_source_path = str(source_path)
 
@@ -133,7 +119,7 @@ def prepare_ingest(
         admission_gate = AdmissionGate(settings)
         admission = admission_gate.decide(source_path, source_peek)
 
-        with trace.stage(
+        with trace_recorder.stage(
             "quality_gate",
             method="effective_char_ratio",
             provider="config",
@@ -154,7 +140,7 @@ def prepare_ingest(
 
         if admission.decision == "rejected":
             if admission.gray_outcome is not None:
-                trace.append_stage(
+                trace_recorder.append_stage(
                     IngestionStage.gray_review(
                         provider=admission.gray_outcome.provider,
                         method=admission.gray_outcome.method,
@@ -164,14 +150,14 @@ def prepare_ingest(
                     )
                 )
             return _finish_rejected_ingest(
-                trace,
+                trace_recorder,
                 source_path,
                 settings,
                 document_source_path=document_source_path,
             )
 
         if admission.gray_outcome is not None:
-            trace.append_stage(
+            trace_recorder.append_stage(
                 IngestionStage.gray_review(
                     provider=admission.gray_outcome.provider,
                     method=admission.gray_outcome.method,
@@ -183,7 +169,7 @@ def prepare_ingest(
 
         stamp_pending_chunks = admission.stamp_pending_chunks
 
-        with trace.stage(
+        with trace_recorder.stage(
             "load",
             method="pending",
             provider="pending",
@@ -212,7 +198,7 @@ def prepare_ingest(
             )
             load_info["provider"] = document.load_provider or "file"
 
-        with trace.stage(
+        with trace_recorder.stage(
             "integrity",
             method="sha256",
             provider="knowledge",
@@ -240,8 +226,7 @@ def prepare_ingest(
                 integrity_info["candidate_count"] = 1
 
         if skipped:
-            _set_trace_summary(
-                trace,
+            trace_recorder.set_summary(
                 source_path=document_source_path,
                 document_id=document_id,
                 title=document_title,
@@ -249,18 +234,17 @@ def prepare_ingest(
                 chunk_count=0,
                 chunks_with_images=0,
             )
-            trace.close()
-            save_trace(settings, trace)
+            trace_recorder.close_and_save(settings)
             return IngestResult(
                 document_id=document_id,
                 chunk_count=0,
-                elapsed_ms=trace.total_elapsed_ms,
-                trace_id=trace.trace_id,
+                elapsed_ms=trace_recorder.trace_context.total_elapsed_ms,
+                trace_id=trace_recorder.trace_id,
                 status=status,
             )
 
         splitter = splitter_factory.create(settings)
-        with trace.stage(
+        with trace_recorder.stage(
             "split",
             method=splitter.provider_name,
             provider=splitter.provider_name,
@@ -284,10 +268,9 @@ def prepare_ingest(
             for index, text in enumerate(texts)
         ]
 
-        chunks = prepare_chunks(chunks, settings, trace)
+        chunks = prepare_chunks(chunks, settings, trace_recorder)
 
-        return PreparedIngest(
-            trace=trace,
+        body = PrepareBody(
             source_path=source_path,
             document_id=document_id,
             document_title=document_title,
@@ -297,9 +280,10 @@ def prepare_ingest(
             chunks=chunks,
             previous_document_id=previous_document_id,
         )
+        return PreparedIngest(body=body, recorder=trace_recorder)
     except Exception:
-        save_trace(settings, trace)
+        trace_recorder.save_on_error(settings)
         raise
 
 
-__all__ = ["PreparedIngest", "prepare_ingest"]
+__all__ = ["PrepareBody", "PreparedIngest", "count_chunks_with_images", "prepare_ingest"]

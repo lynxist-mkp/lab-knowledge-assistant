@@ -9,11 +9,10 @@ from wenmai.tracing.ingestion_views import (
     list_degradations,
     summarize_ingestion_trace,
 )
-from wenmai.tracing.query_views import (
+from wenmai.tracing.query_trace import (
+    QueryTrace,
     QueryTraceDetail,
     QueryTraceSummary,
-    query_trace_detail,
-    summarize_query_trace,
 )
 from wenmai.tracing.store import get_trace_record, read_trace_records
 
@@ -25,7 +24,7 @@ def list_query_summaries(settings: Settings) -> list[QueryTraceSummary]:
     records = [
         record for record in read_trace_records(settings) if record.get("trace_type") == "query"
     ]
-    return [summarize_query_trace(record) for record in reversed(records)]
+    return [QueryTrace.summarize(record) for record in reversed(records)]
 
 
 def list_ingestion_summaries(settings: Settings) -> list[IngestionTraceSummary]:
@@ -43,7 +42,7 @@ def get_trace_summary(settings: Settings, trace_id: str) -> TraceSummary | None:
         return None
     trace_type = record.get("trace_type")
     if trace_type == "query":
-        return summarize_query_trace(record)
+        return QueryTrace.summarize(record)
     if trace_type == "ingestion":
         return summarize_ingestion_trace(record)
     return None
@@ -55,7 +54,7 @@ def get_trace_detail(settings: Settings, trace_id: str) -> TraceDetail | None:
         return None
     trace_type = record.get("trace_type")
     if trace_type == "query":
-        return query_trace_detail(record)
+        return QueryTrace.detail(record)
     if trace_type == "ingestion":
         return ingestion_trace_detail(record)
     return None

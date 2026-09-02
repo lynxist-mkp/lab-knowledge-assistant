@@ -6,13 +6,11 @@ import pkgutil
 _COMPONENT_PACKAGES = (
     "wenmai.components.embedding",
     "wenmai.components.evaluator",
-    "wenmai.components.llm",
     "wenmai.components.multimodal",
     "wenmai.components.reranker",
     "wenmai.components.splitter",
     "wenmai.components.transform",
     "wenmai.components.vector_store",
-    "wenmai.components.vision",
 )
 
 _loaded = False

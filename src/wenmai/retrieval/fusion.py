@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Literal
@@ -58,17 +59,51 @@ def run_fusion(
     resolved = validate_retrieval_mode(mode)
     queries = unique_queries(query, extra_queries)
     if resolved == "dense_only":
-        return _dense_only(knowledge, queries, settings, culture_domain)
+        return _single_path_fusion(
+            knowledge,
+            queries,
+            settings,
+            culture_domain,
+            mode="dense_only",
+            search=knowledge.dense_search,
+            top_k=settings.retrieval.dense_k,
+            path_counter=lambda index, count: {
+                "query_index": index,
+                "dense_count": count,
+                "sparse_count": 0,
+            },
+            primary_attr="dense_chunks",
+        )
     if resolved == "sparse_only":
-        return _sparse_only(knowledge, queries, settings, culture_domain)
+        return _single_path_fusion(
+            knowledge,
+            queries,
+            settings,
+            culture_domain,
+            mode="sparse_only",
+            search=knowledge.sparse_search,
+            top_k=settings.retrieval.sparse_k,
+            path_counter=lambda index, count: {
+                "query_index": index,
+                "dense_count": 0,
+                "sparse_count": count,
+            },
+            primary_attr="sparse_chunks",
+        )
     return _rrf(knowledge, queries, settings, culture_domain)
 
 
-def _dense_only(
+def _single_path_fusion(
     knowledge: Knowledge,
     queries: list[str],
     settings: Settings,
     culture_domain: str | None,
+    *,
+    mode: RetrievalMode,
+    search: Callable[..., list[ScoredChunk]],
+    top_k: int,
+    path_counter: Callable[[int, int], dict[str, object]],
+    primary_attr: Literal["dense_chunks", "sparse_chunks"],
 ) -> RetrievalResult:
     started = time.perf_counter()
     primary_chunks: list[ScoredChunk] = []
@@ -76,17 +111,11 @@ def _dense_only(
     chunk_by_id: dict[str, ScoredChunk] = {}
     query_path_counts: list[dict[str, object]] = []
     for index, query in enumerate(queries):
-        chunks = knowledge.dense_search(
-            query,
-            top_k=settings.retrieval.dense_k,
-            culture_domain=culture_domain,
-        )
+        chunks = search(query, top_k=top_k, culture_domain=culture_domain)
         if index == 0:
             primary_chunks = chunks
         ranked_lists.append([item.chunk.chunk_id for item in chunks])
-        query_path_counts.append(
-            {"query_index": index, "dense_count": len(chunks), "sparse_count": 0}
-        )
+        query_path_counts.append(path_counter(index, len(chunks)))
         for item in chunks:
             chunk_by_id[item.chunk.chunk_id] = item
     elapsed_ms = (time.perf_counter() - started) * 1000
@@ -106,61 +135,18 @@ def _dense_only(
             if chunk_id in chunk_by_id
         ]
         fusion_ms = (time.perf_counter() - fusion_started) * 1000
+    if primary_attr == "dense_chunks":
+        return RetrievalResult(
+            chunks=fused_chunks,
+            mode=mode,
+            dense_chunks=primary_chunks,
+            dense_elapsed_ms=elapsed_ms,
+            fusion_elapsed_ms=fusion_ms,
+            query_path_counts=query_path_counts,
+        )
     return RetrievalResult(
         chunks=fused_chunks,
-        mode="dense_only",
-        dense_chunks=primary_chunks,
-        dense_elapsed_ms=elapsed_ms,
-        fusion_elapsed_ms=fusion_ms,
-        query_path_counts=query_path_counts,
-    )
-
-
-def _sparse_only(
-    knowledge: Knowledge,
-    queries: list[str],
-    settings: Settings,
-    culture_domain: str | None,
-) -> RetrievalResult:
-    started = time.perf_counter()
-    primary_chunks: list[ScoredChunk] = []
-    ranked_lists: list[list[str]] = []
-    chunk_by_id: dict[str, ScoredChunk] = {}
-    query_path_counts: list[dict[str, object]] = []
-    for index, query in enumerate(queries):
-        chunks = knowledge.sparse_search(
-            query,
-            top_k=settings.retrieval.sparse_k,
-            culture_domain=culture_domain,
-        )
-        if index == 0:
-            primary_chunks = chunks
-        ranked_lists.append([item.chunk.chunk_id for item in chunks])
-        query_path_counts.append(
-            {"query_index": index, "dense_count": 0, "sparse_count": len(chunks)}
-        )
-        for item in chunks:
-            chunk_by_id[item.chunk.chunk_id] = item
-    elapsed_ms = (time.perf_counter() - started) * 1000
-    if len(ranked_lists) == 1:
-        fused_chunks = primary_chunks
-        fusion_ms = 0.0
-    else:
-        fusion_started = time.perf_counter()
-        fused_ids = reciprocal_rank_fusion(
-            ranked_lists,
-            k=settings.retrieval.rrf_k,
-            top_k=settings.retrieval.fused_k,
-        )
-        fused_chunks = [
-            ScoredChunk(chunk=chunk_by_id[chunk_id].chunk, score=score)
-            for chunk_id, score in fused_ids
-            if chunk_id in chunk_by_id
-        ]
-        fusion_ms = (time.perf_counter() - fusion_started) * 1000
-    return RetrievalResult(
-        chunks=fused_chunks,
-        mode="sparse_only",
+        mode=mode,
         sparse_chunks=primary_chunks,
         sparse_elapsed_ms=elapsed_ms,
         fusion_elapsed_ms=fusion_ms,
