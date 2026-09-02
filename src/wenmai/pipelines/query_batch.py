@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import threading
 import time
-import uuid
-from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from wenmai.components.model_guard import ModelResource, begin_batch, end_batch
 from wenmai.config import Settings
 from wenmai.models import AskResult
 from wenmai.pipelines.query_core import run_ask_pipeline
+from wenmai.pipelines.window_batch import WindowBatchCoordinator
 
 if TYPE_CHECKING:
     from wenmai.knowledge import Knowledge
@@ -39,15 +37,26 @@ class _AskJob:
     batch_wait_ms: float = 0.0
 
 
+def _process_ask_batch(jobs: list[_AskJob], batch_meta: dict[str, object]) -> None:
+    try:
+        run_ask_pipeline(jobs, phase_batch=True, batch_meta=batch_meta)
+    except BaseException as exc:
+        for job in jobs:
+            if job.error is None and job.result is None:
+                job.error = exc
+
+
 class QueryBatchCoordinator:
     """Collect ask jobs for batch_window_seconds, then run phase-level batches."""
 
     def __init__(self, settings: Settings) -> None:
-        self._settings = settings
-        self._lock = threading.Lock()
-        self._cond = threading.Condition(self._lock)
-        self._queue: deque[_AskJob] = deque()
-        self._worker: threading.Thread | None = None
+        resources = settings.resources
+        self._inner = WindowBatchCoordinator(
+            window_seconds=resources.batch_window_seconds,
+            max_size=resources.batch_window_max_size,
+            process_batch=_process_ask_batch,
+            worker_name="query-batch-worker",
+        )
 
     def submit(
         self,
@@ -69,74 +78,7 @@ class QueryBatchCoordinator:
             knowledge=knowledge,
             record_trace=record_trace,
         )
-        with self._cond:
-            self._queue.append(job)
-            if self._worker is None or not self._worker.is_alive():
-                self._worker = threading.Thread(
-                    target=self._worker_loop,
-                    name="query-batch-worker",
-                    daemon=True,
-                )
-                self._worker.start()
-            self._cond.notify()
-        job.event.wait()
-        if job.error is not None:
-            raise job.error
-        assert job.result is not None
-        return job.result
-
-    def _worker_loop(self) -> None:
-        while True:
-            batch = self._collect_window()
-            if not batch:
-                continue
-            self._process_batch(batch)
-
-    def _collect_window(self) -> list[_AskJob]:
-        resources = self._settings.resources
-        window = resources.batch_window_seconds
-        max_size = resources.batch_window_max_size
-        with self._cond:
-            while not self._queue:
-                self._cond.wait()
-            batch = [self._queue.popleft()]
-            deadline = time.monotonic() + window
-            while len(batch) < max_size:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    break
-                if not self._queue:
-                    self._cond.wait(timeout=remaining)
-                    if not self._queue:
-                        break
-                batch.append(self._queue.popleft())
-            return batch
-
-    def _process_batch(self, jobs: list[_AskJob]) -> None:
-        batch_id = str(uuid.uuid4())
-        batch_size = len(jobs)
-        started = time.monotonic()
-        for job in jobs:
-            job.batch_id = batch_id
-            job.batch_size = batch_size
-            job.batch_wait_ms = (started - job.enqueued_at) * 1000
-
-        try:
-            run_ask_pipeline(
-                jobs,
-                phase_batch=True,
-                batch_meta={
-                    "batch_id": batch_id,
-                    "batch_size": batch_size,
-                },
-            )
-        except BaseException as exc:
-            for job in jobs:
-                if job.error is None and job.result is None:
-                    job.error = exc
-        finally:
-            for job in jobs:
-                job.event.set()
+        return self._inner.submit(job)
 
 
 def window_batch_enabled(settings: Settings) -> bool:

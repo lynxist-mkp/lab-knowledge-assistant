@@ -2,6 +2,10 @@
 {% block title %}编辑工作台 · 福云·文脉助手{% endblock %}
 {% block surface_label %}编辑工作台{% endblock %}
 
+{% block surface_switch %}
+<a href="/ops" class="surface-switch" title="知识库维护、入库与追踪">知识库维护</a>
+{% endblock %}
+
 {% block header_extra %}
 <div class="topbar-domain-control" role="region" aria-label="文化域筛选">
   <label for="culture-domain-select" class="topbar-label">
@@ -218,6 +222,8 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    /* Keep example prompts clear of the fixed compliance footer. */
+    padding-bottom: 0.5rem;
   }
   .history-header {
     display: flex;
@@ -1059,7 +1065,7 @@
           name="question"
           class="ask-textarea"
           rows="3"
-          placeholder="请输入您的问题（例如：妈祖信仰的发源地在哪里？），按 Cmd/Ctrl+Enter 快速提交..."
+          placeholder="请输入您的问题（例如：妈祖信仰的发源地在哪里？），按 Enter 提交…"
           required
           aria-required="true"
         ></textarea>
@@ -1070,7 +1076,7 @@
           <span id="active-domain-badge" class="domain-badge-active">全部 / 不限</span>
         </div>
         <div class="ask-button-group">
-          <span class="ask-shortcut-hint">Cmd/Ctrl + Enter</span>
+          <span class="ask-shortcut-hint">Enter 提交 · Shift+Enter 换行</span>
           <button type="submit" id="submit-btn" class="btn-submit">
             <span class="btn-text">提问</span>
           </button>
@@ -1837,6 +1843,7 @@
     const cardEl = createQaCardElement(item);
     qaList.insertBefore(cardEl, qaList.firstChild);
     historyCount.textContent = '共 ' + historyItems.length + ' 条';
+    cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   /* =========================================================
@@ -1898,6 +1905,7 @@
           time: new Date().toLocaleTimeString('zh-CN', { hour12: false })
         });
         questionInput.value = '';
+        questionInput.focus();
       } else {
         let errData = null;
         try {
@@ -1944,10 +1952,14 @@
   });
 
   questionInput.addEventListener('keydown', function(e) {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
-      handleAsk();
+    if (e.key !== 'Enter' || e.isComposing) {
+      return;
     }
+    if (e.shiftKey) {
+      return;
+    }
+    e.preventDefault();
+    handleAsk();
   });
 
   // Example Prompt Chips

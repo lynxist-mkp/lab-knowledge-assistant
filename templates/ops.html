@@ -2,6 +2,10 @@
 {% block title %}运维看板 · 福云·文脉助手{% endblock %}
 {% block surface_label %}运维看板{% endblock %}
 
+{% block surface_switch %}
+<a href="/" class="surface-switch" title="返回融媒编辑提问界面">返回提问</a>
+{% endblock %}
+
 {% block header_extra %}
 <nav class="ops-header-nav" id="ops-nav" aria-label="运维看板导航" role="tablist">
   <button
@@ -261,6 +265,7 @@
     font-weight: 600;
     color: var(--color-text);
     cursor: pointer;
+    white-space: nowrap;
     transition: all 0.15s ease;
   }
   .btn-secondary:hover:not(:disabled) {
@@ -327,7 +332,7 @@
     font-weight: 700;
     color: var(--color-text);
     line-height: 1.2;
-    font-family: ui-monospace, SFMono-Regular, "PingFang SC", sans-serif;
+    font-variant-numeric: tabular-nums;
   }
   .stat-unit {
     font-size: 0.82rem;
@@ -345,7 +350,7 @@
   .stat-sub-value {
     font-weight: 600;
     color: var(--color-text);
-    font-family: ui-monospace, SFMono-Regular, "PingFang SC", sans-serif;
+    font-variant-numeric: tabular-nums;
   }
   .stat-sub-sep {
     opacity: 0.5;
@@ -393,10 +398,20 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.75rem;
+    text-align: left;
     text-decoration: none;
     color: var(--color-text);
     cursor: pointer;
     transition: all 0.15s ease;
+  }
+  .quick-jump-card > div:first-child {
+    flex: 1;
+    min-width: 0;
+  }
+  .quick-jump-card > svg {
+    flex-shrink: 0;
+    color: var(--color-muted);
   }
   .quick-jump-card:hover {
     border-color: var(--color-primary);
@@ -410,6 +425,9 @@
   .quick-jump-desc {
     font-size: 0.78rem;
     color: var(--color-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* =========================================================
@@ -464,12 +482,22 @@
     overflow: hidden;
     box-shadow: var(--shadow-sm);
   }
+  .domain-group-card > summary {
+    list-style: none;
+    cursor: pointer;
+  }
+  .domain-group-card > summary::-webkit-details-marker {
+    display: none;
+  }
+  .domain-group-card > summary,
+  .doc-item-card > summary {
+    text-align: left;
+  }
   .domain-group-header {
     background: var(--color-bg);
     border-bottom: 1px solid var(--color-border);
     padding: 0.85rem 1.15rem;
     display: flex;
-    justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
     gap: 0.5rem;
@@ -478,6 +506,19 @@
     display: flex;
     align-items: center;
     gap: 0.6rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
+  }
+  .domain-title-wrap::before {
+    content: '▸';
+    color: var(--color-muted);
+    font-size: 0.75rem;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+  }
+  .domain-group-card[open] > summary .domain-title-wrap::before {
+    transform: rotate(90deg);
   }
   .domain-badge {
     background: var(--color-primary);
@@ -487,6 +528,7 @@
     padding: 0.2rem 0.6rem;
     border-radius: 4px;
     letter-spacing: 0.02em;
+    white-space: nowrap;
   }
   .domain-name {
     margin: 0;
@@ -498,6 +540,8 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    margin-left: auto;
+    flex-shrink: 0;
   }
   .badge-metric {
     font-size: 0.78rem;
@@ -521,20 +565,68 @@
     border-radius: var(--radius-sm, 4px);
     overflow: hidden;
   }
+  .doc-item-card > summary {
+    list-style: none;
+    cursor: pointer;
+  }
+  .doc-item-card > summary::-webkit-details-marker {
+    display: none;
+  }
   .doc-item-header {
     padding: 0.75rem 0.95rem;
     display: flex;
-    justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
     gap: 0.5rem;
     background: #ffffff;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid transparent;
+    text-align: left;
+  }
+  .doc-item-card[open] > summary .doc-item-header {
+    border-bottom-color: var(--color-border);
+  }
+  .doc-item-header > .badge-metric {
+    margin-left: auto;
+    flex-shrink: 0;
   }
   .doc-title-box {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.35rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
+  }
+  .doc-title-box::before {
+    content: '▸';
+    color: var(--color-muted);
+    font-size: 0.72rem;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+  }
+  .doc-item-card[open] > summary .doc-title-box::before {
+    transform: rotate(90deg);
+  }
+  .doc-title-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+  .chunks-grid {
+    padding: 0.75rem 0.95rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .chunks-grid--collapsed .chunk-preview-row:nth-child(n+4) {
+    display: none;
+  }
+  .chunks-expand-bar {
+    display: flex;
+    justify-content: center;
+    padding: 0 0.95rem 0.75rem;
   }
   .doc-title {
     margin: 0;
@@ -550,14 +642,11 @@
     padding: 0.1rem 0.4rem;
     border-radius: 3px;
     color: var(--color-muted);
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: normal;
   }
 
-  .chunks-grid {
-    padding: 0.75rem 0.95rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
   .chunk-preview-row {
     background: var(--color-panel);
     border: 1px solid var(--color-border);
@@ -595,6 +684,26 @@
     align-items: center;
     gap: 0.5rem;
   }
+  .chunk-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+  }
+  .btn-chunk-view-full {
+    background: transparent;
+    border: 1px solid rgba(3, 122, 255, 0.25);
+    color: var(--color-primary);
+    font-size: 0.72rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-chunk-view-full:hover {
+    background: var(--color-primary);
+    color: #ffffff;
+  }
   .chunk-id-tag {
     font-size: 0.75rem;
     font-family: ui-monospace, SFMono-Regular, monospace;
@@ -605,8 +714,18 @@
     margin: 0;
     font-size: 0.85rem;
     color: var(--color-muted);
-    line-height: 1.5;
-    word-break: break-all;
+    line-height: 1.55;
+    overflow-wrap: break-word;
+    word-break: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .chunk-preview-text--expanded {
+    display: block;
+    -webkit-line-clamp: unset;
+    overflow: visible;
   }
 
   /* Full Chunk Details Modal / Expander */
@@ -637,12 +756,28 @@
     background: var(--color-panel);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm, 4px);
-    padding: 0.85rem 1rem;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .review-doc-summary {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    list-style: none;
+    cursor: pointer;
+  }
+  .review-chunk-list {
+    border-top: 1px solid var(--color-border);
+    padding: 0.65rem 1rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: var(--color-bg);
   }
   .review-doc-meta {
     display: flex;
@@ -650,6 +785,23 @@
     gap: 0.25rem;
     min-width: 0;
     flex: 1 1 12rem;
+    position: relative;
+    padding-left: 1rem;
+  }
+  .review-doc-meta::before {
+    content: '▸';
+    position: absolute;
+    left: 0;
+    top: 0.2rem;
+    color: var(--color-muted);
+    font-size: 0.75rem;
+    transition: transform 0.15s ease;
+  }
+  .review-doc-card[open] .review-doc-meta::before {
+    transform: rotate(90deg);
+  }
+  .review-doc-summary::-webkit-details-marker {
+    display: none;
   }
   .review-doc-title {
     margin: 0;
@@ -663,8 +815,9 @@
     color: var(--color-muted);
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.4rem 0.6rem;
     align-items: center;
+    line-height: 1.4;
   }
   .review-doc-actions {
     display: flex;
@@ -795,6 +948,7 @@
     font-weight: 600;
     padding: 0.2rem 0.6rem;
     border-radius: 4px;
+    white-space: nowrap;
   }
   .status-badge.idle {
     background: var(--color-bg);
@@ -914,24 +1068,32 @@
   }
   .result-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 0.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.65rem 1rem;
     font-size: 0.85rem;
   }
   .result-item {
     display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.35rem;
+    flex-wrap: wrap;
   }
   .result-key {
     font-size: 0.78rem;
     color: #006b47;
     opacity: 0.85;
+    flex-shrink: 0;
+  }
+  .result-key::after {
+    content: ':';
   }
   .result-val {
     font-weight: 600;
     color: #004d33;
-    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   /* Error Banner */
@@ -1078,6 +1240,14 @@
     color: var(--color-text);
     vertical-align: middle;
   }
+  .ops-table td:last-child {
+    width: 1%;
+    white-space: nowrap;
+  }
+  .ops-table .btn-table-action {
+    padding: 0.2rem 0.55rem;
+    font-size: 0.78rem;
+  }
   .ops-table tr:last-child td {
     border-bottom: none;
   }
@@ -1100,15 +1270,102 @@
   }
 
   .trace-detail-box {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(560px, 94vw);
+    z-index: 190;
+    margin: 0;
+    border-radius: 0;
+    border-left: 1px solid var(--color-border);
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+    overflow-y: auto;
+    max-height: 100vh;
     background: var(--color-panel);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md, 8px);
     padding: 1.25rem;
-    box-shadow: var(--shadow-sm);
+    box-shadow: -4px 0 24px rgba(15, 23, 42, 0.12);
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    animation: fadeIn 0.15s ease;
+  }
+  .trace-detail-box.is-open {
+    transform: translateX(0);
+  }
+  .ops-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.35);
+    z-index: 180;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .ops-drawer-backdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .ops-chunk-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(480px, 94vw);
+    z-index: 190;
+    background: var(--color-panel);
+    border-left: 1px solid var(--color-border);
+    box-shadow: -4px 0 24px rgba(15, 23, 42, 0.12);
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .ops-chunk-drawer.is-open {
+    transform: translateX(0);
+  }
+  .ops-chunk-drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem 1.15rem;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+  }
+  .ops-chunk-drawer-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+  .ops-chunk-drawer-meta {
+    margin: 0.25rem 0 0;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.6rem;
+  }
+  .ops-chunk-drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem 1.15rem;
+  }
+  .ops-chunk-drawer-text {
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.65;
+    color: var(--color-text);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .ops-table tr.selected-row {
+    background: var(--color-primary-light, #eaf3ff);
   }
   .trace-detail-header {
     display: flex;
@@ -1179,36 +1436,42 @@
     color: #873800;
   }
 
-  .eval-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 0.85rem;
+  .eval-compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
   }
-  .eval-group-card {
-    background: var(--color-bg);
+  .eval-compare-table th,
+  .eval-compare-table td {
+    padding: 0.55rem 0.75rem;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm, 4px);
-    padding: 0.85rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    text-align: left;
+    vertical-align: middle;
   }
-  .eval-group-title {
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: var(--color-primary);
-    margin: 0;
-  }
-  .eval-metric-row {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.82rem;
+  .eval-compare-table thead th {
+    background: var(--color-bg);
     color: var(--color-muted);
+    font-weight: 600;
+    white-space: nowrap;
   }
-  .eval-metric-val {
+  .eval-compare-table tbody th {
+    background: var(--color-bg);
+    color: var(--color-muted);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .eval-compare-table td.eval-metric-val {
+    font-family: ui-monospace, SFMono-Regular, monospace;
     font-weight: 700;
     color: var(--color-text);
-    font-family: ui-monospace, SFMono-Regular, monospace;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .eval-compare-table .is-primary-col {
+    background: rgba(3, 122, 255, 0.06);
+  }
+  .eval-run-detail-card {
+    margin-top: 1rem;
   }
 
   /* Responsive */
@@ -1216,14 +1479,25 @@
     .overview-info-grid {
       grid-template-columns: 1fr;
     }
+    .shell-header-actions {
+      width: 100%;
+      flex-direction: column;
+      align-items: stretch;
+    }
     .ops-header-nav {
       width: 100%;
-      justify-content: space-between;
+      justify-content: flex-start;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .ops-header-nav::-webkit-scrollbar {
+      display: none;
     }
     .ops-nav-tab {
-      flex: 1;
+      flex: 0 0 auto;
       justify-content: center;
-      padding: 0.4rem 0.35rem;
+      padding: 0.4rem 0.65rem;
       font-size: 0.82rem;
     }
     .browse-search-wrap {
@@ -1325,7 +1599,7 @@
             </svg>
           </div>
           <div class="stat-body">
-            <span class="stat-label">平均查询耗时 (avg_query_latency_ms)</span>
+            <span class="stat-label">平均查询耗时</span>
             <div class="stat-value-row">
               <span id="stat-avg-latency" class="stat-value">-</span>
               <span class="stat-unit">ms</span>
@@ -1639,20 +1913,20 @@
       <div class="subtab-nav" role="tablist" aria-label="追踪子导航">
         <button
           type="button"
-          class="subtab-btn active"
+          class="subtab-btn"
           id="trace-subtab-ingestion"
           role="tab"
-          aria-selected="true"
+          aria-selected="false"
           aria-controls="trace-ingestion-view"
         >
           入库 Trace
         </button>
         <button
           type="button"
-          class="subtab-btn"
+          class="subtab-btn active"
           id="trace-subtab-query"
           role="tab"
-          aria-selected="false"
+          aria-selected="true"
           aria-controls="trace-query-view"
         >
           查询 Trace
@@ -1660,7 +1934,7 @@
       </div>
 
       <!-- Ingestion Trace List View -->
-      <div id="trace-ingestion-view" role="tabpanel" aria-labelledby="trace-subtab-ingestion">
+      <div id="trace-ingestion-view" role="tabpanel" aria-labelledby="trace-subtab-ingestion" style="display: none;" hidden>
         <div class="browse-toolbar">
           <button type="button" id="btn-refresh-trace-ingestion" class="btn-secondary" title="刷新入库 Trace 列表">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -1709,7 +1983,7 @@
       </div>
 
       <!-- Query Trace List View -->
-      <div id="trace-query-view" role="tabpanel" aria-labelledby="trace-subtab-query" style="display: none;" hidden>
+      <div id="trace-query-view" role="tabpanel" aria-labelledby="trace-subtab-query">
         <div class="browse-toolbar">
           <button type="button" id="btn-refresh-trace-query" class="btn-secondary" title="刷新查询 Trace 列表">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -1756,37 +2030,6 @@
           </table>
         </div>
       </div>
-    </div>
-
-    <!-- Shared Trace Detail Panel -->
-    <div id="trace-detail-panel" class="trace-detail-box" style="display: none;" hidden>
-      <div class="trace-detail-header">
-        <div class="trace-detail-title-wrap">
-          <h3 id="trace-detail-title" class="trace-detail-title">Trace 详情</h3>
-          <span id="trace-detail-subtitle" class="ops-card-desc"></span>
-        </div>
-        <button type="button" id="trace-detail-close" class="btn-secondary" title="关闭详情返回列表">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-          <span>返回列表</span>
-        </button>
-      </div>
-
-      <div id="trace-detail-loading" class="loading-state-box" style="display: none;" hidden>
-        <div class="loading-spinner" aria-hidden="true"></div>
-        <span>正在读取 Trace 详情...</span>
-      </div>
-
-      <div id="trace-detail-error" class="alert-banner" role="alert">
-        <div class="alert-content">
-          <div class="alert-title">Trace 详情读取失败</div>
-          <p id="trace-detail-error-msg" class="alert-message"></p>
-        </div>
-      </div>
-
-      <div id="trace-detail-body" class="trace-detail-body"></div>
     </div>
   </section>
 
@@ -1840,12 +2083,12 @@
         <table class="ops-table">
           <thead>
             <tr>
-              <th>运行时间 (Timestamp)</th>
-              <th>评测题目数</th>
+              <th>运行时间</th>
+              <th>题目数</th>
               <th>失败数</th>
-              <th>RRF + Rerank Hit@5</th>
-              <th>RRF + Rerank MRR</th>
-              <th>RRF + Rerank 拒答率</th>
+              <th>Hit@5</th>
+              <th>MRR</th>
+              <th>拒答准确率</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -1855,16 +2098,78 @@
     </div>
 
     <!-- Selected Eval Run Detail -->
-    <div id="eval-run-detail" class="ops-card" style="display: none;" hidden>
+    <div id="eval-run-detail" class="ops-card eval-run-detail-card" style="display: none;" hidden>
       <div class="ops-card-header">
         <div class="ops-card-title-wrap">
-          <h3 id="eval-run-detail-title" class="ops-card-title">评测运行消融详情</h3>
+          <h3 id="eval-run-detail-title" class="ops-card-title">消融对比</h3>
           <p id="eval-run-detail-desc" class="ops-card-desc"></p>
         </div>
       </div>
-      <div id="eval-run-groups-container" class="eval-grid"></div>
+      <div id="eval-run-groups-container"></div>
     </div>
   </section>
+
+  <!-- Global overlays (outside tab panels so drawers stay visible) -->
+  <div id="trace-detail-backdrop" class="ops-drawer-backdrop" hidden></div>
+  <div id="trace-detail-panel" class="trace-detail-box" style="display: none;" hidden>
+    <div class="trace-detail-header">
+      <div class="trace-detail-title-wrap">
+        <h3 id="trace-detail-title" class="trace-detail-title">Trace 详情</h3>
+        <span id="trace-detail-subtitle" class="ops-card-desc"></span>
+      </div>
+      <button type="button" id="trace-detail-close" class="btn-secondary" title="关闭详情">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        <span>关闭</span>
+      </button>
+    </div>
+
+    <div id="trace-detail-loading" class="loading-state-box" style="display: none;" hidden>
+      <div class="loading-spinner" aria-hidden="true"></div>
+      <span>正在读取 Trace 详情...</span>
+    </div>
+
+    <div id="trace-detail-error" class="alert-banner" role="alert">
+      <div class="alert-content">
+        <div class="alert-title">Trace 详情读取失败</div>
+        <p id="trace-detail-error-msg" class="alert-message"></p>
+      </div>
+    </div>
+
+    <div id="trace-detail-body" class="trace-detail-body"></div>
+  </div>
+
+  <div id="ops-chunk-drawer-backdrop" class="ops-drawer-backdrop" hidden></div>
+  <aside id="ops-chunk-drawer" class="ops-chunk-drawer" aria-label="片段全文" style="display: none;" hidden>
+    <div class="ops-chunk-drawer-header">
+      <div>
+        <h3 id="ops-chunk-drawer-title" class="ops-chunk-drawer-title">片段全文</h3>
+        <p id="ops-chunk-drawer-meta" class="ops-chunk-drawer-meta"></p>
+      </div>
+      <button type="button" id="ops-chunk-drawer-close" class="btn-secondary" title="关闭">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        <span>关闭</span>
+      </button>
+    </div>
+    <div class="ops-chunk-drawer-body">
+      <div id="ops-chunk-drawer-loading" class="loading-state-box" style="display: none;" hidden>
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <span>正在读取片段全文...</span>
+      </div>
+      <div id="ops-chunk-drawer-error" class="alert-banner" role="alert" style="display: none;">
+        <div class="alert-content">
+          <div class="alert-title">片段读取失败</div>
+          <p id="ops-chunk-drawer-error-msg" class="alert-message"></p>
+        </div>
+      </div>
+      <pre id="ops-chunk-drawer-text" class="ops-chunk-drawer-text"></pre>
+    </div>
+  </aside>
 </div>
 {% endblock %}
 
@@ -1896,7 +2201,26 @@
   const statLatencyP95 = document.getElementById('stat-latency-p95');
 
   function formatLatencyMs(value) {
-    return typeof value === 'number' && !isNaN(value) ? value.toFixed(1) : '-';
+    if (typeof value !== 'number' || isNaN(value)) {
+      return { text: '-', unit: 'ms' };
+    }
+    if (value >= 1000) {
+      return {
+        text: (value / 1000).toFixed(value >= 10000 ? 0 : 1),
+        unit: 's'
+      };
+    }
+    return { text: value.toFixed(1), unit: 'ms' };
+  }
+
+  function applyLatencyStat(valueEl, unitEl, ms) {
+    const formatted = formatLatencyMs(ms);
+    if (valueEl) {
+      valueEl.textContent = formatted.text;
+    }
+    if (unitEl) {
+      unitEl.textContent = formatted.unit;
+    }
   }
 
   // Browse Elements
@@ -1956,6 +2280,7 @@
   const traceQueryTableWrap = document.getElementById('trace-query-table-wrap');
 
   const traceDetailPanel = document.getElementById('trace-detail-panel');
+  const traceDetailBackdrop = document.getElementById('trace-detail-backdrop');
   const traceDetailTitle = document.getElementById('trace-detail-title');
   const traceDetailSubtitle = document.getElementById('trace-detail-subtitle');
   const traceDetailClose = document.getElementById('trace-detail-close');
@@ -1979,8 +2304,19 @@
   const evalRunDetailDesc = document.getElementById('eval-run-detail-desc');
   const evalRunGroupsContainer = document.getElementById('eval-run-groups-container');
 
-  let activeTraceSubtab = 'ingestion';
+  const chunkDrawer = document.getElementById('ops-chunk-drawer');
+  const chunkDrawerBackdrop = document.getElementById('ops-chunk-drawer-backdrop');
+  const chunkDrawerClose = document.getElementById('ops-chunk-drawer-close');
+  const chunkDrawerTitle = document.getElementById('ops-chunk-drawer-title');
+  const chunkDrawerMeta = document.getElementById('ops-chunk-drawer-meta');
+  const chunkDrawerLoading = document.getElementById('ops-chunk-drawer-loading');
+  const chunkDrawerError = document.getElementById('ops-chunk-drawer-error');
+  const chunkDrawerErrorMsg = document.getElementById('ops-chunk-drawer-error-msg');
+  const chunkDrawerText = document.getElementById('ops-chunk-drawer-text');
+
+  let activeTraceSubtab = 'query';
   let rawEvalRuns = [];
+  let selectedEvalRunIdx = -1;
 
   let rawBrowseData = [];
 
@@ -1994,6 +2330,27 @@
       .replace(/'/g, '&#039;');
   }
 
+  function truncateId(value, head, tail) {
+    const text = String(value || '');
+    if (text.length <= head + tail + 1) {
+      return text;
+    }
+    return text.slice(0, head) + '…' + text.slice(-tail);
+  }
+
+  function formatChunkPreview(text) {
+    if (!text) {
+      return '';
+    }
+    let cleaned = String(text);
+    cleaned = cleaned.replace(/!\[[^\]]*\]\([^)]*\)/g, '');
+    cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+    cleaned = cleaned.replace(/<[^>]+>/g, '');
+    cleaned = cleaned.replace(/^#+\s*/gm, '');
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    return cleaned;
+  }
+
   function formatRefusalReason(reason) {
     if (!reason) return '-';
     if (reason === 'insufficient_evidence') return '证据不足';
@@ -2001,9 +2358,153 @@
     return escapeHtml(reason);
   }
 
+  function openTraceDrawer() {
+    if (!traceDetailPanel || !traceDetailBackdrop) return;
+    traceDetailPanel.style.display = 'flex';
+    traceDetailPanel.removeAttribute('hidden');
+    traceDetailBackdrop.removeAttribute('hidden');
+    requestAnimationFrame(function() {
+      traceDetailPanel.classList.add('is-open');
+      traceDetailBackdrop.classList.add('is-open');
+    });
+  }
+
+  function closeTraceDrawer() {
+    if (!traceDetailPanel || !traceDetailBackdrop) return;
+    traceDetailPanel.classList.remove('is-open');
+    traceDetailBackdrop.classList.remove('is-open');
+    window.setTimeout(function() {
+      traceDetailPanel.style.display = 'none';
+      traceDetailPanel.setAttribute('hidden', '');
+      traceDetailBackdrop.setAttribute('hidden', '');
+    }, 220);
+  }
+
+  function openChunkDrawer() {
+    if (!chunkDrawer || !chunkDrawerBackdrop) return;
+    chunkDrawer.style.display = 'flex';
+    chunkDrawer.removeAttribute('hidden');
+    chunkDrawerBackdrop.removeAttribute('hidden');
+    requestAnimationFrame(function() {
+      chunkDrawer.classList.add('is-open');
+      chunkDrawerBackdrop.classList.add('is-open');
+    });
+  }
+
+  function closeChunkDrawer() {
+    if (!chunkDrawer || !chunkDrawerBackdrop) return;
+    chunkDrawer.classList.remove('is-open');
+    chunkDrawerBackdrop.classList.remove('is-open');
+    window.setTimeout(function() {
+      chunkDrawer.style.display = 'none';
+      chunkDrawer.setAttribute('hidden', '');
+      chunkDrawerBackdrop.setAttribute('hidden', '');
+    }, 220);
+  }
+
+  async function loadChunkFullText(chunkId) {
+    if (!chunkId || !chunkDrawer) return;
+    openChunkDrawer();
+    chunkDrawerTitle.textContent = '片段全文';
+    chunkDrawerMeta.textContent = chunkId;
+    chunkDrawerText.textContent = '';
+    chunkDrawerError.style.display = 'none';
+    chunkDrawerLoading.style.display = 'flex';
+    chunkDrawerLoading.removeAttribute('hidden');
+
+    try {
+      const response = await fetch('/api/chunks/' + encodeURIComponent(chunkId));
+      if (response.status === 404) {
+        throw new Error('未找到片段 ' + chunkId);
+      }
+      if (!response.ok) {
+        throw new Error('服务响应异常 (HTTP ' + response.status + ')');
+      }
+      const detail = await response.json();
+      chunkDrawerTitle.textContent = detail.title || '片段全文';
+      chunkDrawerMeta.textContent = [
+        detail.chunk_id || chunkId,
+        detail.culture_domain ? '文化域: ' + detail.culture_domain : '',
+        detail['审阅状态'] ? '状态: ' + detail['审阅状态'] : ''
+      ].filter(Boolean).join(' · ');
+      chunkDrawerText.textContent = detail.text || '（该片段正文内容为空）';
+    } catch (err) {
+      chunkDrawerErrorMsg.textContent = err.message;
+      chunkDrawerError.style.display = 'block';
+    } finally {
+      chunkDrawerLoading.style.display = 'none';
+      chunkDrawerLoading.setAttribute('hidden', '');
+    }
+  }
+
+  const BROWSE_CHUNK_PREVIEW_LIMIT = 3;
+
+  function renderChunkPreviewRow(chunk) {
+    const isPending = chunk['审阅状态'] === '待审' || chunk.review_status === '待审';
+    const rowClass = isPending ? 'chunk-preview-row chunk-preview-row--pending' : 'chunk-preview-row';
+    const pendingBadge = isPending ? '<span class="chunk-pending-badge">待审</span>' : '';
+    const viewFullBtn = chunk.chunk_id
+      ? `<button type="button" class="btn-chunk-view-full" data-view-chunk-full="${escapeHtml(chunk.chunk_id)}">查看全文</button>`
+      : '';
+    return `
+      <div class="${rowClass}">
+        <div class="chunk-row-header">
+          <code class="chunk-id-tag" title="${escapeHtml(chunk.chunk_id)}">${escapeHtml(truncateId(chunk.chunk_id, 10, 6))}</code>
+          <div class="chunk-row-actions">
+            ${pendingBadge}
+            ${viewFullBtn}
+          </div>
+        </div>
+        <p class="chunk-preview-text">${escapeHtml(formatChunkPreview(chunk.preview))}</p>
+      </div>
+    `;
+  }
+
+  function renderChunksSection(chunks) {
+    if (!chunks || chunks.length === 0) {
+      return '';
+    }
+    const collapsedClass = chunks.length > BROWSE_CHUNK_PREVIEW_LIMIT ? ' chunks-grid--collapsed' : '';
+    const chunksHtml = chunks.map(renderChunkPreviewRow).join('');
+    const expandBar = chunks.length > BROWSE_CHUNK_PREVIEW_LIMIT
+      ? `<div class="chunks-expand-bar"><button type="button" class="btn-chunk-expand" data-expand-chunks>展开全部 ${chunks.length} 个片段</button></div>`
+      : '';
+    return `
+      <div class="chunks-grid${collapsedClass}">
+        ${chunksHtml}
+      </div>
+      ${expandBar}
+    `;
+  }
+
+  function renderReviewChunkList(chunks) {
+    if (!chunks || chunks.length === 0) {
+      return '<p class="empty-desc" style="margin:0;">暂无片段预览</p>';
+    }
+    const collapsedClass = chunks.length > BROWSE_CHUNK_PREVIEW_LIMIT ? ' chunks-grid--collapsed' : '';
+    const chunksHtml = chunks.map(renderChunkPreviewRow).join('');
+    const expandBar = chunks.length > BROWSE_CHUNK_PREVIEW_LIMIT
+      ? `<div class="chunks-expand-bar"><button type="button" class="btn-chunk-expand" data-expand-chunks>展开全部 ${chunks.length} 个片段</button></div>`
+      : '';
+    return `
+      <div class="chunks-grid${collapsedClass}">
+        ${chunksHtml}
+      </div>
+      ${expandBar}
+    `;
+  }
+
   /* =========================================================
      Tab Switching Logic
      ========================================================= */
+  function resolveTabFromHash() {
+    const hash = (window.location.hash || '').replace(/^#/, '');
+    if (['overview', 'browse', 'review', 'ingest', 'trace', 'eval'].includes(hash)) {
+      return hash;
+    }
+    return 'overview';
+  }
+
   function switchTab(targetTab) {
     if (!panels[targetTab]) {
       targetTab = 'overview';
@@ -2038,11 +2539,7 @@
     } else if (targetTab === 'review') {
       loadReview();
     } else if (targetTab === 'trace') {
-      if (activeTraceSubtab === 'ingestion') {
-        loadTraceIngestionList();
-      } else {
-        loadTraceQueryList();
-      }
+      switchTraceSubtab(activeTraceSubtab);
     } else if (targetTab === 'eval') {
       loadEvalRuns();
     }
@@ -2083,15 +2580,23 @@
       statChunkCount.textContent = typeof data.chunk_count === 'number' ? data.chunk_count : '0';
 
       if (typeof data.avg_query_latency_ms === 'number' && !isNaN(data.avg_query_latency_ms)) {
-        statAvgLatency.textContent = data.avg_query_latency_ms.toFixed(1);
+        applyLatencyStat(statAvgLatency, statAvgLatency ? statAvgLatency.nextElementSibling : null, data.avg_query_latency_ms);
       } else {
-        statAvgLatency.textContent = '-';
+        applyLatencyStat(statAvgLatency, statAvgLatency ? statAvgLatency.nextElementSibling : null, NaN);
       }
       if (statLatencyP50) {
-        statLatencyP50.textContent = formatLatencyMs(data.query_latency_p50_ms);
+        const p50 = formatLatencyMs(data.query_latency_p50_ms);
+        statLatencyP50.textContent = p50.text;
+        if (statLatencyP50.nextElementSibling) {
+          statLatencyP50.nextElementSibling.textContent = p50.unit;
+        }
       }
       if (statLatencyP95) {
-        statLatencyP95.textContent = formatLatencyMs(data.query_latency_p95_ms);
+        const p95 = formatLatencyMs(data.query_latency_p95_ms);
+        statLatencyP95.textContent = p95.text;
+        if (statLatencyP95.nextElementSibling) {
+          statLatencyP95.nextElementSibling.textContent = p95.unit;
+        }
       }
     } catch (err) {
       overviewErrorMsg.textContent = '读取概览统计失败: ' + err.message;
@@ -2150,64 +2655,55 @@
     let totalDocs = 0;
     let totalChunks = 0;
 
-    filteredGroups.forEach(function(group) {
+    filteredGroups.forEach(function(group, groupIdx) {
       totalDocs += group.document_count || 0;
       totalChunks += group.chunk_count || 0;
-
-      const groupEl = document.createElement('article');
-      groupEl.className = 'domain-group-card';
+      const shouldOpenGroup = Boolean(query) || groupIdx === 0;
 
       let docsHtml = '';
       if (group.documents && group.documents.length > 0) {
-        docsHtml = group.documents.map(function(doc) {
-          let chunksHtml = '';
-          if (doc.chunks && doc.chunks.length > 0) {
-            chunksHtml = doc.chunks.map(function(chunk) {
-              const isPending = chunk['审阅状态'] === '待审';
-              const rowClass = isPending ? 'chunk-preview-row chunk-preview-row--pending' : 'chunk-preview-row';
-              const pendingBadge = isPending ? '<span class="chunk-pending-badge">待审</span>' : '';
-              return `
-                <div class="${rowClass}">
-                  <div class="chunk-row-header">
-                    <code class="chunk-id-tag">${escapeHtml(chunk.chunk_id)}</code>
-                    ${pendingBadge}
-                  </div>
-                  <p class="chunk-preview-text">${escapeHtml(chunk.preview)}</p>
-                </div>
-              `;
-            }).join('');
-          }
-
+        docsHtml = group.documents.map(function(doc, docIdx) {
+          const chunkCount = doc.chunk_count || (doc.chunks ? doc.chunks.length : 0);
+          const shouldOpenDoc = Boolean(query) || (shouldOpenGroup && docIdx === 0);
           return `
-            <div class="doc-item-card">
-              <div class="doc-item-header">
-                <div class="doc-title-box">
-                  <h4 class="doc-title">${escapeHtml(doc.title || '未命名文档')}</h4>
-                  <code class="doc-id-code" title="文档标识">${escapeHtml(doc.document_id)}</code>
+            <details class="doc-item-card"${shouldOpenDoc ? ' open' : ''}>
+              <summary>
+                <div class="doc-item-header">
+                  <div class="doc-title-box">
+                    <div class="doc-title-inner">
+                      <h4 class="doc-title">${escapeHtml(doc.title || '未命名文档')}</h4>
+                      <code class="doc-id-code" title="文档标识">${escapeHtml(truncateId(doc.document_id, 12, 8))}</code>
+                    </div>
+                  </div>
+                  <span class="badge-metric">${chunkCount} 个片段</span>
                 </div>
-                <span class="badge-metric">${doc.chunk_count || (doc.chunks ? doc.chunks.length : 0)} 个片段</span>
-              </div>
-              <div class="chunks-grid">
-                ${chunksHtml}
-              </div>
-            </div>
+              </summary>
+              ${renderChunksSection(doc.chunks || [])}
+            </details>
           `;
         }).join('');
       } else {
         docsHtml = '<p class="empty-desc" style="margin: 0.5rem 0;">该文化域暂无文档</p>';
       }
 
+      const groupEl = document.createElement('details');
+      groupEl.className = 'domain-group-card';
+      if (shouldOpenGroup) {
+        groupEl.setAttribute('open', '');
+      }
       groupEl.innerHTML = `
-        <header class="domain-group-header">
-          <div class="domain-title-wrap">
-            <span class="domain-badge">${escapeHtml(group.culture_domain)}</span>
-            <h3 class="domain-name">${escapeHtml(group.culture_domain)} 文化域</h3>
+        <summary>
+          <div class="domain-group-header">
+            <div class="domain-title-wrap">
+              <span class="domain-badge">${escapeHtml(group.culture_domain)}</span>
+              <h3 class="domain-name">文化域</h3>
+            </div>
+            <div class="domain-stats-badges">
+              <span class="badge-metric">${group.document_count || 0} 篇文档</span>
+              <span class="badge-metric">${group.chunk_count || 0} 个切片</span>
+            </div>
           </div>
-          <div class="domain-stats-badges">
-            <span class="badge-metric">${group.document_count || 0} 篇文档</span>
-            <span class="badge-metric">${group.chunk_count || 0} 个切片</span>
-          </div>
-        </header>
+        </summary>
         <div class="domain-documents-list">
           ${docsHtml}
         </div>
@@ -2251,6 +2747,24 @@
     });
   }
 
+  if (opsBrowseList) {
+    opsBrowseList.addEventListener('click', function(event) {
+      const viewFullBtn = event.target.closest('[data-view-chunk-full]');
+      if (viewFullBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        loadChunkFullText(viewFullBtn.getAttribute('data-view-chunk-full'));
+        return;
+      }
+      const expandBtn = event.target.closest('[data-expand-chunks]');
+      if (!expandBtn) return;
+      const grid = expandBtn.closest('.doc-item-card, details')?.querySelector('.chunks-grid');
+      if (!grid) return;
+      grid.classList.remove('chunks-grid--collapsed');
+      expandBtn.closest('.chunks-expand-bar')?.remove();
+    });
+  }
+
   /* =========================================================
      2b. 待审 (Review) Data Fetch & Actions
      ========================================================= */
@@ -2266,21 +2780,26 @@
     reviewEmpty.setAttribute('hidden', '');
 
     items.forEach(function(item) {
-      const card = document.createElement('article');
+      const card = document.createElement('details');
       card.className = 'review-doc-card';
       card.dataset.documentId = item.document_id;
       card.innerHTML = `
-        <div class="review-doc-meta">
-          <h3 class="review-doc-title">${escapeHtml(item.title || '未命名文档')}</h3>
-          <p class="review-doc-sub">
-            <span class="domain-badge">${escapeHtml(item.culture_domain || '其他')}</span>
-            <code class="doc-id-code">${escapeHtml(item.document_id)}</code>
-            <span class="badge-metric">${item.chunk_count || 0} 个片段</span>
-          </p>
-        </div>
-        <div class="review-doc-actions">
-          <button type="button" class="btn-review-approve" data-action="approve" data-document-id="${escapeHtml(item.document_id)}">通过</button>
-          <button type="button" class="btn-review-reject" data-action="reject" data-document-id="${escapeHtml(item.document_id)}">驳回</button>
+        <summary class="review-doc-summary">
+          <div class="review-doc-meta">
+            <h3 class="review-doc-title">${escapeHtml(item.title || '未命名文档')}</h3>
+            <p class="review-doc-sub">
+              <span class="domain-badge">${escapeHtml(item.culture_domain || '其他')}</span>
+              <code class="doc-id-code" title="${escapeHtml(item.document_id)}">${escapeHtml(truncateId(item.document_id, 12, 8))}</code>
+              <span class="badge-metric">${item.chunk_count || 0} 个片段</span>
+            </p>
+          </div>
+          <div class="review-doc-actions">
+            <button type="button" class="btn-review-approve" data-action="approve" data-document-id="${escapeHtml(item.document_id)}">通过</button>
+            <button type="button" class="btn-review-reject" data-action="reject" data-document-id="${escapeHtml(item.document_id)}">驳回</button>
+          </div>
+        </summary>
+        <div class="review-chunk-list">
+          ${renderReviewChunkList(item.chunks || [])}
         </div>
       `;
       reviewList.appendChild(card);
@@ -2322,6 +2841,23 @@
 
   if (reviewList) {
     reviewList.addEventListener('click', function(event) {
+      const viewFullBtn = event.target.closest('[data-view-chunk-full]');
+      if (viewFullBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        loadChunkFullText(viewFullBtn.getAttribute('data-view-chunk-full'));
+        return;
+      }
+      const expandBtn = event.target.closest('[data-expand-chunks]');
+      if (expandBtn) {
+        const grid = expandBtn.closest('.review-chunk-list, details')?.querySelector('.chunks-grid');
+        if (grid) {
+          grid.classList.remove('chunks-grid--collapsed');
+          expandBtn.closest('.chunks-expand-bar')?.remove();
+        }
+        return;
+      }
+
       const button = event.target.closest('[data-action]');
       if (!button) return;
       const documentId = button.getAttribute('data-document-id');
@@ -2603,15 +3139,22 @@
         <td>${elapsedStr}</td>
         <td>${timeStr}</td>
         <td>
-          <button type="button" class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.78rem;" data-trace-id="${escapeHtml(item.trace_id)}">
+          <button type="button" class="btn-secondary btn-table-action" data-trace-id="${escapeHtml(item.trace_id)}">
             查看详情
           </button>
         </td>
       `;
 
-      tr.addEventListener('click', function(e) {
+      tr.addEventListener('click', function() {
         openTraceDetail(item.trace_id);
       });
+      const detailBtn = tr.querySelector('[data-trace-id]');
+      if (detailBtn) {
+        detailBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          openTraceDetail(item.trace_id);
+        });
+      }
 
       traceIngestionList.appendChild(tr);
     });
@@ -2683,15 +3226,22 @@
         <td>${elapsedStr}</td>
         <td>${timeStr}</td>
         <td>
-          <button type="button" class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.78rem;" data-trace-id="${escapeHtml(item.trace_id)}">
+          <button type="button" class="btn-secondary btn-table-action" data-trace-id="${escapeHtml(item.trace_id)}">
             查看详情
           </button>
         </td>
       `;
 
-      tr.addEventListener('click', function(e) {
+      tr.addEventListener('click', function() {
         openTraceDetail(item.trace_id);
       });
+      const detailBtn = tr.querySelector('[data-trace-id]');
+      if (detailBtn) {
+        detailBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          openTraceDetail(item.trace_id);
+        });
+      }
 
       traceQueryList.appendChild(tr);
     });
@@ -2703,9 +3253,7 @@
 
   async function openTraceDetail(traceId) {
     if (!traceDetailPanel) return;
-    traceDetailPanel.style.display = 'flex';
-    traceDetailPanel.removeAttribute('hidden');
-    traceDetailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    openTraceDrawer();
 
     traceDetailError.classList.remove('visible');
     traceDetailErrorMsg.textContent = '';
@@ -2951,11 +3499,26 @@
   }
 
   if (traceDetailClose) {
-    traceDetailClose.addEventListener('click', function() {
-      traceDetailPanel.style.display = 'none';
-      traceDetailPanel.setAttribute('hidden', '');
-    });
+    traceDetailClose.addEventListener('click', closeTraceDrawer);
   }
+  if (traceDetailBackdrop) {
+    traceDetailBackdrop.addEventListener('click', closeTraceDrawer);
+  }
+  if (chunkDrawerClose) {
+    chunkDrawerClose.addEventListener('click', closeChunkDrawer);
+  }
+  if (chunkDrawerBackdrop) {
+    chunkDrawerBackdrop.addEventListener('click', closeChunkDrawer);
+  }
+  document.addEventListener('keydown', function(event) {
+    if (event.key !== 'Escape') return;
+    if (traceDetailPanel && traceDetailPanel.classList.contains('is-open')) {
+      closeTraceDrawer();
+    }
+    if (chunkDrawer && chunkDrawer.classList.contains('is-open')) {
+      closeChunkDrawer();
+    }
+  });
 
   /* =========================================================
      5. 评测 (Eval) Logic
@@ -3015,7 +3578,12 @@
       const newRun = await response.json();
       await loadEvalRuns();
       if (newRun && newRun.timestamp) {
-        renderEvalRunDetail(newRun);
+        const idx = rawEvalRuns.findIndex(function(run) {
+          return run.timestamp === newRun.timestamp;
+        });
+        if (idx >= 0) {
+          selectEvalRun(idx, rawEvalRuns[idx]);
+        }
       }
     } catch (err) {
       evalErrorMsg.textContent = '运行评测失败: ' + err.message;
@@ -3028,8 +3596,23 @@
     }
   }
 
+  function selectEvalRun(idx, run) {
+    selectedEvalRunIdx = idx;
+    if (evalRunsList) {
+      evalRunsList.querySelectorAll('tr').forEach(function(row, rowIdx) {
+        row.classList.toggle('selected-row', rowIdx === idx);
+      });
+    }
+    renderEvalRunDetail(run);
+  }
+
   function renderEvalRunsList(runs) {
     evalRunsList.innerHTML = '';
+    selectedEvalRunIdx = -1;
+    if (evalRunDetail) {
+      evalRunDetail.style.display = 'none';
+      evalRunDetail.setAttribute('hidden', '');
+    }
     if (!runs || runs.length === 0) {
       evalEmpty.style.display = 'block';
       evalEmpty.removeAttribute('hidden');
@@ -3058,23 +3641,25 @@
         <td>${mrr}</td>
         <td>${refusalAcc}</td>
         <td>
-          <button type="button" class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.78rem;" data-run-idx="${idx}">
+          <button type="button" class="btn-secondary btn-table-action" data-run-idx="${idx}">
             查看消融
           </button>
         </td>
       `;
 
       tr.addEventListener('click', function() {
-        renderEvalRunDetail(run);
+        selectEvalRun(idx, run);
       });
+      const detailBtn = tr.querySelector('[data-run-idx]');
+      if (detailBtn) {
+        detailBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          selectEvalRun(idx, run);
+        });
+      }
 
       evalRunsList.appendChild(tr);
     });
-
-    // Automatically render the first/latest run detail if present
-    if (runs.length > 0) {
-      renderEvalRunDetail(runs[0]);
-    }
   }
 
   function renderEvalRunDetail(run) {
@@ -3082,51 +3667,52 @@
     evalRunDetail.style.display = 'flex';
     evalRunDetail.removeAttribute('hidden');
 
-    evalRunDetailTitle.textContent = `评测运行消融详情: ${run.timestamp}`;
+    evalRunDetailTitle.textContent = '消融对比 · ' + run.timestamp;
     evalRunDetailDesc.textContent = `黄金集: ${run.golden_set || '未指定'} · 题目总数: ${run.item_count || 0} · 失败数: ${run.failed_count || 0}`;
 
-    const groupNames = ['dense_only', 'sparse_only', 'rrf', 'rrf_rerank'];
-    const defaultLabels = {
-      dense_only: 'Dense 单路',
-      sparse_only: 'Sparse 单路',
-      rrf: 'RRF 融合',
-      rrf_rerank: 'RRF + Rerank'
-    };
+    const groupNames = Object.keys(run.groups || {});
+    const preferredOrder = ['dense_only', 'sparse_only', 'rrf', 'rrf_rerank'];
+    const orderedNames = preferredOrder.filter(function(name) {
+      return groupNames.includes(name);
+    }).concat(groupNames.filter(function(name) {
+      return !preferredOrder.includes(name);
+    }));
 
-    let html = '';
-    groupNames.forEach(function(gName) {
+    const defaultLabels = {
+      dense_only: 'Dense',
+      sparse_only: 'Sparse',
+      rrf: 'RRF',
+      rrf_rerank: 'RRF+Rerank'
+    };
+    const metricDefs = [
+      { key: 'hit_at_5', label: 'Hit@5', format: function(v) { return (v * 100).toFixed(1) + '%'; } },
+      { key: 'mrr', label: 'MRR', format: function(v) { return v.toFixed(3); } },
+      { key: 'refusal_accuracy', label: '拒答准确率', format: function(v) { return (v * 100).toFixed(1) + '%'; } },
+      { key: 'citation_coverage', label: '出处覆盖率', format: function(v) { return (v * 100).toFixed(1) + '%'; } }
+    ];
+
+    let html = '<div class="ops-table-wrap"><table class="eval-compare-table"><thead><tr><th>指标</th>';
+    orderedNames.forEach(function(gName) {
       const groupData = run.groups ? run.groups[gName] : null;
       const label = (groupData && groupData.label) || defaultLabels[gName] || gName;
-      const metrics = groupData ? groupData.metrics : null;
+      const primaryClass = gName === 'rrf_rerank' ? ' class="is-primary-col"' : '';
+      html += `<th${primaryClass}>${escapeHtml(label)}</th>`;
+    });
+    html += '</tr></thead><tbody>';
 
-      const hitStr = metrics && typeof metrics.hit_at_5 === 'number' ? (metrics.hit_at_5 * 100).toFixed(1) + '%' : '-';
-      const mrrStr = metrics && typeof metrics.mrr === 'number' ? metrics.mrr.toFixed(3) : '-';
-      const refusalStr = metrics && typeof metrics.refusal_accuracy === 'number' ? (metrics.refusal_accuracy * 100).toFixed(1) + '%' : '-';
-      const citationStr = metrics && typeof metrics.citation_coverage === 'number' ? (metrics.citation_coverage * 100).toFixed(1) + '%' : '-';
-
-      html += `
-        <div class="eval-group-card">
-          <h4 class="eval-group-title">${escapeHtml(label)}</h4>
-          <div class="eval-metric-row">
-            <span>Hit@5</span>
-            <span class="eval-metric-val">${hitStr}</span>
-          </div>
-          <div class="eval-metric-row">
-            <span>MRR</span>
-            <span class="eval-metric-val">${mrrStr}</span>
-          </div>
-          <div class="eval-metric-row">
-            <span>拒答准确率</span>
-            <span class="eval-metric-val">${refusalStr}</span>
-          </div>
-          <div class="eval-metric-row">
-            <span>出处覆盖率</span>
-            <span class="eval-metric-val">${citationStr}</span>
-          </div>
-        </div>
-      `;
+    metricDefs.forEach(function(metric) {
+      html += `<tr><th>${metric.label}</th>`;
+      orderedNames.forEach(function(gName) {
+        const groupData = run.groups ? run.groups[gName] : null;
+        const metrics = groupData ? groupData.metrics : null;
+        const value = metrics && typeof metrics[metric.key] === 'number' ? metrics[metric.key] : null;
+        const primaryClass = gName === 'rrf_rerank' ? ' is-primary-col' : '';
+        html += `<td class="eval-metric-val${primaryClass}">${value != null ? metric.format(value) : '-'}</td>`;
+      });
+      html += '</tr>';
     });
 
+    html += '</tbody></table></div>';
     evalRunGroupsContainer.innerHTML = html;
   }
 
@@ -3137,13 +3723,12 @@
     btnRunEval.addEventListener('click', handleRunEval);
   }
 
+  window.addEventListener('hashchange', function() {
+    switchTab(resolveTabFromHash());
+  });
+
   // Initial tab resolution based on URL hash (default to overview)
-  const initialHash = (window.location.hash || '').replace(/^#/, '');
-  if (['overview', 'browse', 'review', 'ingest', 'trace', 'eval'].includes(initialHash)) {
-    switchTab(initialHash);
-  } else {
-    switchTab('overview');
-  }
+  switchTab(resolveTabFromHash());
 
 })();
 </script>

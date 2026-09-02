@@ -12,6 +12,7 @@ from wenmai.models import ScoredChunk
 from wenmai.retrieval.fusion import RetrievalResult, run_fusion
 from wenmai.tracing.context import StageRecord
 from wenmai.tracing.stages.query import QueryStage
+from wenmai.tracing.stages.retrieval import stages_from_fusion
 
 _RETRIEVAL_MODES = frozenset({"rrf", "dense_only", "sparse_only"})
 
@@ -22,11 +23,14 @@ def retrieve(
     *,
     culture_domain: str | None = None,
     retrieval_mode: str | None = None,
-    rerank_enabled: bool | None = None,
     knowledge: Knowledge | None = None,
     extra_queries: list[str] | None = None,
+    include_trace_stages: bool = True,
+    rerank_enabled: bool | None = None,
 ) -> RetrievalResult:
-    mode, _do_rerank = _resolve_retrieval(settings, retrieval_mode, rerank_enabled)
+    """Return fused chunks and timing metrics. Rerank runs in 提问编排 phase 3."""
+    _ = rerank_enabled
+    mode = _resolve_mode(settings, retrieval_mode)
     knowledge = knowledge or create_knowledge(settings)
     resolved_extras = extra_queries
     if resolved_extras is None:
@@ -41,11 +45,14 @@ def retrieve(
         culture_domain=culture_domain,
         extra_queries=resolved_extras,
     )
-    chunks = fusion_result.chunks
-    stages = _stages_from_fusion(knowledge, settings, fusion_result, culture_domain)
+    stages: list[StageRecord] = []
+    if include_trace_stages:
+        stages = stages_from_fusion(
+            knowledge, settings, fusion_result, culture_domain
+        )
 
     return RetrievalResult(
-        chunks=chunks,
+        chunks=fusion_result.chunks,
         mode=fusion_result.mode,
         stages=stages,
         dense_chunks=fusion_result.dense_chunks,
@@ -53,75 +60,27 @@ def retrieve(
         dense_elapsed_ms=fusion_result.dense_elapsed_ms,
         sparse_elapsed_ms=fusion_result.sparse_elapsed_ms,
         fusion_elapsed_ms=fusion_result.fusion_elapsed_ms,
+        query_path_counts=fusion_result.query_path_counts,
     )
 
 
-def _resolve_retrieval(
+def _resolve_mode(settings: Settings, retrieval_mode: str | None) -> str:
+    mode = settings.retrieval.mode if retrieval_mode is None else retrieval_mode
+    if mode not in _RETRIEVAL_MODES:
+        raise ValueError(f"unknown retrieval_mode: {mode!r}")
+    return mode
+
+
+def resolve_retrieval_mode(
     settings: Settings,
     retrieval_mode: str | None,
     rerank_enabled: bool | None,
 ) -> tuple[str, bool]:
-    mode = settings.retrieval.mode if retrieval_mode is None else retrieval_mode
-    if mode not in _RETRIEVAL_MODES:
-        raise ValueError(f"unknown retrieval_mode: {mode!r}")
+    mode = _resolve_mode(settings, retrieval_mode)
     rerank = settings.retrieval.rerank_enabled if rerank_enabled is None else rerank_enabled
     if mode != "rrf":
         rerank = False
     return mode, bool(rerank)
-
-
-def _stages_from_fusion(
-    knowledge: Knowledge,
-    settings: Settings,
-    fusion_result: RetrievalResult,
-    culture_domain: str | None,
-) -> list[StageRecord]:
-    mode = fusion_result.mode
-    if mode == "dense_only":
-        return [
-            QueryStage.dense(
-                knowledge,
-                settings,
-                fusion_result.dense_chunks,
-                fusion_result.dense_elapsed_ms,
-                culture_domain,
-            )
-        ]
-    if mode == "sparse_only":
-        return [
-            QueryStage.sparse(
-                settings,
-                fusion_result.sparse_chunks,
-                fusion_result.sparse_elapsed_ms,
-                culture_domain,
-            )
-        ]
-
-    dense_chunks = fusion_result.dense_chunks
-    sparse_chunks = fusion_result.sparse_chunks
-    return [
-        QueryStage.dense(
-            knowledge,
-            settings,
-            dense_chunks,
-            fusion_result.dense_elapsed_ms,
-            culture_domain,
-        ),
-        QueryStage.sparse(
-            settings,
-            sparse_chunks,
-            fusion_result.sparse_elapsed_ms,
-            culture_domain,
-        ),
-        QueryStage.fusion(
-            settings,
-            dense_chunks,
-            sparse_chunks,
-            fusion_result.chunks,
-            fusion_result.fusion_elapsed_ms,
-            query_path_counts=fusion_result.query_path_counts,
-        ),
-    ]
 
 
 def _rank_changes(
@@ -231,14 +190,6 @@ def rerank_chunks(
             rerank_top=rerank_top,
             reason=reason,
         )
-
-
-def resolve_retrieval_mode(
-    settings: Settings,
-    retrieval_mode: str | None,
-    rerank_enabled: bool | None,
-) -> tuple[str, bool]:
-    return _resolve_retrieval(settings, retrieval_mode, rerank_enabled)
 
 
 __all__ = ["rerank_chunks", "resolve_retrieval_mode", "retrieve"]

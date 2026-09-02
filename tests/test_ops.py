@@ -140,7 +140,10 @@ def test_ops_dual_shell_isolation(test_settings: Settings) -> None:
     assert "编辑工作台" in workbench.text
     assert "运维看板" not in workbench.text
     assert "库览" not in workbench.text
-    assert "/ops" not in workbench.text
+    assert 'class="ops-nav-tab"' not in workbench.text
+
+    assert "返回提问" in ops.text
+    assert "知识库维护" in workbench.text
 
 
 def test_ops_overview_api_contract(test_settings: Settings, tmp_path: Path) -> None:
@@ -337,6 +340,10 @@ def test_ops_trace_panel_wiring(test_settings: Settings) -> None:
     assert "fetch('/api/traces/' + encodeURIComponent(" in html or (
         'fetch("/api/traces/" + encodeURIComponent(' in html
     )
+    assert "white-space: nowrap" in html
+    assert "btn-table-action" in html
+    assert "function formatChunkPreview" in html
+    assert 'id="trace-detail-backdrop"' in html
 
 
 def test_ops_eval_panel_wiring(test_settings: Settings) -> None:
@@ -450,6 +457,12 @@ def test_ops_review_panel_wiring(test_settings: Settings) -> None:
     assert "通过" in html
     assert "驳回" in html
     assert "chunk-preview-row--pending" in html
+    assert "review-chunk-list" in html
+    assert "chunks-grid--collapsed" in html
+    assert "data-expand-chunks" in html
+    assert "data-view-chunk-full" in html
+    assert 'id="ops-chunk-drawer"' in html
+    assert "eval-compare-table" in html
 
 
 def test_workbench_has_no_review_actions(test_settings: Settings) -> None:
@@ -528,6 +541,10 @@ def test_review_pending_approve_reject_api_contract(
         assert "title" in item
         assert "culture_domain" in item
         assert item["chunk_count"] >= 1
+        assert "chunks" in item
+        assert len(item["chunks"]) >= 1
+        assert "preview" in item["chunks"][0]
+        assert item["chunks"][0]["审阅状态"] == "待审"
 
     missing = client.post("/api/review/unknown-doc/approve")
     assert missing.status_code == 404

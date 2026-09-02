@@ -123,6 +123,18 @@ def release_all_resources() -> None:
 
 
 @contextmanager
+def phase_batch(resource: ModelResource, enabled: bool) -> Iterator[None]:
+    """Begin/end a model batch when *enabled*; no-op otherwise."""
+    if enabled:
+        begin_batch(resource)
+    try:
+        yield
+    finally:
+        if enabled:
+            end_batch()
+
+
+@contextmanager
 def hold(resource: ModelResource) -> Iterator[None]:
     global _active
     if not _exclusive:

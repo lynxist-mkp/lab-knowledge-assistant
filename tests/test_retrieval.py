@@ -74,7 +74,7 @@ def test_rerank_failure_still_returns_fused_chunks(
 
     test_settings.fakes["reranker"] = "error"
     ingest_source(_write_minpai_markdown(tmp_path / "matsu.md"), test_settings)
-    result = retrieve("妈祖信仰的发源地在哪里？", test_settings, rerank_enabled=True)
+    result = retrieve("妈祖信仰的发源地在哪里？", test_settings)
     assert result.chunks
     assert not any(stage.name == "rerank" for stage in result.stages)
 

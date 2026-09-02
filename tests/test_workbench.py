@@ -66,13 +66,13 @@ def test_workbench_landmarks_and_culture_domain_filter(test_settings: Settings) 
     assert "人工智能生成合成" in html
     assert "播出终审" in html
 
-    # No ops primary nav chrome
+    # No ops primary nav chrome (surface switch link is allowed)
     assert "Ingestion 管理" not in html
     assert "评估面板" not in html
     assert "数据浏览" not in html
     assert "库览" not in html
     assert "运维看板" not in html
-    assert "/ops" not in html
+    assert 'class="ops-nav-tab"' not in html
 
 
 def test_workbench_dual_shell_isolation(test_settings: Settings) -> None:
@@ -89,6 +89,10 @@ def test_workbench_dual_shell_isolation(test_settings: Settings) -> None:
     assert "编辑工作台" not in ops.text
     assert "人工智能生成合成" in ops.text
     assert "播出终审" in ops.text
+
+    # Cross-surface switch links use neutral labels, not the other surface name
+    assert "知识库维护" in workbench.text
+    assert "返回提问" in ops.text
 
 
 def test_workbench_citation_drawer_shell_landmarks(test_settings: Settings) -> None:
@@ -118,11 +122,15 @@ def test_workbench_citation_drawer_shell_landmarks(test_settings: Settings) -> N
     assert "citation-ref" in html
     assert "data-chunk-id" in html
 
+    # Surface switch affordance for maintainers
+    assert 'class="surface-switch"' in html
+    assert "知识库维护" in html
+
     # No full 库览 ops chrome / browse fetch on workbench
     assert "库览" not in html
-    assert "/ops" not in html
     assert "fetch('/api/browse'" not in html
     assert 'fetch("/api/browse"' not in html
+    assert 'class="surface-switch"' in html
 
 
 def test_workbench_ask_flow_uses_ask_endpoint(test_settings: Settings) -> None:
@@ -184,7 +192,7 @@ def test_workbench_citation_drawer_js_wiring(test_settings: Settings) -> None:
 
     # Editor shell stays isolated — no full 库览 / ops chrome
     assert "库览" not in html
-    assert "/ops" not in html
+    assert 'class="ops-nav-tab"' not in html
 
 
 def test_workbench_chunk_api_returns_fragment_text(
