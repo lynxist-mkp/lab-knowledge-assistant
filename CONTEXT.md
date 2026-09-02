@@ -124,9 +124,17 @@ _Avoid_: QueryOrchestrator, query pipeline, ask handler
 材料进入 load 前的三态决策：硬拒、直接放行、或标**待审**；**入库质量门**与**灰区复判**的结果在此收敛为单一决策，**入库**流水线按决策分支。
 _Avoid_: AdmissionGate（作产品名）, quality check pipeline
 
+**入库编排**:
+一份材料从**入库质量门**、load、transform 到 embed/upsert 的深 module；单条 `run_prepare_commit`、批处理 `run_prepare_commit_batch`；prepare 产出 `PrepareBody`，commit 写**知识库**。
+_Avoid_: ingest pipeline, run_ingest_phases, IngestPrepareBody
+
 **ReadPath**:
 **知识库**的 read seam：稠密/稀疏检索、按文档或片段读取、列出**待审**文档；与 WritePath 对称。
 _Avoid_: browse service, retrieve adapter
+
+**WritePath**:
+**知识库**的 write seam：plan/commit **入库**、删文档、审阅通过/驳回；经 ReadPath 校验文档存在。
+_Avoid_: ingest writer, upsert adapter
 
 **PrepareTraceRecorder**:
 **入库** pipeline seam 上的 Trace 适配器：编排层写阶段与摘要，底层不直接碰 TraceContext。

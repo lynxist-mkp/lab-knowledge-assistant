@@ -17,7 +17,7 @@
 2. **生成前扩展统一**：评测与 `/ask` 均经 `prepare_generation_context`（封装 `expand_for_generation`）后再调用 `generate()`。
 3. **检索不再内联精排**：`retrieve()` 只返回融合后的 chunks；精排仅在编排 Phase 3 通过 `rerank_chunks` 执行。
 4. **评测仍不写 trace**：与 ADR 0004 一致，编排路径不调用 `save_trace`。
-5. **删除 `eval_item()` 死代码**：评测只经 `run_eval_group_batched` 批处理入口。
+5. **删除 `eval_item()` 死代码**：评测只经 `run_eval_group_batched` → `run_eval_works` 批处理入口（ADR 0004 不写 trace 约束不变）。
 
 ## Consequences
 
