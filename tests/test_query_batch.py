@@ -44,13 +44,13 @@ def test_run_ask_pipeline_phase_batch_sets_active_resource(
         batch_size = 1
         batch_wait_ms = 0.0
 
-    from wenmai.retrieval import retrieve as retrieve_mod
+    from wenmai.retrieval import run_fusion as fusion_mod
 
-    def spy_retrieve(*args, **kwargs):
+    def spy_fusion(*args, **kwargs):
         seen.append(active_resource())
-        return retrieve_mod(*args, **kwargs)
+        return fusion_mod(*args, **kwargs)
 
-    monkeypatch.setattr("wenmai.pipelines.query_orchestration.retrieve", spy_retrieve)
+    monkeypatch.setattr("wenmai.pipelines.query_orchestration.run_fusion", spy_fusion)
     run_ask_pipeline([Job()], phase_batch=True, batch_meta=None)
     assert ModelResource.BGE_M3 in seen
 

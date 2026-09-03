@@ -11,8 +11,23 @@ from wenmai.config import Settings
 from wenmai.ingestion.quality import evaluate_quality_gate
 from wenmai.knowledge import create_knowledge
 from wenmai.pipelines.ingestion import ingest_source
-from wenmai.retrieval import retrieve
+from wenmai.retrieval import resolve_retrieval_mode, run_fusion
 from wenmai.tracing import get_ingestion_detail
+
+
+def _run_retrieval(question, settings, *, knowledge=None, extra_queries=None, retrieval_mode=None):
+    from wenmai.knowledge import create_knowledge
+    from wenmai.retrieval import resolve_retrieval_mode, run_fusion
+    knowledge = knowledge or create_knowledge(settings)
+    mode, _ = resolve_retrieval_mode(settings, retrieval_mode, None)
+    return run_fusion(
+        knowledge,
+        question,
+        mode=mode,
+        settings=settings,
+        extra_queries=extra_queries or [],
+    )
+
 
 
 def _write_reject_markdown(path: Path) -> Path:
@@ -119,7 +134,7 @@ def test_quality_gate_approves_normal_prose(
     assert chunks
     assert all(chunk.metadata.get("审阅状态") == "已通过" for chunk in chunks)
 
-    hits = retrieve("船政学堂", test_settings)
+    hits = _run_retrieval("船政学堂", test_settings)
     assert hits.chunks
     assert "船政" in hits.chunks[0].chunk.text
 
@@ -137,7 +152,7 @@ def test_quality_gate_gray_marks_pending_and_filters_retrieval(
     assert chunks
     assert all(chunk.metadata.get("审阅状态") == "待审" for chunk in chunks)
 
-    pending = retrieve("福", test_settings, knowledge=knowledge)
+    pending = _run_retrieval("福", test_settings, knowledge=knowledge)
     assert not pending.chunks
 
     groups = knowledge.browse_by_culture_domain()

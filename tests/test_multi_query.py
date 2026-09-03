@@ -10,8 +10,23 @@ from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
 from wenmai.pipelines.query import ask_question
-from wenmai.retrieval import retrieve
+from wenmai.retrieval import resolve_retrieval_mode, run_fusion
 from wenmai.tracing.store import get_trace_record
+
+
+def _run_retrieval(question, settings, *, knowledge=None, extra_queries=None, retrieval_mode=None):
+    from wenmai.knowledge import create_knowledge
+    from wenmai.retrieval import resolve_retrieval_mode, run_fusion
+    knowledge = knowledge or create_knowledge(settings)
+    mode, _ = resolve_retrieval_mode(settings, retrieval_mode, None)
+    return run_fusion(
+        knowledge,
+        question,
+        mode=mode,
+        settings=settings,
+        extra_queries=extra_queries or [],
+    )
+
 
 
 def _chunk(chunk_id: str, document_id: str, text: str) -> Chunk:
@@ -68,7 +83,7 @@ def test_multi_query_extra_path_hits_fusion(test_settings: Settings, tmp_path: P
         "马尾船政学堂创办于1866年，是中国最早的近代海军学堂。",
     )
 
-    disabled = retrieve(
+    disabled = _run_retrieval(
         "这所院校始于哪一年？",
         test_settings,
         retrieval_mode="sparse_only",
@@ -77,7 +92,7 @@ def test_multi_query_extra_path_hits_fusion(test_settings: Settings, tmp_path: P
     )
     assert disabled.chunks == []
 
-    enabled = retrieve(
+    enabled = _run_retrieval(
         "这所院校始于哪一年？",
         test_settings,
         retrieval_mode="sparse_only",

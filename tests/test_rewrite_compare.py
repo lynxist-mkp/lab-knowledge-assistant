@@ -13,7 +13,22 @@ from wenmai.eval import pipeline as eval_pipeline
 from wenmai.eval.views import parse_eval_run
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import Chunk
-from wenmai.retrieval import retrieve
+from wenmai.retrieval import resolve_retrieval_mode, run_fusion
+
+
+def _run_retrieval(question, settings, *, knowledge=None, extra_queries=None, retrieval_mode=None):
+    from wenmai.knowledge import create_knowledge
+    from wenmai.retrieval import resolve_retrieval_mode, run_fusion
+    knowledge = knowledge or create_knowledge(settings)
+    mode, _ = resolve_retrieval_mode(settings, retrieval_mode, None)
+    return run_fusion(
+        knowledge,
+        question,
+        mode=mode,
+        settings=settings,
+        extra_queries=extra_queries or [],
+    )
+
 
 
 def _chunk(chunk_id: str, document_id: str, text: str) -> Chunk:
@@ -116,19 +131,28 @@ def test_run_eval_passes_empty_extra_queries(
     test_settings.evaluation.ablations = ["sparse_only"]
     knowledge = _prepare_rewrite_knowledge(test_settings)
     seen: list[list[str] | None] = []
-    real_retrieve = retrieve
+    real_fusion = run_fusion
 
-    def tracking_retrieve(
-        question: str,
-        settings: Settings,
+    def tracking_fusion(
+        knowledge_arg,
+        query: str,
         *,
+        mode: str,
+        settings: Settings,
         extra_queries: list[str] | None = None,
         **kwargs: object,
     ):
         seen.append(extra_queries)
-        return real_retrieve(question, settings, extra_queries=extra_queries, **kwargs)
+        return real_fusion(
+            knowledge_arg,
+            query,
+            mode=mode,
+            settings=settings,
+            extra_queries=extra_queries,
+            **kwargs,
+        )
 
-    monkeypatch.setattr("wenmai.pipelines.query_orchestration.retrieve", tracking_retrieve)
+    monkeypatch.setattr("wenmai.pipelines.query_orchestration.run_fusion", tracking_fusion)
     run_eval(test_settings, knowledge=knowledge)
     assert seen == [[]]
 

@@ -7,7 +7,7 @@ import pytest
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
-from wenmai.ops.overview import build_overview_stats
+from wenmai.ops.observation import get_overview_stats
 from wenmai.storage.document_images import find_image_ids
 
 
@@ -27,7 +27,7 @@ def _chunk(chunk_id: str, document_id: str, text: str, culture_domain: str = "")
 
 
 def _overview(knowledge) -> object:
-    return build_overview_stats(knowledge._settings, knowledge._catalog)
+    return get_overview_stats(knowledge._settings)
 
 
 def _commit(

@@ -1,4 +1,4 @@
-"""检索 interface：按检索方式返回排好的片段和 Trace 阶段载荷。"""
+"""检索 interface：run_fusion 返回排好的片段；Trace 在编排 seam 附着。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ import pytest
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.pipelines.ingestion import ingest_source
-from wenmai.retrieval import attach_retrieval_trace_stages, retrieve
+from wenmai.pipelines.rerank import rerank_chunks
+from wenmai.retrieval import attach_retrieval_trace_stages, resolve_retrieval_mode, run_fusion
 
 
 def _write_minpai_markdown(path: Path) -> Path:
@@ -35,12 +36,13 @@ def _retrieve_with_stages(
     extra_queries: list[str] | None = None,
 ):
     knowledge = knowledge or create_knowledge(settings)
-    fusion = retrieve(
+    mode, _ = resolve_retrieval_mode(settings, retrieval_mode, None)
+    fusion = run_fusion(
+        knowledge,
         question,
-        settings,
-        retrieval_mode=retrieval_mode,
-        knowledge=knowledge,
-        extra_queries=extra_queries,
+        mode=mode,
+        settings=settings,
+        extra_queries=extra_queries or [],
     )
     return attach_retrieval_trace_stages(
         fusion,
@@ -88,14 +90,12 @@ def test_dense_only_omits_sparse_stage(
 
 def test_unknown_retrieval_mode_raises(test_settings: Settings) -> None:
     with pytest.raises(ValueError, match="unknown retrieval_mode"):
-        retrieve("妈祖", test_settings, retrieval_mode="clip")
+        resolve_retrieval_mode(test_settings, "clip", None)
 
 
 def test_rerank_failure_still_returns_fused_chunks(
     test_settings: Settings, tmp_path: Path
 ) -> None:
-    from wenmai.retrieval.retrieve import rerank_chunks
-
     test_settings.fakes["reranker"] = "error"
     ingest_source(_write_minpai_markdown(tmp_path / "matsu.md"), test_settings)
     result = _retrieve_with_stages("妈祖信仰的发源地在哪里？", test_settings)
@@ -121,10 +121,21 @@ def test_retrieve_excludes_pending_chunks_until_approved(
     knowledge = create_knowledge(test_settings)
     knowledge.set_review_status(result.document_id, "待审")
 
-    pending = retrieve("妈祖信仰的发源地在哪里？", test_settings, knowledge=knowledge)
+    mode, _ = resolve_retrieval_mode(test_settings, None, None)
+    pending = run_fusion(
+        knowledge,
+        "妈祖信仰的发源地在哪里？",
+        mode=mode,
+        settings=test_settings,
+    )
     assert not pending.chunks
 
     knowledge.set_review_status(result.document_id, "已通过")
-    approved = retrieve("妈祖信仰的发源地在哪里？", test_settings, knowledge=knowledge)
+    approved = run_fusion(
+        knowledge,
+        "妈祖信仰的发源地在哪里？",
+        mode=mode,
+        settings=test_settings,
+    )
     assert approved.chunks
     assert "妈祖" in approved.chunks[0].chunk.text

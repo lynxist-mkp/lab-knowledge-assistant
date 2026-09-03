@@ -12,14 +12,12 @@ from wenmai.factories import splitter as splitter_factory
 from wenmai.ingestion.admission import AdmissionGate
 from wenmai.ingestion.loaders import LoadedDocument, SourceLoadError, load_source
 from wenmai.ingestion.prepare import prepare_chunks
-from wenmai.ingestion.quality import peek_source
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.knowledge.domain import REVIEW_PENDING, REVIEW_STATUS_FIELD, stamp_review_status
 from wenmai.models import Chunk, IngestResult
 from wenmai.storage.document_images import IMAGE_PLACEHOLDER_RE
 from wenmai.tracing import StageRecord
 from wenmai.tracing.prepare_recorder import PrepareTraceRecorder
-from wenmai.tracing.stages.ingestion import IngestionStage
 
 
 @dataclass
@@ -115,56 +113,16 @@ def prepare_ingest(
     document_source_path = str(source_path)
 
     try:
-        source_peek = peek_source(source_path, settings)
-        admission_gate = AdmissionGate(settings)
-        admission = admission_gate.decide(source_path, source_peek)
-
-        with trace_recorder.stage(
-            "quality_gate",
-            method="effective_char_ratio",
-            provider="config",
-            input_summary=str(source_path),
-        ) as gate_info:
-            gate_result = admission.gate_result
-            gate_info["output_summary"] = (
-                f"ratio={gate_result.ratio:.2f} band={gate_result.band}"
-            )
-            if source_peek.defer_reject and gate_result.band == "gray":
-                gate_info["output_summary"] += " defer=scanned_pdf"
-            gate_info["candidate_count"] = 1
-            if admission.decision == "rejected" and admission.gray_outcome is None:
-                gate_info["error"] = (
-                    f"effective_char_ratio {gate_result.ratio:.2f} "
-                    f"below {settings.quality_gate.reject_below:.2f}"
-                )
+        admission = AdmissionGate(settings).admit(source_path)
+        for stage in admission.stages:
+            trace_recorder.append_stage(stage)
 
         if admission.decision == "rejected":
-            if admission.gray_outcome is not None:
-                trace_recorder.append_stage(
-                    IngestionStage.gray_review(
-                        provider=admission.gray_outcome.provider,
-                        method=admission.gray_outcome.method,
-                        elapsed_ms=admission.gray_elapsed_ms or 0.0,
-                        output_summary=admission.gray_outcome.output_summary,
-                        error=admission.gray_outcome.error,
-                    )
-                )
             return _finish_rejected_ingest(
                 trace_recorder,
                 source_path,
                 settings,
                 document_source_path=document_source_path,
-            )
-
-        if admission.gray_outcome is not None:
-            trace_recorder.append_stage(
-                IngestionStage.gray_review(
-                    provider=admission.gray_outcome.provider,
-                    method=admission.gray_outcome.method,
-                    elapsed_ms=admission.gray_elapsed_ms or 0.0,
-                    output_summary=admission.gray_outcome.output_summary,
-                    error=admission.gray_outcome.error,
-                )
             )
 
         stamp_pending_chunks = admission.stamp_pending_chunks

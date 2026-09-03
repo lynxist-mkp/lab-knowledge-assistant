@@ -11,8 +11,23 @@ from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
 from wenmai.pipelines.query import ask_question
 from wenmai.query_processing.extras import collect_extra_queries
-from wenmai.retrieval import retrieve
+from wenmai.retrieval import resolve_retrieval_mode, run_fusion
 from wenmai.tracing.store import get_trace_record
+
+
+def _run_retrieval(question, settings, *, knowledge=None, extra_queries=None, retrieval_mode=None):
+    from wenmai.knowledge import create_knowledge
+    from wenmai.retrieval import resolve_retrieval_mode, run_fusion
+    knowledge = knowledge or create_knowledge(settings)
+    mode, _ = resolve_retrieval_mode(settings, retrieval_mode, None)
+    return run_fusion(
+        knowledge,
+        question,
+        mode=mode,
+        settings=settings,
+        extra_queries=extra_queries or [],
+    )
+
 
 
 def _chunk(chunk_id: str, document_id: str, text: str) -> Chunk:
@@ -62,13 +77,13 @@ def test_miss_lexicon_identical_retrieval(test_settings: Settings, tmp_path: Pat
     knowledge = create_knowledge(test_settings)
     _commit(knowledge, "doc-a", "船政学堂创办于1866年，是近代海军摇篮。")
 
-    control = retrieve(
+    control = _run_retrieval(
         "船政学堂哪年办的？",
         test_settings,
         knowledge=knowledge,
     )
     _settings_with_lexicon(test_settings, tmp_path, rewriter="none")
-    disabled = retrieve(
+    disabled = _run_retrieval(
         "船政学堂哪年办的？",
         test_settings,
         knowledge=knowledge,
@@ -102,7 +117,7 @@ def test_synonym_extra_path_hits_fusion(test_settings: Settings, tmp_path: Path)
     _commit(knowledge, "doc-ship", "船政学堂创办于1866年，是中国最早的近代海军学堂。")
 
     without = _settings_with_lexicon(test_settings, tmp_path, rewriter="none")
-    missed = retrieve(
+    missed = _run_retrieval(
         "马尾学堂哪年办的？",
         without,
         retrieval_mode="sparse_only",
@@ -116,7 +131,7 @@ def test_synonym_extra_path_hits_fusion(test_settings: Settings, tmp_path: Path)
         rewriter="lexicon",
         lexicon={"马尾学堂": "船政学堂"},
     )
-    hit = retrieve(
+    hit = _run_retrieval(
         "马尾学堂哪年办的？",
         with_lexicon,
         retrieval_mode="sparse_only",

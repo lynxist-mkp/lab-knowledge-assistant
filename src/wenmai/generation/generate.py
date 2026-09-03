@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
 from wenmai.config import Settings
 from wenmai.factories import multimodal as multimodal_factory
+from wenmai.generation.expand import expand_for_generation
+from wenmai.knowledge import Knowledge
 from wenmai.models import Citation, ScoredChunk
 
 _CITATION_PATTERN = re.compile(r"\[(\d+)\]")
@@ -13,6 +16,7 @@ _REFUSAL_PREFIX = "拒答："
 _INSUFFICIENT_EVIDENCE_ANSWER = "拒答：检索未返回可用片段，无法依据材料回答该问题。"
 
 RefusalReason = Literal["insufficient_evidence", "model_refused"]
+GenerateFn = Callable[[str, list[ScoredChunk], Settings], "GenerationResult"]
 
 
 class GenerationError(Exception):
@@ -39,6 +43,16 @@ class GenerationResult:
     candidate_count: int
     refusal_reason: RefusalReason | None = None
     error: str | None = None
+
+
+@dataclass(frozen=True)
+class ContextGeneration:
+    """Deep 生成 outcome: expanded context + LLM/拒答 result."""
+
+    result: GenerationResult
+    expanded_chunks: list[ScoredChunk]
+    expanded_from: list[str]
+    expanded_chunk_ids: list[str]
 
 
 def _load_qa_prompt(settings: Settings) -> str:
@@ -116,6 +130,7 @@ def _resolve_response(answer: str, scored_chunks: list[ScoredChunk]) -> tuple[bo
 def generate(
     question: str, scored_chunks: list[ScoredChunk], settings: Settings
 ) -> GenerationResult:
+    """LLM + 拒答/出处 — implementation detail of generate_with_context."""
     if not scored_chunks:
         return GenerationResult(
             answer=_INSUFFICIENT_EVIDENCE_ANSWER,
@@ -145,4 +160,28 @@ def generate(
         output_summary="refusal" if refused else f"{len(answer)} chars",
         candidate_count=len(scored_chunks),
         refusal_reason="model_refused" if refused else None,
+    )
+
+
+def generate_with_context(
+    question: str,
+    scored_chunks: list[ScoredChunk],
+    knowledge: Knowledge,
+    settings: Settings,
+    *,
+    generate_fn: GenerateFn | None = None,
+) -> ContextGeneration:
+    """生成 interface：邻块扩展 + LLM + 拒答/出处."""
+    expanded, expanded_from, expanded_chunk_ids = expand_for_generation(
+        scored_chunks,
+        knowledge,
+        settings.retrieval.adjacent_n,
+    )
+    gen = generate_fn or generate
+    result = gen(question, expanded, settings)
+    return ContextGeneration(
+        result=result,
+        expanded_chunks=expanded,
+        expanded_from=expanded_from,
+        expanded_chunk_ids=expanded_chunk_ids,
     )

@@ -16,11 +16,10 @@ from wenmai.components.model_guard import in_batch, release_all_resources
 from wenmai.config import Settings
 from wenmai.eval import list_eval_runs, run_eval
 from wenmai.knowledge.document_card import DocumentNotFoundError, build_document_card
-from wenmai.ops.overview import build_overview_stats
+from wenmai.ops.observation import get_overview_stats
 from wenmai.pipelines.ingestion import ingest_source
 from wenmai.pipelines.query import QueryGenerationError, ask_question
 from wenmai.runtime import create_runtime
-from wenmai.storage.catalog import DocumentCatalog
 from wenmai.tracing import (
     get_trace_detail,
     get_trace_summary,
@@ -28,8 +27,6 @@ from wenmai.tracing import (
     list_query_summaries,
     list_trace_degradations,
 )
-from wenmai.tracing.latency import query_latency_percentiles
-from wenmai.tracing.store import average_query_latency_ms
 
 
 class IngestRequest(BaseModel):
@@ -157,20 +154,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/stats/overview")
     def api_overview_stats() -> dict[str, object]:
-        catalog = DocumentCatalog.from_settings(resolved)
-        latency = query_latency_percentiles(
-            resolved,
-            recent_n=resolved.observability.query_latency_recent_n,
-        )
-        total = latency.get("total") or {}
-        return build_overview_stats(
-            resolved,
-            catalog,
-            avg_query_latency_ms=average_query_latency_ms(resolved),
-            query_latency_p50_ms=total.get("p50"),
-            query_latency_p95_ms=total.get("p95"),
-            stage_latency=latency,
-        ).as_dict()
+        return get_overview_stats(resolved).as_dict()
 
     @app.get("/api/browse")
     def api_browse() -> list[dict[str, object]]:

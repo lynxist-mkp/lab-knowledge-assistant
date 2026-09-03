@@ -8,8 +8,23 @@ from wenmai.config import Settings
 from wenmai.ingestion.quality import evaluate_quality_gate
 from wenmai.knowledge import create_knowledge
 from wenmai.pipelines.ingestion import ingest_source
-from wenmai.retrieval import retrieve
+from wenmai.retrieval import resolve_retrieval_mode, run_fusion
 from wenmai.tracing import get_ingestion_detail
+
+
+def _run_retrieval(question, settings, *, knowledge=None, extra_queries=None, retrieval_mode=None):
+    from wenmai.knowledge import create_knowledge
+    from wenmai.retrieval import resolve_retrieval_mode, run_fusion
+    knowledge = knowledge or create_knowledge(settings)
+    mode, _ = resolve_retrieval_mode(settings, retrieval_mode, None)
+    return run_fusion(
+        knowledge,
+        question,
+        mode=mode,
+        settings=settings,
+        extra_queries=extra_queries or [],
+    )
+
 
 
 def _write_gray_markdown(path: Path, test_settings: Settings, extra: str = "") -> Path:
@@ -45,7 +60,7 @@ def test_gray_review_pass_stamps_approved(
     chunks = create_knowledge(test_settings).get_by_document_id(result.document_id)
     assert chunks
     assert all(chunk.metadata.get("审阅状态") == "已通过" for chunk in chunks)
-    hits = retrieve("福", test_settings)
+    hits = _run_retrieval("福", test_settings)
     assert hits.chunks
 
     detail = get_ingestion_detail(test_settings, result.trace_id)
@@ -71,7 +86,7 @@ def test_gray_review_fail_stamps_pending(
     chunks = knowledge.get_by_document_id(result.document_id)
     assert chunks
     assert all(chunk.metadata.get("审阅状态") == "待审" for chunk in chunks)
-    assert not retrieve("福", test_settings, knowledge=knowledge).chunks
+    assert not _run_retrieval("福", test_settings, knowledge=knowledge).chunks
 
 
 def test_gray_review_timeout_hard_rejects(

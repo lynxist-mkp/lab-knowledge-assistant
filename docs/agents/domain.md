@@ -32,7 +32,7 @@ Two directories share numbering but not every number — read by topic, not by a
 | Directory | Numbers | Topics |
 | --- | --- | --- |
 | `docs/adr/` | 0001–0004 | 扫描件 OCR、Gemma MLX、双面 UI、**入库质量门** |
-| `wenmai-assistant/docs/adr/` | 0003–0006 | 双面 UI（副本）、**评测不写 Trace**、评测共用生成前扩展、**深 module 收口** |
+| `wenmai-assistant/docs/adr/` | 0003–0007 | 双面 UI（副本）、**评测不写 Trace**、评测共用生成前扩展、**深 module 收口**（0006/0007） |
 
 When a skill says "check ADRs", search both directories for the feature area.
 
@@ -48,16 +48,20 @@ Domain terms for the main seams. Call through the module's public interface; don
 
 | Term (`CONTEXT.md`) | Seam | Entry |
 | --- | --- | --- |
-| **提问编排** | ask + eval 共用四阶段编排 | `pipelines/query_orchestration.py` — `run_ask_works` / `run_eval_works`（别名 `run_ask` / `run_eval`） |
-| **入库编排** | prepare → commit 两阶段入库 | `ingestion/orchestrator.py`（`prepare_ingest`）+ `pipelines/ingestion.py`（`run_prepare_commit` / `run_prepare_commit_batch`） |
-| **知识库** | read/write 门面 | `knowledge/store.py` — `Knowledge` 委托 `ReadPath` / `WritePath` |
+| **提问编排** | ask + eval 共用四阶段编排 | `pipelines/query_orchestration.py` — `run_ask_works` / `run_eval_works` |
+| **入库编排** | prepare → commit 两阶段入库 | `ingestion/orchestrator.py` + `pipelines/ingestion.py` |
+| **入库准入** | path → 三态决策 + Trace 载荷 | `ingestion/admission.py` — `AdmissionGate.admit` |
+| **知识库** | read/write 门面 | `knowledge/store.py` — `Knowledge` → `ReadPath` / `WritePath` |
 | **ReadPath** | 检索与审阅读取 | `knowledge/read.py` |
 | **WritePath** | 入库写入与审阅变更 | `knowledge/write.py` |
+| **生成** | 扩展 + LLM + 拒答 | `generation/generate.py` — `generate_with_context` |
+| **评测** | run / 看板 | `eval/runner.py` · `eval/read.py` |
+| **运维观测** | Trace 读 + 概览 | `ops/observation.py` |
 | **QueryTrace** | 提问 Trace 读写 | `tracing/query_trace.py` |
 | **PrepareTraceRecorder** | 入库 Trace 适配 | `tracing/prepare_recorder.py` |
-| **检索** | 融合检索（不含精排） | `retrieval/retrieve.py` — 精排仅在**提问编排** Phase 3 |
+| **检索** | 融合检索（不含精排） | `retrieval/fusion.py` — `run_fusion`；精排在 `pipelines/rerank.py` |
 
-`retrieve()` 只返回融合 chunks；`rerank_chunks` 只在编排层调用。评测与 `/ask` 共用编排，评测不写 Trace（ADR 0004）。
+`run_fusion` 只返回融合 chunks；`rerank_chunks` 只在编排层调用。评测与 `/ask` 共用编排，评测不写 Trace（ADR 0004）。
 
 ## ADR conflicts
 

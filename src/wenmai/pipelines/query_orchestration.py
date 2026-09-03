@@ -6,20 +6,26 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
-from wenmai.components.model_guard import ModelResource, phase_batch as model_phase_batch
+from wenmai.components.model_guard import ModelResource
+from wenmai.components.model_guard import phase_batch as model_phase_batch
 from wenmai.config import Settings
-from wenmai.generation import GenerationError, GenerationResult, QueryGenerationError, generate
-from wenmai.generation.expand import expand_for_generation
+from wenmai.generation import (
+    GenerationError,
+    GenerationResult,
+    QueryGenerationError,
+    generate_with_context,
+)
+from wenmai.generation.generate import GenerateFn
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import AskResult, ScoredChunk
+from wenmai.pipelines.rerank import rerank_chunks
 from wenmai.query_processing.extras import collect_extra_queries
-from wenmai.retrieval import retrieve
+from wenmai.retrieval import run_fusion
 from wenmai.retrieval.fusion import RetrievalResult
 from wenmai.retrieval.retrieve import (
     attach_retrieval_trace_stages,
-    rerank_chunks,
     resolve_retrieval_mode,
 )
 from wenmai.tracing.query_trace import QueryTrace
@@ -31,25 +37,10 @@ logger = logging.getLogger(__name__)
 
 _DENSE_MODES = frozenset({"dense_only", "rrf"})
 
-GenerateFn = Callable[[str, list[ScoredChunk], Settings], GenerationResult]
-
 
 def normalize_question(question: str) -> str:
     collapsed = re.sub(r"\s+", " ", question.strip())
     return collapsed
-
-
-def prepare_generation_context(
-    scored_chunks: list[ScoredChunk],
-    knowledge: Knowledge,
-    settings: Settings,
-) -> tuple[list[ScoredChunk], list[str], list[str]]:
-    """Expand ranked hits with neighbor chunks before generation."""
-    return expand_for_generation(
-        scored_chunks,
-        knowledge,
-        settings.retrieval.adjacent_n,
-    )
 
 
 def _needs_dense_embedding(mode: str) -> bool:
@@ -209,12 +200,12 @@ class RetrievalPhase:
                 work._do_rerank = do_rerank
                 try:
                     knowledge = work.knowledge or create_knowledge(work.settings)
-                    fusion = retrieve(
+                    fusion = run_fusion(
+                        knowledge,
                         work.normalized,
-                        work.settings,
+                        mode=mode,
+                        settings=work.settings,
                         culture_domain=work.culture_domain,
-                        retrieval_mode=mode,
-                        knowledge=knowledge,
                         extra_queries=work.extra_queries,
                     )
                     work.retrieval_result = attach_retrieval_trace_stages(
@@ -289,24 +280,21 @@ class GenerationPhase:
         if not pending:
             return
 
-        gen = generate_fn or generate
         with model_phase_batch(ModelResource.MLX_VLM, phase_batch):
             for work in pending:
                 knowledge = work.knowledge or create_knowledge(work.settings)
-                expanded, expanded_from, expanded_chunk_ids = prepare_generation_context(
-                    work.chunks,
-                    knowledge,
-                    work.settings,
-                )
-                work.expanded_chunks = expanded
-                work.expanded_from = expanded_from
-                work.expanded_chunk_ids = expanded_chunk_ids
                 try:
-                    work.generation = gen(
+                    prepared = generate_with_context(
                         work.normalized,
-                        expanded,
+                        work.chunks,
+                        knowledge,
                         work.settings,
+                        generate_fn=generate_fn,
                     )
+                    work.expanded_chunks = prepared.expanded_chunks
+                    work.expanded_from = prepared.expanded_from
+                    work.expanded_chunk_ids = prepared.expanded_chunk_ids
+                    work.generation = prepared.result
                 except GenerationError as exc:
                     work.generation_error = exc
                     work.generation = None
@@ -507,7 +495,6 @@ __all__ = [
     "RetrievalPhase",
     "ask_pipeline_single",
     "normalize_question",
-    "prepare_generation_context",
     "run_ask_pipeline",
     "run_ask_works",
     "run_eval_works",

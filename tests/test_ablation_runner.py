@@ -18,8 +18,23 @@ from wenmai.eval import pipeline as eval_pipeline
 from wenmai.eval.golden import GoldItem
 from wenmai.generation import GenerationError, generate
 from wenmai.knowledge import create_knowledge
-from wenmai.retrieval import retrieve
+from wenmai.retrieval import resolve_retrieval_mode, run_fusion
 from wenmai.tracing.store import read_trace_records
+
+
+def _run_retrieval(question, settings, *, knowledge=None, extra_queries=None, retrieval_mode=None):
+    from wenmai.knowledge import create_knowledge
+    from wenmai.retrieval import resolve_retrieval_mode, run_fusion
+    knowledge = knowledge or create_knowledge(settings)
+    mode, _ = resolve_retrieval_mode(settings, retrieval_mode, None)
+    return run_fusion(
+        knowledge,
+        question,
+        mode=mode,
+        settings=settings,
+        extra_queries=extra_queries or [],
+    )
+
 
 
 @pytest.fixture(autouse=True)
@@ -322,7 +337,7 @@ def test_eval_single_retrieve_per_item(
     without_ragas_judge_key: None,
 ) -> None:
     _prepare_eval(test_settings, tmp_path)
-    real_retrieve = retrieve
+    real_fusion = run_fusion
     real_generate = generate
     retrieve_calls: dict[tuple[str, str], int] = {}
     generate_calls: dict[tuple[str, str], int] = {}
@@ -351,22 +366,10 @@ def test_eval_single_retrieve_per_item(
             phase_batch=phase_batch,
         )
 
-    def counting_retrieve(
-        question: str,
-        settings: Settings,
-        *,
-        retrieval_mode: str | None = None,
-        rerank_enabled: bool | None = None,
-        **kwargs: object,
-    ):
-        key = (question, str(retrieval_mode))
+    def counting_fusion(knowledge, query: str, *, mode: str, settings: Settings, **kwargs: object):
+        key = (query, mode)
         retrieve_calls[key] = retrieve_calls.get(key, 0) + 1
-        return real_retrieve(
-            question,
-            settings,
-            retrieval_mode=retrieval_mode,
-            **kwargs,
-        )
+        return real_fusion(knowledge, query, mode=mode, settings=settings, **kwargs)
 
     def flaky_generate(question: str, scored_chunks: list[object], settings: Settings):
         mode = current_mode[0] if current_mode else ""
@@ -381,7 +384,7 @@ def test_eval_single_retrieve_per_item(
         return real_generate(question, scored_chunks, settings)
 
     monkeypatch.setattr(eval_pipeline, "run_eval_group_batched", tracking_batched)
-    monkeypatch.setattr("wenmai.pipelines.query_orchestration.retrieve", counting_retrieve)
+    monkeypatch.setattr("wenmai.pipelines.query_orchestration.run_fusion", counting_fusion)
     monkeypatch.setattr("wenmai.eval.pipeline.generate", flaky_generate)
 
     run = run_eval(test_settings)
@@ -403,11 +406,11 @@ def test_run_eval_group_batched_sets_active_resource(
     seen: list[ModelResource | None] = []
     knowledge = create_knowledge(test_settings)
 
-    def spy_retrieve(*args, **kwargs):
+    def spy_fusion(*args, **kwargs):
         seen.append(active_resource())
-        return retrieve(*args, **kwargs)
+        return run_fusion(*args, **kwargs)
 
-    monkeypatch.setattr("wenmai.pipelines.query_orchestration.retrieve", spy_retrieve)
+    monkeypatch.setattr("wenmai.pipelines.query_orchestration.run_fusion", spy_fusion)
     golden_items = [
         eval_pipeline.EvalGroupItem(
             item=GoldItem(
@@ -440,7 +443,8 @@ def test_run_eval_group_batched_sets_cross_encoder_during_rerank(
     test_settings.resources.query_phase_batch = True
     seen: list[ModelResource | None] = []
     knowledge = create_knowledge(test_settings)
-    real_rerank = eval_pipeline.rerank_chunks
+    from wenmai.pipelines.rerank import rerank_chunks
+    real_rerank = rerank_chunks
 
     def spy_rerank(*args, **kwargs):
         seen.append(active_resource())

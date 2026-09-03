@@ -53,12 +53,12 @@ _Avoid_: 数据浏览（UI 文案可保留）, browse service
 _Avoid_: catalog index, browse cache
 
 **检索**:
-按检索方式从知识库取出排好的片段，可含精排。
-_Avoid_: retrieve, search pipeline
+按检索方式从知识库取出排好的片段（融合）；精排不在此 module。
+_Avoid_: retrieve 浅包装, search pipeline
 
 **生成**:
-用对话 LLM 根据检索到的片段写出带引用的回答，或执行拒答。
-_Avoid_: 嵌入, 视觉模型, Embedding
+用对话 LLM 根据检索到的片段写出带引用的回答，或执行拒答；邻块扩展在同一 interface 内完成，**提问编排**与**评测**共用。
+_Avoid_: 嵌入, 视觉模型, Embedding, prepare_generation_context
 
 **嵌入**:
 把文本或图片变成向量，供稠密检索。
@@ -105,7 +105,7 @@ _Avoid_: 工作音频, 节目成片
 _Avoid_: 测试集（泛称）, 自动生成后直接当标准答案的题单
 
 **评测**:
-用黄金集量提问：按检索方式分组，得到 Hit@5、MRR、拒答是否判对、出处覆盖。
+用黄金集量提问：按检索方式分组，得到 Hit@5、MRR、拒答是否判对、出处覆盖；对外以 run / 看板读取为 interface。
 _Avoid_: Ragas 当主尺子, 测试集
 
 **编辑工作台**:
@@ -121,12 +121,16 @@ _Avoid_: Dashboard（作产品名）, 监测中心, 管理后台（泛称）
 _Avoid_: QueryOrchestrator, query pipeline, ask handler
 
 **入库准入**:
-材料进入 load 前的三态决策：硬拒、直接放行、或标**待审**；**入库质量门**与**灰区复判**的结果在此收敛为单一决策，**入库**流水线按决策分支。
+材料进入 load 前的三态决策：硬拒、直接放行、或标**待审**；**入库质量门**与**灰区复判**的结果在此收敛为单一决策与 Trace stage 载荷，**入库**流水线按决策分支。
 _Avoid_: AdmissionGate（作产品名）, quality check pipeline
 
 **入库编排**:
 一份材料从**入库质量门**、load、transform 到 embed/upsert 的深 module；单条 `run_prepare_commit`、批处理 `run_prepare_commit_batch`；prepare 产出 `PrepareBody`，commit 写**知识库**。
 _Avoid_: ingest pipeline, run_ingest_phases, IngestPrepareBody
+
+**运维观测**:
+**运维看板**读侧深 module：提问/入库 Trace 的列表与详情、降级列表、概览统计。
+_Avoid_: build_overview_stats, tracing/read 函数袋, ops/overview
 
 **ReadPath**:
 **知识库**的 read seam：稠密/稀疏检索、按文档或片段读取、列出**待审**文档；与 WritePath 对称。

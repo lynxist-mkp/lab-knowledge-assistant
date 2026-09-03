@@ -7,7 +7,7 @@ import pytest
 from wenmai.config import Settings
 from wenmai.factories import reranker as reranker_factory
 from wenmai.models import Chunk, ScoredChunk
-from wenmai.retrieval.retrieve import rerank_chunks
+from wenmai.pipelines.rerank import rerank_chunks
 
 
 def _scored_chunk(index: int) -> ScoredChunk:

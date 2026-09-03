@@ -1,9 +1,46 @@
 from __future__ import annotations
 
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 from wenmai.tracing.context import StageRecord
+
+if TYPE_CHECKING:
+    from wenmai.ingestion.quality import QualityGateResult, SourcePeek
 
 
 class IngestionStage:
+    @staticmethod
+    def quality_gate(
+        *,
+        elapsed_ms: float,
+        path: Path,
+        gate_result: QualityGateResult,
+        peek: SourcePeek,
+        decision: str,
+        gray_ran: bool,
+        reject_below: float,
+    ) -> StageRecord:
+        output_summary = f"ratio={gate_result.ratio:.2f} band={gate_result.band}"
+        if peek.defer_reject and gate_result.band == "gray":
+            output_summary += " defer=scanned_pdf"
+        error: str | None = None
+        if decision == "rejected" and not gray_ran:
+            error = (
+                f"effective_char_ratio {gate_result.ratio:.2f} "
+                f"below {reject_below:.2f}"
+            )
+        return StageRecord(
+            name="quality_gate",
+            method="effective_char_ratio",
+            provider="config",
+            elapsed_ms=elapsed_ms,
+            input_summary=str(path),
+            output_summary=output_summary,
+            candidate_count=1,
+            error=error,
+        )
+
     @staticmethod
     def gray_review(
         *,

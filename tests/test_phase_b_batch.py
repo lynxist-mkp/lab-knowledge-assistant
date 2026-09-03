@@ -130,7 +130,7 @@ def test_ingest_corpus_manifest_exit_semantics_all_failed(
     def boom(*_args: object, **_kwargs: object) -> object:
         raise RuntimeError("ingest failed")
 
-    monkeypatch.setattr("wenmai.eval.corpus_ingest.prepare_ingest_source", boom)
+    monkeypatch.setattr("wenmai.pipelines.ingestion.prepare_ingest_source", boom)
 
     result = ingest_corpus_manifest(test_settings, manifest, items_dir)
 

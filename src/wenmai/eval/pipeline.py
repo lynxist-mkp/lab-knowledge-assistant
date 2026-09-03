@@ -12,8 +12,6 @@ from wenmai.knowledge import Knowledge
 from wenmai.models import ScoredChunk
 from wenmai.pipelines.query import normalize_question
 from wenmai.pipelines.query_orchestration import OrchestrationWork, run_eval_works
-from wenmai.retrieval import retrieve
-from wenmai.retrieval.retrieve import rerank_chunks, resolve_retrieval_mode
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +99,5 @@ def run_eval_group_batched(
 __all__ = [
     "EvalGroupItem",
     "EvalItemResult",
-    "rerank_chunks",
-    "resolve_retrieval_mode",
-    "retrieve",
     "run_eval_group_batched",
 ]
