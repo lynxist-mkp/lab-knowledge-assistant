@@ -117,8 +117,8 @@ _Avoid_: 聊天机器人, ChatGPT 壳, 问答首页（泛称）, 多轮私教
 _Avoid_: Dashboard（作产品名）, 监测中心, 管理后台（泛称）
 
 **提问编排**:
-一次**提问**从**检索**、精排、生成前准备（含邻块扩展）到**生成**的深 module；**编辑工作台**与**评测**共用同一编排 interface，仅是否写 query **Trace** 可选。
-_Avoid_: QueryOrchestrator, query pipeline, ask handler
+一次**提问**从**检索**、精排、生成前准备（含邻块扩展）到**生成**的深 module；**编辑工作台**与**评测**共用同一编排 interface，仅是否写 query **Trace** 可选；调用方经 `ask_work_from_job` / `eval_work_from_item` / `gen_retry_work` 建 work，不直接拼 `OrchestrationWork`。
+_Avoid_: QueryOrchestrator, query pipeline, ask handler, 手填 OrchestrationWork 字段
 
 **提问预处理**:
 **提问编排** Phase 1：术语归一与 Multi-Query 产出额外检索路径，并带上 Trace 所需 rewriter 元数据与耗时；入口 `prepare_query_extras`。
@@ -149,5 +149,5 @@ _Avoid_: ingest writer, upsert adapter
 _Avoid_: IngestTraceRecorder, ingestion trace shim
 
 **QueryTrace**:
-**提问** Trace 的读写合一 module：编排层 begin/finalize/save，运维读 summary/detail。
-_Avoid_: query_views, TraceRecorder（对外入口）
+**提问** Trace 的读写合一 module：编排层 begin/finalize/save，运维读 summary/detail；写 seam 输入为 `AskTracePayload`。
+_Avoid_: query_views, TraceRecorder（对外入口）, work: object

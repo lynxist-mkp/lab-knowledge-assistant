@@ -21,6 +21,7 @@ from wenmai.retrieval.retrieve import (
     rerank_chunks,
     resolve_retrieval_mode,
 )
+from wenmai.tracing.ask_payload import ask_trace_payload_from_work
 from wenmai.tracing.query_trace import QueryTrace
 
 if TYPE_CHECKING:
@@ -117,6 +118,64 @@ class AskPipelineInput:
     batch_id: str | None = None
     batch_size: int = 1
     batch_wait_ms: float = 0.0
+
+
+def ask_work_from_job(job: _AskJob | _SingleJob) -> OrchestrationWork:
+    """Build orchestration work for an ask job (internal work bag)."""
+    return OrchestrationWork(
+        normalized=normalize_question(job.question),
+        settings=job.settings,
+        culture_domain=job.culture_domain,
+        retrieval_mode=job.retrieval_mode,
+        rerank_enabled=job.rerank_enabled,
+        knowledge=job.knowledge,
+        collect_extras=True,
+    )
+
+
+def eval_work_from_item(
+    *,
+    question: str,
+    settings: Settings,
+    retrieval_mode: str,
+    rerank_enabled: bool,
+    knowledge: Knowledge,
+    query_rewrite: bool = False,
+    existing_chunks: list[ScoredChunk] | None = None,
+) -> OrchestrationWork:
+    """Build orchestration work for one eval item (optional gen-only retry)."""
+    return OrchestrationWork(
+        normalized=normalize_question(question),
+        settings=settings,
+        retrieval_mode=retrieval_mode,
+        rerank_enabled=rerank_enabled,
+        knowledge=knowledge,
+        collect_extras=query_rewrite,
+        skip_retrieval=existing_chunks is not None,
+        pre_chunks=existing_chunks,
+    )
+
+
+def gen_retry_work(
+    *,
+    question: str,
+    settings: Settings,
+    retrieval_mode: str,
+    rerank_enabled: bool,
+    knowledge: Knowledge,
+    pre_chunks: list[ScoredChunk],
+    query_rewrite: bool = False,
+) -> OrchestrationWork:
+    """Build gen-only retry work from already-ranked chunks."""
+    return eval_work_from_item(
+        question=question,
+        settings=settings,
+        retrieval_mode=retrieval_mode,
+        rerank_enabled=rerank_enabled,
+        knowledge=knowledge,
+        query_rewrite=query_rewrite,
+        existing_chunks=pre_chunks,
+    )
 
 
 @dataclass
@@ -407,7 +466,7 @@ def run_ask_works(
         try:
             if work.generation_error is not None:
                 trace.finalize_generation_error(
-                    work=work,
+                    payload=ask_trace_payload_from_work(work),
                     question=context.question,
                     culture_domain=work.culture_domain,
                     error=work.generation_error,
@@ -417,7 +476,7 @@ def run_ask_works(
                     trace.trace_id,
                 ) from work.generation_error
             outcome.result = trace.finalize_ask_work(
-                work=work,
+                payload=ask_trace_payload_from_work(work),
                 question=context.question,
                 culture_domain=work.culture_domain,
             )
@@ -471,16 +530,7 @@ def run_ask_pipeline(
 
     pairs: list[tuple[OrchestrationWork, AskWorkContext]] = []
     for job in jobs:
-        normalized = normalize_question(job.question)
-        work = OrchestrationWork(
-            normalized=normalized,
-            settings=job.settings,
-            culture_domain=job.culture_domain,
-            retrieval_mode=job.retrieval_mode,
-            rerank_enabled=job.rerank_enabled,
-            knowledge=job.knowledge,
-            collect_extras=True,
-        )
+        work = ask_work_from_job(job)
         context = AskWorkContext(
             question=job.question,
             record_trace=job.record_trace,
@@ -502,10 +552,12 @@ __all__ = [
     "AskWorkOutcome",
     "ExtrasPhase",
     "GenerationPhase",
-    "OrchestrationWork",
     "RerankPhase",
     "RetrievalPhase",
     "ask_pipeline_single",
+    "ask_work_from_job",
+    "eval_work_from_item",
+    "gen_retry_work",
     "normalize_question",
     "prepare_generation_context",
     "run_ask_pipeline",

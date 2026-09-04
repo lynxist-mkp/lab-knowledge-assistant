@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from wenmai.config import Settings
@@ -10,8 +10,7 @@ from wenmai.eval.metrics import corpus_doc_ids_from_chunks, retrieval_item_snaps
 from wenmai.generation import GenerationResult, generate
 from wenmai.knowledge import Knowledge
 from wenmai.models import ScoredChunk
-from wenmai.pipelines.query import normalize_question
-from wenmai.pipelines.query_orchestration import OrchestrationWork, run_eval_works
+from wenmai.pipelines.query_orchestration import eval_work_from_item, gen_retry_work, run_eval_works
 
 logger = logging.getLogger(__name__)
 
@@ -67,21 +66,31 @@ def run_eval_group_batched(
         else phase_batch
     ) and settings.resources.single_model_exclusive
 
-    works: list[OrchestrationWork] = []
+    works = []
     for entry in group_items:
-        normalized = normalize_question(entry.item.question)
-        works.append(
-            OrchestrationWork(
-                normalized=normalized,
-                settings=settings,
-                retrieval_mode=retrieval_mode,
-                rerank_enabled=rerank_enabled,
-                knowledge=knowledge,
-                collect_extras=query_rewrite,
-                skip_retrieval=entry.existing_chunks is not None,
-                pre_chunks=entry.existing_chunks,
+        if entry.existing_chunks is not None:
+            works.append(
+                gen_retry_work(
+                    question=entry.item.question,
+                    settings=settings,
+                    retrieval_mode=retrieval_mode,
+                    rerank_enabled=rerank_enabled,
+                    knowledge=knowledge,
+                    pre_chunks=entry.existing_chunks,
+                    query_rewrite=query_rewrite,
+                )
             )
-        )
+        else:
+            works.append(
+                eval_work_from_item(
+                    question=entry.item.question,
+                    settings=settings,
+                    retrieval_mode=retrieval_mode,
+                    rerank_enabled=rerank_enabled,
+                    knowledge=knowledge,
+                    query_rewrite=query_rewrite,
+                )
+            )
 
     results = run_eval_works(
         works,
