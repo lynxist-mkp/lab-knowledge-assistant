@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from wenmai.config import Settings
+from wenmai.tracing.ask_payload import AskTracePayload
 from wenmai.tracing.context import TraceContext
 from wenmai.tracing.stage_result import StageResult, stage_to_dict
 from wenmai.tracing.stages.query import QueryStage
@@ -131,35 +132,26 @@ class TraceRecorder:
     def finalize_ask_generation_error(
         self,
         *,
-        work: object,
+        payload: AskTracePayload,
         question: str,
         culture_domain: str | None,
         error: object,
     ) -> None:
-        from wenmai.factories import query_rewrite as query_rewrite_factory
-
-        assert work.retrieval_result is not None
-        rewriter = query_rewrite_factory.create(work.settings)
-        mq_provider = (
-            work.settings.providers.multimodal
-            if work.settings.query_processing.multi_query
-            else None
-        )
         self.record_query_processing(
             question=question,
-            normalized=work.normalized,
-            elapsed_ms=work.extras_elapsed_ms,
+            normalized=payload.normalized,
+            elapsed_ms=payload.extras_elapsed_ms,
             culture_domain=culture_domain,
-            term_extras=work.term_extras,
-            multi_query_extras=work.multi_query_extras,
-            rewriter=rewriter.provider_name,
-            multi_query_provider=mq_provider,
+            term_extras=payload.term_extras,
+            multi_query_extras=payload.multi_query_extras,
+            rewriter=payload.rewriter_provider_name,
+            multi_query_provider=payload.multi_query_provider,
         )
-        self.append_retrieval_stages(work.retrieval_result.stages)
-        self.append_rerank_stages(work.rerank_stages)
+        self.append_retrieval_stages(payload.retrieval_result.stages)
+        self.append_rerank_stages(payload.rerank_stages)
 
-        scored_chunks = work.chunks or []
-        generation_input = f"{len(work.expanded_chunks or scored_chunks)} chunks"
+        scored_chunks = payload.chunks
+        generation_input = f"{len(payload.expanded_chunks or scored_chunks)} chunks"
         generation_error = f"{type(error).__name__}: {error}"
         self.record_generation(
             provider=error.provider_name,
@@ -168,47 +160,38 @@ class TraceRecorder:
             output_summary="generation failed",
             candidate_count=0,
             error=generation_error,
-            expanded_from=work.expanded_from,
-            expanded_chunk_ids=work.expanded_chunk_ids,
+            expanded_from=payload.expanded_from,
+            expanded_chunk_ids=payload.expanded_chunk_ids,
         )
         self.error = generation_error
 
     def finalize_ask_work(
         self,
         *,
-        work: object,
+        payload: AskTracePayload,
         question: str,
         culture_domain: str | None,
     ) -> object:
-        """Assemble query trace from orchestration work and return AskResult."""
-        from wenmai.factories import query_rewrite as query_rewrite_factory
-        from wenmai.generation import GenerationError, QueryGenerationError
+        """Assemble query trace from AskTracePayload and return AskResult."""
         from wenmai.models import AskResult
 
-        assert work.retrieval_result is not None
-        rewriter = query_rewrite_factory.create(work.settings)
-        mq_provider = (
-            work.settings.providers.multimodal
-            if work.settings.query_processing.multi_query
-            else None
-        )
         self.record_query_processing(
             question=question,
-            normalized=work.normalized,
-            elapsed_ms=work.extras_elapsed_ms,
+            normalized=payload.normalized,
+            elapsed_ms=payload.extras_elapsed_ms,
             culture_domain=culture_domain,
-            term_extras=work.term_extras,
-            multi_query_extras=work.multi_query_extras,
-            rewriter=rewriter.provider_name,
-            multi_query_provider=mq_provider,
+            term_extras=payload.term_extras,
+            multi_query_extras=payload.multi_query_extras,
+            rewriter=payload.rewriter_provider_name,
+            multi_query_provider=payload.multi_query_provider,
         )
-        self.append_retrieval_stages(work.retrieval_result.stages)
-        self.append_rerank_stages(work.rerank_stages)
+        self.append_retrieval_stages(payload.retrieval_result.stages)
+        self.append_rerank_stages(payload.rerank_stages)
 
-        scored_chunks = work.chunks or []
-        generation_input = f"{len(work.expanded_chunks or [])} chunks"
-        assert work.generation is not None
-        gen_result = work.generation
+        scored_chunks = payload.chunks
+        generation_input = f"{len(payload.expanded_chunks)} chunks"
+        assert payload.generation is not None
+        gen_result = payload.generation
 
         self.record_generation(
             provider=gen_result.provider_name,
@@ -216,8 +199,8 @@ class TraceRecorder:
             input_summary=generation_input,
             output_summary=gen_result.output_summary,
             candidate_count=gen_result.candidate_count,
-            expanded_from=work.expanded_from,
-            expanded_chunk_ids=work.expanded_chunk_ids,
+            expanded_from=payload.expanded_from,
+            expanded_chunk_ids=payload.expanded_chunk_ids,
         )
         self.set_outcome(
             refused=gen_result.refused,

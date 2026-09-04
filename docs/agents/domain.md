@@ -48,13 +48,15 @@ Domain terms for the main seams. Call through the module's public interface; don
 
 | Term (`CONTEXT.md`) | Seam | Entry |
 | --- | --- | --- |
-| **提问编排** | ask + eval 共用四阶段编排 | `pipelines/query_orchestration.py` — `run_ask_works` / `run_eval_works`（别名 `run_ask` / `run_eval`） |
+| **提问编排** | ask + eval 共用四阶段编排 | `pipelines/query_orchestration.py` — `run_ask_works` / `run_eval_works`；builders: `ask_work_from_job` / `eval_work_from_item` / `gen_retry_work` |
+| **提问预处理** | 术语归一 + Multi-Query | `query_processing/extras.py` — `prepare_query_extras` |
 | **入库编排** | prepare → commit 两阶段入库 | `ingestion/orchestrator.py`（`prepare_ingest`）+ `pipelines/ingestion.py`（`run_prepare_commit` / `run_prepare_commit_batch`） |
 | **知识库** | read/write 门面 | `knowledge/store.py` — `Knowledge` 委托 `ReadPath` / `WritePath` |
 | **ReadPath** | 检索与审阅读取 | `knowledge/read.py` |
 | **WritePath** | 入库写入与审阅变更 | `knowledge/write.py` |
 | **运维观测** | Trace 读 + 概览 | `ops/observation.py` — `load_overview_stats` |
-| **QueryTrace** | 提问 Trace 读写 | `tracing/query_trace.py` |
+| **评测** | run / 看板 | `eval/runner.py` · `eval/read.py` · `eval/persist.py` |
+| **QueryTrace** | 提问 Trace 读写 | `tracing/query_trace.py`（写：`AskTracePayload`） |
 | **PrepareTraceRecorder** | 入库 Trace 适配 | `tracing/prepare_recorder.py` |
 | **检索** | 融合检索（不含精排） | `retrieval/retrieve.py` — 精排仅在**提问编排** Phase 3 |
 

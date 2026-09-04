@@ -106,7 +106,7 @@ _Avoid_: 测试集（泛称）, 自动生成后直接当标准答案的题单
 
 **评测**:
 用黄金集量提问：按检索方式分组，得到 Hit@5、MRR、拒答是否判对、出处覆盖。
-_Avoid_: Ragas 当主尺子, 测试集
+_Avoid_: Ragas 当主尺子, 测试集, 各 runner 自写 _runs_dir
 
 **编辑工作台**:
 融媒编辑用的提问界面：默认入口；文化域作顶栏筛选；主区是单次提问与带出处回答/拒答（历史条目彼此独立、不把上轮当上下文）；本次 Trace 默认折叠可展开；点出处在页内抽屉只读查看片段。固定页脚标明人工智能生成合成，并声明不可直接作为播出终审。不是成片工具，也不承担入库与评测。完整多轮对话不在当前范围。
@@ -117,8 +117,12 @@ _Avoid_: 聊天机器人, ChatGPT 壳, 问答首页（泛称）, 多轮私教
 _Avoid_: Dashboard（作产品名）, 监测中心, 管理后台（泛称）
 
 **提问编排**:
-一次**提问**从**检索**、精排、生成前准备（含邻块扩展）到**生成**的深 module；**编辑工作台**与**评测**共用同一编排 interface，仅是否写 query **Trace** 可选。
-_Avoid_: QueryOrchestrator, query pipeline, ask handler
+一次**提问**从**检索**、精排、生成前准备（含邻块扩展）到**生成**的深 module；**编辑工作台**与**评测**共用同一编排 interface，仅是否写 query **Trace** 可选；调用方经 `ask_work_from_job` / `eval_work_from_item` / `gen_retry_work` 建 work，不直接拼 `OrchestrationWork`。
+_Avoid_: QueryOrchestrator, query pipeline, ask handler, 手填 OrchestrationWork 字段
+
+**提问预处理**:
+**提问编排** Phase 1：术语归一与 Multi-Query 产出额外检索路径，并带上 Trace 所需 rewriter 元数据与耗时；入口 `prepare_query_extras`。
+_Avoid_: collect_extra_queries, CollectedExtras, ExtrasPhase 内二次拼装
 
 **入库准入**:
 材料进入 load 前的三态决策：硬拒、直接放行、或标**待审**；**入库质量门**与**灰区复判**的结果在此收敛为单一决策，**入库**流水线按决策分支。
@@ -145,5 +149,5 @@ _Avoid_: ingest writer, upsert adapter
 _Avoid_: IngestTraceRecorder, ingestion trace shim
 
 **QueryTrace**:
-**提问** Trace 的读写合一 module：编排层 begin/finalize/save，运维读 summary/detail。
-_Avoid_: query_views, TraceRecorder（对外入口）
+**提问** Trace 的读写合一 module：编排层 begin/finalize/save，运维读 summary/detail；写 seam 输入为 `AskTracePayload`。
+_Avoid_: query_views, TraceRecorder（对外入口）, work: object

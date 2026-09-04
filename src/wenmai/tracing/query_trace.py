@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from wenmai.config import Settings
+from wenmai.tracing.ask_payload import AskTracePayload
 from wenmai.tracing.recorder import TraceRecorder
 from wenmai.tracing.views.query import (
     CandidateRow,
@@ -18,6 +19,7 @@ from wenmai.tracing.views.query import (
 )
 
 __all__ = [
+    "AskTracePayload",
     "CandidateRow",
     "QueryTrace",
     "QueryTraceDetail",
@@ -28,7 +30,7 @@ __all__ = [
 
 
 class QueryTrace:
-    """Owns query trace write (from orchestration work) and read (summary/detail)."""
+    """Owns query trace write (AskTracePayload) and read (summary/detail)."""
 
     def __init__(self, recorder: TraceRecorder) -> None:
         self._recorder = recorder
@@ -58,12 +60,12 @@ class QueryTrace:
     def finalize_ask_work(
         self,
         *,
-        work: object,
+        payload: AskTracePayload,
         question: str,
         culture_domain: str | None,
     ) -> object:
         return self._recorder.finalize_ask_work(
-            work=work,
+            payload=payload,
             question=question,
             culture_domain=culture_domain,
         )
@@ -71,13 +73,13 @@ class QueryTrace:
     def finalize_generation_error(
         self,
         *,
-        work: object,
+        payload: AskTracePayload,
         question: str,
         culture_domain: str | None,
         error: object,
     ) -> None:
         self._recorder.finalize_ask_generation_error(
-            work=work,
+            payload=payload,
             question=question,
             culture_domain=culture_domain,
             error=error,

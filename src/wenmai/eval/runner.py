@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import logging
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from wenmai.config import Settings
@@ -24,8 +22,9 @@ from wenmai.eval.metrics import (
 )
 from wenmai.eval.pipeline import EvalGroupItem
 from wenmai.eval import pipeline as eval_pipeline
+from wenmai.eval.persist import persist_eval_artifact
 from wenmai.eval.ragas_metrics import attach_ragas_to_artifact, should_run_ragas
-from wenmai.eval.views import EvalRunView, FailedEvalItem, parse_eval_run
+from wenmai.eval.views import EvalRunView, FailedEvalItem
 from wenmai.generation import GenerationResult
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import ScoredChunk
@@ -40,13 +39,6 @@ REWRITE_COMPARE_FLAGS: dict[str, bool] = {
     "rewrite_off": False,
     "rewrite_on": True,
 }
-
-
-def _runs_dir(settings: Settings) -> Path:
-    raw = Path(settings.evaluation.runs)
-    path = raw if raw.is_absolute() else settings.root / raw
-    path.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 def _metrics_payload(
@@ -233,6 +225,27 @@ def _run_grouped_eval(
     return ranked_chunks, generation_results, failures
 
 
+def _group_artifact_entry(
+    items: list[GoldItem],
+    ranked_chunks: dict[str, list[ScoredChunk]],
+    generation_results: dict[str, GenerationResult],
+    *,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "config": config,
+        "metrics": _metrics_payload(
+            items,
+            {
+                item_id: corpus_doc_ids_from_chunks(chunks)
+                for item_id, chunks in ranked_chunks.items()
+            },
+            generation_results,
+        ),
+        "items": _item_snapshots(items, ranked_chunks, generation_results),
+    }
+
+
 def run_eval(
     settings: Settings,
     *,
@@ -266,18 +279,12 @@ def run_eval(
         "failures": [item.as_dict() for item in failures],
         "latency_ms": latency_ms,
         "groups": {
-            name: {
-                "config": config_snapshot(settings, name),
-                "metrics": _metrics_payload(
-                    items,
-                    {
-                        item_id: corpus_doc_ids_from_chunks(chunks)
-                        for item_id, chunks in ranked_chunks[name].items()
-                    },
-                    generation_results[name],
-                ),
-                "items": _item_snapshots(items, ranked_chunks[name], generation_results[name]),
-            }
+            name: _group_artifact_entry(
+                items,
+                ranked_chunks[name],
+                generation_results[name],
+                config=config_snapshot(settings, name),
+            )
             for name in resolved_groups
         },
     }
@@ -290,15 +297,7 @@ def run_eval(
             settings,
         )
 
-    output_path = _runs_dir(settings) / f"{timestamp}.json"
-    output_path.write_text(
-        json.dumps(artifact, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    parsed = parse_eval_run(artifact)
-    if parsed is None:
-        raise RuntimeError("eval run artifact could not be parsed")
-    return parsed
+    return persist_eval_artifact(settings, artifact)
 
 
 def run_rewrite_compare(
@@ -329,32 +328,18 @@ def run_rewrite_compare(
         "failures": [item.as_dict() for item in failures],
         "latency_ms": latency_ms,
         "groups": {
-            name: {
-                "config": rewrite_compare_config_snapshot(
+            name: _group_artifact_entry(
+                items,
+                ranked_chunks[name],
+                generation_results[name],
+                config=rewrite_compare_config_snapshot(
                     settings,
                     group=name,
                     query_rewrite=REWRITE_COMPARE_FLAGS[name],
                 ),
-                "metrics": _metrics_payload(
-                    items,
-                    {
-                        item_id: corpus_doc_ids_from_chunks(chunks)
-                        for item_id, chunks in ranked_chunks[name].items()
-                    },
-                    generation_results[name],
-                ),
-                "items": _item_snapshots(items, ranked_chunks[name], generation_results[name]),
-            }
+            )
             for name in groups
         },
     }
 
-    output_path = _runs_dir(settings) / f"{timestamp}.json"
-    output_path.write_text(
-        json.dumps(artifact, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    parsed = parse_eval_run(artifact)
-    if parsed is None:
-        raise RuntimeError("rewrite compare artifact could not be parsed")
-    return parsed
+    return persist_eval_artifact(settings, artifact)
