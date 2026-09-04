@@ -10,7 +10,7 @@ from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
 from wenmai.pipelines.query import ask_question
-from wenmai.query_processing.extras import collect_extra_queries
+from wenmai.query_processing.extras import prepare_query_extras
 from wenmai.retrieval import retrieve
 from wenmai.tracing.store import get_trace_record
 
@@ -121,7 +121,7 @@ def test_synonym_extra_path_hits_fusion(test_settings: Settings, tmp_path: Path)
         with_lexicon,
         retrieval_mode="sparse_only",
         knowledge=knowledge,
-        extra_queries=collect_extra_queries("马尾学堂哪年办的？", with_lexicon).combined,
+        extra_queries=prepare_query_extras("马尾学堂哪年办的？", with_lexicon).combined,
     )
     assert hit.chunks
     assert hit.chunks[0].chunk.chunk_id == "doc-ship:0000"

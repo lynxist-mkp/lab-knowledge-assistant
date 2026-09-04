@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
@@ -14,7 +13,7 @@ from wenmai.generation import GenerationError, GenerationResult, QueryGeneration
 from wenmai.generation.expand import expand_for_generation
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import AskResult, ScoredChunk
-from wenmai.query_processing.extras import collect_extra_queries
+from wenmai.query_processing.extras import prepare_query_extras
 from wenmai.retrieval import retrieve
 from wenmai.retrieval.fusion import RetrievalResult
 from wenmai.retrieval.retrieve import (
@@ -72,6 +71,7 @@ class OrchestrationWork:
     collect_extras: bool = False
     skip_retrieval: bool = False
     pre_chunks: list[ScoredChunk] | None = None
+    rewriter_provider_name: str = "none"
 
     retrieval_result: RetrievalResult | None = None
     chunks: list[ScoredChunk] | None = None
@@ -176,12 +176,12 @@ class ExtrasPhase:
         with model_phase_batch(ModelResource.MLX_VLM, phase_batch and any_multi_query):
             for work in retrieval_works:
                 if work.collect_extras:
-                    started = time.perf_counter()
-                    extras = collect_extra_queries(work.normalized, work.settings)
+                    extras = prepare_query_extras(work.normalized, work.settings)
                     work.term_extras = extras.term_extras
                     work.multi_query_extras = extras.multi_query_extras
                     work.extra_queries = extras.combined
-                    work.extras_elapsed_ms = (time.perf_counter() - started) * 1000
+                    work.extras_elapsed_ms = extras.extras_elapsed_ms
+                    work.rewriter_provider_name = extras.rewriter_provider_name
 
 
 class RetrievalPhase:

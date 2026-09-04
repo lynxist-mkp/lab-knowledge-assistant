@@ -136,10 +136,7 @@ class TraceRecorder:
         culture_domain: str | None,
         error: object,
     ) -> None:
-        from wenmai.factories import query_rewrite as query_rewrite_factory
-
         assert work.retrieval_result is not None
-        rewriter = query_rewrite_factory.create(work.settings)
         mq_provider = (
             work.settings.providers.multimodal
             if work.settings.query_processing.multi_query
@@ -152,7 +149,7 @@ class TraceRecorder:
             culture_domain=culture_domain,
             term_extras=work.term_extras,
             multi_query_extras=work.multi_query_extras,
-            rewriter=rewriter.provider_name,
+            rewriter=work.rewriter_provider_name,
             multi_query_provider=mq_provider,
         )
         self.append_retrieval_stages(work.retrieval_result.stages)
@@ -181,12 +178,10 @@ class TraceRecorder:
         culture_domain: str | None,
     ) -> object:
         """Assemble query trace from orchestration work and return AskResult."""
-        from wenmai.factories import query_rewrite as query_rewrite_factory
         from wenmai.generation import GenerationError, QueryGenerationError
         from wenmai.models import AskResult
 
         assert work.retrieval_result is not None
-        rewriter = query_rewrite_factory.create(work.settings)
         mq_provider = (
             work.settings.providers.multimodal
             if work.settings.query_processing.multi_query
@@ -199,7 +194,7 @@ class TraceRecorder:
             culture_domain=culture_domain,
             term_extras=work.term_extras,
             multi_query_extras=work.multi_query_extras,
-            rewriter=rewriter.provider_name,
+            rewriter=work.rewriter_provider_name,
             multi_query_provider=mq_provider,
         )
         self.append_retrieval_stages(work.retrieval_result.stages)

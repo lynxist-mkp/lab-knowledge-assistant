@@ -120,6 +120,10 @@ _Avoid_: Dashboard（作产品名）, 监测中心, 管理后台（泛称）
 一次**提问**从**检索**、精排、生成前准备（含邻块扩展）到**生成**的深 module；**编辑工作台**与**评测**共用同一编排 interface，仅是否写 query **Trace** 可选。
 _Avoid_: QueryOrchestrator, query pipeline, ask handler
 
+**提问预处理**:
+**提问编排** Phase 1：术语归一与 Multi-Query 产出额外检索路径，并带上 Trace 所需 rewriter 元数据与耗时；入口 `prepare_query_extras`。
+_Avoid_: collect_extra_queries, CollectedExtras, ExtrasPhase 内二次拼装
+
 **入库准入**:
 材料进入 load 前的三态决策：硬拒、直接放行、或标**待审**；**入库质量门**与**灰区复判**的结果在此收敛为单一决策，**入库**流水线按决策分支。
 _Avoid_: AdmissionGate（作产品名）, quality check pipeline

@@ -49,6 +49,7 @@ Domain terms for the main seams. Call through the module's public interface; don
 | Term (`CONTEXT.md`) | Seam | Entry |
 | --- | --- | --- |
 | **提问编排** | ask + eval 共用四阶段编排 | `pipelines/query_orchestration.py` — `run_ask_works` / `run_eval_works`（别名 `run_ask` / `run_eval`） |
+| **提问预处理** | 术语归一 + Multi-Query | `query_processing/extras.py` — `prepare_query_extras` |
 | **入库编排** | prepare → commit 两阶段入库 | `ingestion/orchestrator.py`（`prepare_ingest`）+ `pipelines/ingestion.py`（`run_prepare_commit` / `run_prepare_commit_batch`） |
 | **知识库** | read/write 门面 | `knowledge/store.py` — `Knowledge` 委托 `ReadPath` / `WritePath` |
 | **ReadPath** | 检索与审阅读取 | `knowledge/read.py` |
