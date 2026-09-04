@@ -440,7 +440,7 @@ def test_run_eval_group_batched_sets_cross_encoder_during_rerank(
     test_settings.resources.query_phase_batch = True
     seen: list[ModelResource | None] = []
     knowledge = create_knowledge(test_settings)
-    real_rerank = eval_pipeline.rerank_chunks
+    from wenmai.retrieval.retrieve import rerank_chunks as real_rerank
 
     def spy_rerank(*args, **kwargs):
         seen.append(active_resource())

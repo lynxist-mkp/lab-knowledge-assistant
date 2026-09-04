@@ -5,6 +5,7 @@ from pathlib import Path
 
 from wenmai.components.evaluator.ragas_probe import probe_ragas_judge
 from wenmai.config import Settings
+from wenmai.eval.persist import runs_dir
 from wenmai.eval.views import (
     EvalDashboardView,
     EvalRunView,
@@ -12,11 +13,6 @@ from wenmai.eval.views import (
     RagasStatusView,
     parse_eval_run,
 )
-
-
-def _runs_dir(settings: Settings) -> Path:
-    raw = Path(settings.evaluation.runs)
-    return raw if raw.is_absolute() else settings.root / raw
 
 
 def _load_run_file(path: Path) -> EvalRunView | None:
@@ -30,11 +26,11 @@ def _load_run_file(path: Path) -> EvalRunView | None:
 
 
 def list_eval_runs(settings: Settings) -> list[EvalRunView]:
-    runs_dir = _runs_dir(settings)
-    if not runs_dir.is_dir():
+    eval_runs_dir = runs_dir(settings)
+    if not eval_runs_dir.is_dir():
         return []
     runs: list[EvalRunView] = []
-    for path in runs_dir.glob("*.json"):
+    for path in eval_runs_dir.glob("*.json"):
         run = _load_run_file(path)
         if run is not None:
             runs.append(run)

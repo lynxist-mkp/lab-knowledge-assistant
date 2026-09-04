@@ -15,6 +15,7 @@ from wenmai.eval.corpus_ingest import (
 )
 from wenmai.eval.golden import GoldItem, load_golden_set_from_settings
 from wenmai.eval.metrics import hit_at_5
+from wenmai.eval.persist import runs_dir, write_run_json
 from wenmai.eval.runner import run_eval, run_rewrite_compare
 from wenmai.eval.views import EvalRunView
 
@@ -30,13 +31,6 @@ class PhaseBRunResult:
     rewrite_compare_run: EvalRunView
     ingest_result: IngestManifestResult | None
     bad_cases_path: Path | None
-
-
-def _runs_dir(settings: Settings) -> Path:
-    raw = Path(settings.evaluation.runs)
-    path = raw if raw.is_absolute() else settings.root / raw
-    path.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 def _resolve_repo_path(settings: Settings, path: Path) -> Path:
@@ -248,8 +242,8 @@ def run_phase_b_batch(
     rewrite_compare_run = run_rewrite_compare(settings)
 
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    ablation_path = _runs_dir(settings) / f"{ablation_run.timestamp}.json"
-    rewrite_path = _runs_dir(settings) / f"{rewrite_compare_run.timestamp}.json"
+    ablation_path = runs_dir(settings) / f"{ablation_run.timestamp}.json"
+    rewrite_path = runs_dir(settings) / f"{rewrite_compare_run.timestamp}.json"
 
     summary = build_phase_b_summary(
         settings,
@@ -260,11 +254,7 @@ def run_phase_b_batch(
         rewrite_compare_run=rewrite_compare_run,
         ingest_result=ingest_result,
     )
-    summary_path = _runs_dir(settings) / f"phase_b_{timestamp}.json"
-    summary_path.write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    summary_path = write_run_json(settings, f"phase_b_{timestamp}.json", summary)
 
     ablation_artifact = json.loads(ablation_path.read_text(encoding="utf-8"))
     golden_items = load_golden_set_from_settings(settings)
