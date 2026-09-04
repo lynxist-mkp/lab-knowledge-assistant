@@ -128,6 +128,10 @@ _Avoid_: AdmissionGate（作产品名）, quality check pipeline
 一份材料从**入库质量门**、load、transform 到 embed/upsert 的深 module；单条 `run_prepare_commit`、批处理 `run_prepare_commit_batch`；prepare 产出 `PrepareBody`，commit 写**知识库**。
 _Avoid_: ingest pipeline, run_ingest_phases, IngestPrepareBody
 
+**运维观测**:
+**运维看板**读侧深 module：提问/入库 Trace 的列表与详情、降级列表、概览统计；概览经 `load_overview_stats(settings)` 一次产出。
+_Avoid_: build_overview_stats, tracing/read 函数袋, ops/overview
+
 **ReadPath**:
 **知识库**的 read seam：稠密/稀疏检索、按文档或片段读取、列出**待审**文档；与 WritePath 对称。
 _Avoid_: browse service, retrieve adapter

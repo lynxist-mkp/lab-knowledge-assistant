@@ -32,7 +32,7 @@ Two directories share numbering but not every number — read by topic, not by a
 | Directory | Numbers | Topics |
 | --- | --- | --- |
 | `docs/adr/` | 0001–0004 | 扫描件 OCR、Gemma MLX、双面 UI、**入库质量门** |
-| `wenmai-assistant/docs/adr/` | 0003–0006 | 双面 UI（副本）、**评测不写 Trace**、评测共用生成前扩展、**深 module 收口** |
+| `wenmai-assistant/docs/adr/` | 0003–0007 | 双面 UI（副本）、**评测不写 Trace**、评测共用生成前扩展、**深 module 收口**（0006/0007） |
 
 When a skill says "check ADRs", search both directories for the feature area.
 
@@ -53,6 +53,7 @@ Domain terms for the main seams. Call through the module's public interface; don
 | **知识库** | read/write 门面 | `knowledge/store.py` — `Knowledge` 委托 `ReadPath` / `WritePath` |
 | **ReadPath** | 检索与审阅读取 | `knowledge/read.py` |
 | **WritePath** | 入库写入与审阅变更 | `knowledge/write.py` |
+| **运维观测** | Trace 读 + 概览 | `ops/observation.py` — `load_overview_stats` |
 | **QueryTrace** | 提问 Trace 读写 | `tracing/query_trace.py` |
 | **PrepareTraceRecorder** | 入库 Trace 适配 | `tracing/prepare_recorder.py` |
 | **检索** | 融合检索（不含精排） | `retrieval/retrieve.py` — 精排仅在**提问编排** Phase 3 |
