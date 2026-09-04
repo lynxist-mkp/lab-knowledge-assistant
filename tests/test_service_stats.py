@@ -12,27 +12,8 @@ from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
-from wenmai.ops.overview import build_overview_stats
-from wenmai.storage.catalog import DocumentCatalog
+from wenmai.ops.observation import load_overview_stats
 from wenmai.tracing.latency import query_latency_percentiles
-from wenmai.tracing.store import average_query_latency_ms
-
-
-def _overview_stats(settings: Settings) -> object:
-    catalog = DocumentCatalog.from_settings(settings)
-    latency = query_latency_percentiles(
-        settings,
-        recent_n=settings.observability.query_latency_recent_n,
-    )
-    total = latency.get("total") or {}
-    return build_overview_stats(
-        settings,
-        catalog,
-        avg_query_latency_ms=average_query_latency_ms(settings),
-        query_latency_p50_ms=total.get("p50"),
-        query_latency_p95_ms=total.get("p95"),
-        stage_latency=latency,
-    )
 
 
 def _write_markdown(path: Path, *, culture_domain: str, title: str, body: str) -> Path:
@@ -83,7 +64,7 @@ def _append_query_trace_with_stages(
 
 
 def test_overview_stats_empty_store(test_settings: Settings) -> None:
-    stats = _overview_stats(test_settings)
+    stats = load_overview_stats(test_settings)
 
     assert stats.document_count == 0
     assert stats.chunk_count == 0
@@ -103,7 +84,7 @@ def test_overview_stats_after_ingest(test_settings: Settings, tmp_path: Path) ->
     response = client.post("/ingest", json={"source_path": str(source)})
     assert response.status_code == 200
 
-    stats = _overview_stats(test_settings)
+    stats = load_overview_stats(test_settings)
 
     assert stats.document_count == 1
     assert stats.chunk_count == response.json()["chunk_count"]
@@ -132,7 +113,7 @@ def test_overview_query_latency_percentiles_from_traces(test_settings: Settings)
             stages=[{**generation_stage, "elapsed_ms": generation_ms}],
         )
 
-    stats = _overview_stats(test_settings)
+    stats = load_overview_stats(test_settings)
     latency = query_latency_percentiles(test_settings)
 
     assert stats.query_latency_p50_ms == pytest.approx(150.0)
@@ -192,7 +173,7 @@ def test_overview_avg_query_latency_from_traces(test_settings: Settings) -> None
     with trace_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(ingestion_trace, ensure_ascii=False) + "\n")
 
-    stats = _overview_stats(test_settings)
+    stats = load_overview_stats(test_settings)
 
     assert stats.avg_query_latency_ms == pytest.approx(200.0)
 
