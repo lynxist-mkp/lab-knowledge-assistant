@@ -1,37 +1,51 @@
-# Issue tracker: GitHub
+# Issue tracker
 
-Issues and specs for this repo live as GitHub issues on **lynxist-mkp/wenmai-assistant**. Use the `gh` CLI for all operations, always with `--repo lynxist-mkp/wenmai-assistant` (the Cursor workspace root is not a git clone; the clone is `wenmai-assistant/`).
+Use GitHub issues on `lynxist-mkp/wenmai-assistant`.
 
-## Conventions
+## Default rules
 
-- **Create an issue**: `gh issue create --repo lynxist-mkp/wenmai-assistant --title "..." --body "..."`. Use a heredoc for multi-line bodies.
-- **Read an issue**: `gh issue view <number> --repo lynxist-mkp/wenmai-assistant --comments`, filtering comments by `jq` and also fetching labels.
-- **List issues**: `gh issue list --repo lynxist-mkp/wenmai-assistant --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
-- **Comment on an issue**: `gh issue comment <number> --repo lynxist-mkp/wenmai-assistant --body "..."`
-- **Apply / remove labels**: `gh issue edit <number> --repo lynxist-mkp/wenmai-assistant --add-label "..."` / `--remove-label "..."`
-- **Close**: `gh issue close <number> --repo lynxist-mkp/wenmai-assistant --comment "..."`
+1. Use `gh` for every issue or PR operation.
+2. Pass `--repo lynxist-mkp/wenmai-assistant` on every command.
+3. The Cursor workspace root is not the git clone; repo work happens in `wenmai-assistant/`.
+4. Treat a bare `#42` as ambiguous until you check whether it is a PR or an issue.
 
-## Pull requests as a triage surface
+Completion check: the command you are about to run names the repo explicitly and targets the right object type.
 
-**PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
+## Core operations
 
-GitHub shares one number space across issues and PRs, so a bare `#42` may be either — resolve with `gh pr view 42 --repo lynxist-mkp/wenmai-assistant` and fall back to `gh issue view 42 --repo lynxist-mkp/wenmai-assistant`.
+- Create issue: `gh issue create --repo lynxist-mkp/wenmai-assistant --title "..." --body "..."`
+- Read issue with comments: `gh issue view <number> --repo lynxist-mkp/wenmai-assistant --comments`
+- List issues: `gh issue list --repo lynxist-mkp/wenmai-assistant ...`
+- Comment: `gh issue comment <number> --repo lynxist-mkp/wenmai-assistant --body "..."`
+- Add or remove labels: `gh issue edit <number> --repo lynxist-mkp/wenmai-assistant --add-label "..."` / `--remove-label "..."`
+- Close: `gh issue close <number> --repo lynxist-mkp/wenmai-assistant --comment "..."`
 
-## When a skill says "publish to the issue tracker"
+For multi-line bodies, use a heredoc instead of escaping line breaks inline.
 
-Create a GitHub issue on lynxist-mkp/wenmai-assistant.
+## PR or issue
 
-## When a skill says "fetch the relevant ticket"
+This repo does not treat PRs as a request surface for triage.
 
-Run `gh issue view <number> --repo lynxist-mkp/wenmai-assistant --comments`.
+When a reference like `#42` appears, resolve it in this order:
 
-## Wayfinding operations
+1. `gh pr view 42 --repo lynxist-mkp/wenmai-assistant`
+2. If that fails, `gh issue view 42 --repo lynxist-mkp/wenmai-assistant`
 
-Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.
+## Skill hooks
 
-- **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body. `gh issue create --repo lynxist-mkp/wenmai-assistant --label wayfinder:map`.
-- **Child ticket**: an issue linked to the map as a GitHub sub-issue (`gh api` on the sub-issues endpoint). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
-- **Blocking**: GitHub's **native issue dependencies** — the canonical, UI-visible representation. Add an edge with `gh api --method POST repos/lynxist-mkp/wenmai-assistant/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's numeric **database id** (`gh api repos/lynxist-mkp/wenmai-assistant/issues/<n> --jq .id`, _not_ the `#number` or `node_id`). GitHub reports `issue_dependencies_summary.blocked_by` (open blockers only — the live gate). Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every blocker is closed.
-- **Frontier query**: list the map's open children (`gh issue list --repo lynxist-mkp/wenmai-assistant --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
-- **Claim**: `gh issue edit <n> --repo lynxist-mkp/wenmai-assistant --add-assignee @me` — the session's first write.
-- **Resolve**: `gh issue comment <n> --repo lynxist-mkp/wenmai-assistant --body "<answer>"`, then `gh issue close <n> --repo lynxist-mkp/wenmai-assistant`, then append a context pointer (gist + link) to the map's Decisions-so-far.
+- "Publish to the issue tracker" means create a GitHub issue in `lynxist-mkp/wenmai-assistant`.
+- "Fetch the relevant ticket" means `gh issue view <number> --repo lynxist-mkp/wenmai-assistant --comments`.
+
+## Wayfinding
+
+Used by `/wayfinder`. The map is one issue; child tickets hang off that map.
+
+1. Map: create or find one issue labeled `wayfinder:map`. It holds Notes, Decisions-so-far, and Fog.
+2. Child ticket: create a normal issue, then link it as a GitHub sub-issue. If sub-issues are unavailable, add it to the map task list and put `Part of #<map>` at the top of the child body.
+3. Child label: use `wayfinder:<type>` where type is `research`, `prototype`, `grilling`, or `task`.
+4. Blocking: prefer native issue dependencies. Use the blocker's database id from `gh api repos/lynxist-mkp/wenmai-assistant/issues/<n> --jq .id`, then post the dependency edge. If dependencies are unavailable, fall back to a `Blocked by: #<n>` line in the child body.
+5. Frontier query: among the map's open children, skip anything assigned or still blocked; first remaining item in map order wins.
+6. Claim: `gh issue edit <n> --repo lynxist-mkp/wenmai-assistant --add-assignee @me`
+7. Resolve: comment with the answer, close the issue, then append a context pointer to the map's Decisions-so-far.
+
+Completion check: a wayfinding ticket is only done once the child issue is closed and the map records the result.

@@ -1,13 +1,13 @@
 ## Agent skills
 
-### Issue tracker
+### GitHub issues
 
-Issues: publish, fetch, list, comment, label, close, wayfind. See `docs/agents/issue-tracker.md`.
+Issue tracker: create, fetch, list, comment, label, close, and wayfind issues. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Triage: apply the five roles. See `docs/agents/triage-labels.md`.
+Triage labels: map the five canonical triage roles to this repo's actual labels. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Domain: glossary, ADRs, deep modules. See `docs/agents/domain.md`.
+Domain docs: read glossary terms, ADRs, and deep-module seams before exploring implementation. See `docs/agents/domain.md`.

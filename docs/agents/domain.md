@@ -1,71 +1,69 @@
-# Domain Docs
+# Domain docs
 
-How engineering skills consume this repo's domain documentation when exploring the codebase.
+Use this file before exploring code that depends on repo vocabulary, ADRs, or deep-module seams.
 
-## Before exploring
+## Exploration path
 
-1. Read **`CONTEXT.md`** (workspace root; `wenmai-assistant/CONTEXT.md` is the git-tracked copy — keep them in sync).
-2. Skim ADRs that touch the area you're about to work in (see [ADR locations](#adr-locations)).
-3. If the task crosses a **deep module** seam, read its glossary entry and the [module map](#deep-modules) row before opening implementation files.
+1. Read `CONTEXT.md` at the workspace root.
+2. Read the ADRs for the feature area from both ADR directories.
+3. If the task crosses a deep-module seam, read the matching glossary term and module-map row before opening implementation files.
 
-If a file is missing, proceed. `/domain-modeling` creates glossary entries and ADRs lazily when terms or decisions resolve.
+If a file is missing, proceed. New glossary terms and ADRs can be created later by `/domain-modeling`.
 
-## File structure
+Completion check: before coding, you should know the canonical term, the governing ADRs, and the public seam you are supposed to call through.
 
-```
-/
-├── CONTEXT.md              ← glossary (canonical for agents)
-├── docs/adr/               ← product / infra ADRs (0001–0004)
-├── docs/agents/            ← agent pointers (this file)
-└── wenmai-assistant/
-    ├── CONTEXT.md          ← same glossary, committed with app
-    ├── docs/adr/           ← app ADRs (0003–0006; 0004 ≠ root 0004)
-    └── src/wenmai/
-```
+## Repo layout
 
-Application code lives under `wenmai-assistant/src/wenmai/`. The Cursor workspace root is not the git clone; git operations use `wenmai-assistant/`.
+- `CONTEXT.md`: canonical glossary for agents
+- `docs/adr/`: product and infra ADRs
+- `docs/agents/`: agent-facing pointers
+- `wenmai-assistant/CONTEXT.md`: git-tracked copy of the glossary
+- `wenmai-assistant/docs/adr/`: app ADRs
+- `wenmai-assistant/src/wenmai/`: application code
 
-## ADR locations
+The Cursor workspace root is not the git clone; git operations use `wenmai-assistant/`.
 
-Two directories share numbering but not every number — read by topic, not by assuming one sequence:
+## ADR lookup
 
-| Directory | Numbers | Topics |
-| --- | --- | --- |
-| `docs/adr/` | 0001–0004 | 扫描件 OCR、Gemma MLX、双面 UI、**入库质量门** |
-| `wenmai-assistant/docs/adr/` | 0003–0007 | 双面 UI（副本）、**评测不写 Trace**、评测共用生成前扩展、**深 module 收口**（0006/0007） |
+Search both directories by topic, not by number:
 
-When a skill says "check ADRs", search both directories for the feature area.
+- `docs/adr/`: includes 扫描件 OCR, Gemma MLX, 双面 UI, 入库质量门
+- `wenmai-assistant/docs/adr/`: includes 双面 UI copy, 评测不写 Trace, 评测共用生成前扩展, 深 module 收口
 
-## Glossary terms
+Two directories reuse some ADR numbers. When citing one, name it by title as well as number.
 
-When output names a domain concept (issue title, refactor, hypothesis, test name), use the term as defined in `CONTEXT.md`, including that file's Avoid list.
+## Glossary discipline
 
-A concept missing from the glossary is a signal — invented language, or a gap for `/domain-modeling`.
+When you name a domain concept in output, tests, refactors, or issue titles, use the term defined in `CONTEXT.md`, including that file's Avoid list.
 
-## Deep modules
+If the concept is missing from the glossary, treat that as a signal: either the wording is invented or the domain model needs to be extended.
 
-Domain terms for the main seams. Call through the module's public interface; don't reach past it into adapters unless the task is the seam itself.
+## Deep-module seams
+
+Call through the seam's public interface. Do not reach into adapters unless the task is the seam itself.
 
 | Term (`CONTEXT.md`) | Seam | Entry |
 | --- | --- | --- |
 | **提问编排** | ask + eval 共用四阶段编排 | `pipelines/query_orchestration.py` — `run_ask_works` / `run_eval_works`；builders: `ask_work_from_job` / `eval_work_from_item` / `gen_retry_work` |
 | **提问预处理** | 术语归一 + Multi-Query | `query_processing/extras.py` — `prepare_query_extras` |
-| **入库编排** | prepare → commit 两阶段入库 | `ingestion/orchestrator.py`（`prepare_ingest`）+ `pipelines/ingestion.py`（`run_prepare_commit` / `run_prepare_commit_batch`） |
+| **入库编排** | prepare → commit 两阶段入库 | `ingestion/orchestrator.py` + `pipelines/ingestion.py` |
 | **知识库** | read/write 门面 | `knowledge/store.py` — `Knowledge` 委托 `ReadPath` / `WritePath` |
 | **ReadPath** | 检索与审阅读取 | `knowledge/read.py` |
 | **WritePath** | 入库写入与审阅变更 | `knowledge/write.py` |
 | **运维观测** | Trace 读 + 概览 | `ops/observation.py` — `load_overview_stats` |
 | **评测** | run / 看板 | `eval/runner.py` · `eval/read.py` · `eval/persist.py` |
-| **QueryTrace** | 提问 Trace 读写 | `tracing/query_trace.py`（写：`AskTracePayload`） |
+| **QueryTrace** | 提问 Trace 读写 | `tracing/query_trace.py` |
 | **PrepareTraceRecorder** | 入库 Trace 适配 | `tracing/prepare_recorder.py` |
-| **检索** | 融合检索（不含精排） | `retrieval/retrieve.py` — 精排仅在**提问编排** Phase 3 |
+| **检索** | 融合检索（不含精排） | `retrieval/retrieve.py` |
 
-`retrieve()` 只返回融合 chunks；`rerank_chunks` 只在编排层调用。评测与 `/ask` 共用编排，评测不写 Trace（ADR 0004）。
+Notes:
+
+- `retrieve()` only returns fused chunks.
+- `rerank_chunks` is only called in 提问编排 Phase 3.
+- Eval and `/ask` share the same orchestration, but eval does not write Trace.
 
 ## ADR conflicts
 
-If output contradicts an existing ADR, surface it:
+If your plan or output contradicts an ADR, say so explicitly before proceeding.
 
-> _Contradicts ADR-0002 (local Gemma MLX via ModelScope) — but worth reopening because…_
-
-Use the ADR file's title to identify which `0004` you mean when both directories have one.
+Example: `Contradicts ADR-0002 (local Gemma MLX via ModelScope), but worth reopening because ...`
