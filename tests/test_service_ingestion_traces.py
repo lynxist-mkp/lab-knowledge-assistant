@@ -9,12 +9,8 @@ from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
-from wenmai.tracing import (
-    TraceContext,
-    list_ingestion_summaries,
-    list_trace_degradations,
-    save_trace,
-)
+from wenmai.ops.observation import list_ingestion_summaries, list_trace_degradations
+from wenmai.tracing import TraceContext, save_trace
 
 
 def _write_markdown(path: Path, body: str = "闽派文化材料。") -> Path:

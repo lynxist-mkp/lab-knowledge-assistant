@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from wenmai.config import Settings
-from wenmai.tracing import get_query_detail, list_query_summaries
+from wenmai.ops.observation import get_query_detail, list_query_summaries
 from wenmai.tracing.recorder import QUERY_TRACE_SCHEMA_VERSION, TraceRecorder
 from wenmai.tracing.stage_result import STAGE_SCHEMA_VERSION, stage_as_dict, stage_from_dict, stage_to_dict
 from wenmai.tracing.store import get_trace_record

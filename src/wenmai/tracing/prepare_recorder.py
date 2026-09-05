@@ -28,8 +28,15 @@ class PrepareTraceRecorder:
     def trace_context(self) -> TraceContext:
         return self._context
 
+    @property
+    def metadata(self) -> dict[str, Any]:
+        return self._context.metadata
+
     def stage(self, *args: Any, **kwargs: Any):
         return self._context.stage(*args, **kwargs)
+
+    def record_stage(self, *args: Any, **kwargs: Any) -> None:
+        self._context.record_stage(*args, **kwargs)
 
     def append_stage(self, stage: StageRecord) -> None:
         self._context.append_stage(stage)

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import json
-import time
 
 from wenmai.components.transform.base import BaseTransform
 from wenmai.config import Settings
 from wenmai.factories import multimodal as multimodal_factory
 from wenmai.factories.transform import registry
+from wenmai.ingestion.prepare import TransformTraceRecorder
 from wenmai.models import Chunk
-from wenmai.tracing.context import TraceContext
 
 _DIGEST_CHAR_LIMIT = 8000
 _CHUNK_EXCERPT_CHARS = 500
@@ -83,37 +82,33 @@ class LlmEnricher(BaseTransform):
         self._template = _load_prompt(settings)
         self._domains = list(settings.transform.domains)
 
-    def apply(self, chunks: list[Chunk], trace: TraceContext) -> list[Chunk]:
+    def apply(self, chunks: list[Chunk], recorder: TransformTraceRecorder) -> list[Chunk]:
         if not chunks:
             return chunks
 
-        started = time.perf_counter()
-        stage_error: str | None = None
-        enriched_count = 0
-        output_summary = "enriched 0 chunks"
-
-        try:
-            digest = _build_document_digest(chunks)
-            prompt = _build_prompt(self._template, digest, self._domains)
-            raw = self._llm.generate(prompt)
-            parsed = _parse_response(raw, self._domains)
-            if parsed:
-                for chunk in chunks:
-                    chunk.metadata.update(parsed)
-                enriched_count = len(chunks)
-            output_summary = f"enriched document ({enriched_count}/{len(chunks)} chunks)"
-        except Exception as exc:
-            stage_error = f"{type(exc).__name__}: {exc}"
-            output_summary = f"document enrich failed: {stage_error}"
-
-        trace.record_stage(
+        with recorder.stage(
             name="enricher",
             method="llm",
             provider=self._llm.provider_name,
-            elapsed_ms=(time.perf_counter() - started) * 1000,
             input_summary=f"{len(chunks)} chunks (document-level)",
-            output_summary=output_summary,
-            candidate_count=len(chunks),
-            error=stage_error,
-        )
+        ) as stage_info:
+            enriched_count = 0
+            try:
+                digest = _build_document_digest(chunks)
+                prompt = _build_prompt(self._template, digest, self._domains)
+                raw = self._llm.generate(prompt)
+                parsed = _parse_response(raw, self._domains)
+                if parsed:
+                    for chunk in chunks:
+                        chunk.metadata.update(parsed)
+                    enriched_count = len(chunks)
+                stage_info["output_summary"] = (
+                    f"enriched document ({enriched_count}/{len(chunks)} chunks)"
+                )
+            except Exception as exc:
+                stage_info["error"] = f"{type(exc).__name__}: {exc}"
+                stage_info["output_summary"] = (
+                    f"document enrich failed: {stage_info['error']}"
+                )
+            stage_info["candidate_count"] = len(chunks)
         return chunks

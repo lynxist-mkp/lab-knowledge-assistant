@@ -8,12 +8,8 @@ from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
-from wenmai.tracing import (
-    TraceContext,
-    get_query_detail,
-    list_query_summaries,
-    save_trace,
-)
+from wenmai.ops.observation import get_query_detail, list_query_summaries
+from wenmai.tracing import TraceContext, save_trace
 
 
 def _save_sample_query(

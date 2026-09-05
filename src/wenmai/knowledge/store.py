@@ -9,6 +9,7 @@ from wenmai.factories import embedding as embedding_factory
 from wenmai.factories import vector_store as vector_store_factory
 from wenmai.factories.loader import ensure_providers
 from wenmai.knowledge.browse import CultureDomainGroup, chunk_detail_from_chunk
+from wenmai.knowledge.document_card import DocumentCard
 from wenmai.knowledge.read import ReadPath
 from wenmai.knowledge.review import PendingReviewDocument
 from wenmai.knowledge.write import WritePath
@@ -167,6 +168,9 @@ class Knowledge:
         if chunk is None:
             return None
         return chunk_detail_from_chunk(chunk)
+
+    def document_card(self, document_id: str) -> DocumentCard:
+        return self._read.document_card(document_id)
 
 
 def create_knowledge(settings: Settings) -> Knowledge:

@@ -424,3 +424,32 @@ def test_browse_lists_pending_chunks_with_review_status(test_settings: Settings)
     assert doc.chunk_count == 1
     assert doc.chunks[0].review_status == "待审"
     assert doc.chunks[0].as_dict()["审阅状态"] == "待审"
+
+
+def test_document_card_delegates_to_read_path(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    knowledge.commit_document(
+        source_path="/tmp/doc-card.md",
+        sha256="doc-card",
+        document_id="doc-card",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="doc-card:0000",
+                document_id="doc-card",
+                text="正文",
+                metadata={
+                    "document_id": "doc-card",
+                    "title": "doc-card",
+                    "culture_domain": "妈祖",
+                    "summary": "文档摘要",
+                },
+            )
+        ],
+    )
+
+    card = knowledge.document_card("doc-card")
+
+    assert card.document_id == "doc-card"
+    assert card.culture_domain == "妈祖"
+    assert card.summary == "文档摘要"

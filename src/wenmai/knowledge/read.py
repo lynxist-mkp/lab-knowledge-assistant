@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from wenmai.knowledge.document_card import DocumentCard, DocumentNotFoundError
 from wenmai.knowledge.domain import is_searchable
 from wenmai.models import Chunk, ScoredChunk
 
@@ -79,6 +80,19 @@ class ReadPath:
 
         return list_pending_from_catalog(self._catalog)
 
+    def document_card(self, document_id: str) -> DocumentCard:
+        entry = self._catalog.get_document(document_id)
+        if entry is None:
+            raise DocumentNotFoundError(document_id)
+        chunks = self.get_by_document_id(document_id)
+        return DocumentCard(
+            document_id=document_id,
+            title=entry.title,
+            culture_domain=entry.culture_domain,
+            summary=_document_summary_from_chunks(chunks),
+            chunk_count=entry.chunk_count,
+        )
+
 
 def _metadata_filter(culture_domain: str | None) -> dict[str, Any] | None:
     if culture_domain is None:
@@ -89,3 +103,16 @@ def _metadata_filter(culture_domain: str | None) -> dict[str, Any] | None:
 def _take_searchable(hits: list[ScoredChunk], top_k: int) -> list[ScoredChunk]:
     filtered = [hit for hit in hits if is_searchable(hit.chunk)]
     return filtered[:top_k]
+
+
+def _document_summary_from_chunks(chunks: list[Chunk]) -> str:
+    if not chunks:
+        return ""
+    summaries: list[str] = []
+    for chunk in sorted(chunks, key=lambda item: item.chunk_id):
+        value = chunk.metadata.get("summary")
+        if isinstance(value, str) and value.strip():
+            summaries.append(value.strip())
+    if not summaries:
+        return ""
+    return max(summaries, key=len)

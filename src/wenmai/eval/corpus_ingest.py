@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from wenmai.components.model_guard import ModelResource, begin_batch, end_batch
 from wenmai.config import Settings
-from wenmai.knowledge import create_knowledge
+from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import IngestResult
-from wenmai.pipelines.ingestion import (
-    PreparedIngest,
-    commit_prepared_ingest,
-    prepare_ingest_source,
-)
+from wenmai.pipelines.ingestion import run_prepare_commit_batch
+from wenmai.tracing.context import StageRecord
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +35,19 @@ class IngestManifestResult:
         if self.attempted == 0:
             return True
         return self.failed < self.attempted
+
+
+@dataclass
+class _CorpusIngestJob:
+    index: int
+    item_id: str
+    source_path: Path
+    settings: Settings
+    knowledge: Knowledge | None = None
+    pdf_load_mode: str | None = None
+    on_stage: Callable[[StageRecord], None] | None = None
+    result: IngestResult | None = None
+    error: BaseException | None = None
 
 
 def load_corpus_manifest(path: Path) -> list[dict[str, Any]]:
@@ -127,93 +137,68 @@ def _ingest_corpus_manifest_batched(
     missing = 0
     failed = 0
     errors: list[str] = []
-    prepared_items: list[tuple[int, str, PreparedIngest]] = []
+    jobs: list[_CorpusIngestJob] = []
+    total = len(selected)
 
-    begin_batch(ModelResource.MLX_VLM)
-    try:
-        for index, item in enumerate(selected, start=1):
-            item_id = str(item.get("id") or "")
-            if not item_id:
-                logger.warning("[%s/%s] SKIP: manifest item missing id", index, len(selected))
-                continue
+    for index, item in enumerate(selected, start=1):
+        item_id = str(item.get("id") or "")
+        if not item_id:
+            logger.warning("[%s/%s] SKIP: manifest item missing id", index, total)
+            continue
 
-            source_path = item_source_path(items_dir, item_id)
-            if not source_path.is_file():
-                logger.info(
-                    "[%s/%s] SKIP %s: 文件不存在 %s",
-                    index,
-                    len(selected),
-                    item_id,
-                    source_path,
-                )
-                missing += 1
-                continue
-
-            attempted += 1
-            try:
-                outcome = prepare_ingest_source(
-                    source_path, settings, knowledge=knowledge
-                )
-            except Exception as exc:  # noqa: BLE001 - batch ingest logs and continues
-                failed += 1
-                message = f"{item_id}: {exc}"
-                errors.append(message)
-                logger.error("[%s/%s] FAIL %s", index, len(selected), message)
-                continue
-
-            if isinstance(outcome, IngestResult):
-                ingested, skipped, failed = _record_terminal_result(
-                    outcome,
-                    index=index,
-                    total=len(selected),
-                    item_id=item_id,
-                    ingested=ingested,
-                    skipped=skipped,
-                    failed=failed,
-                    errors=errors,
-                )
-                continue
-
-            prepared_items.append((index, item_id, outcome))
+        source_path = item_source_path(items_dir, item_id)
+        if not source_path.is_file():
             logger.info(
-                "[%s/%s] PREPARED %s: %s chunks",
+                "[%s/%s] SKIP %s: 文件不存在 %s",
                 index,
-                len(selected),
+                total,
                 item_id,
-                len(outcome.body.chunks),
+                source_path,
             )
-    finally:
-        end_batch()
+            missing += 1
+            continue
 
-    begin_batch(ModelResource.BGE_M3)
-    try:
-        for index, item_id, prepared in prepared_items:
-            try:
-                result = commit_prepared_ingest(
-                    prepared, settings, knowledge=knowledge
-                )
-            except Exception as exc:  # noqa: BLE001 - batch ingest logs and continues
-                failed += 1
-                message = f"{item_id}: {exc}"
-                errors.append(message)
-                logger.error("[%s/%s] FAIL %s", index, len(selected), message)
-                continue
-
-            ingested, skipped, failed = _record_terminal_result(
-                result,
+        attempted += 1
+        jobs.append(
+            _CorpusIngestJob(
                 index=index,
-                total=len(selected),
                 item_id=item_id,
-                ingested=ingested,
-                skipped=skipped,
-                failed=failed,
-                errors=errors,
+                source_path=source_path,
+                settings=settings,
+                knowledge=knowledge,
             )
-    finally:
-        end_batch()
+        )
+
+    run_prepare_commit_batch(jobs, batch_id="corpus-manifest")
+
+    for job in jobs:
+        if job.error is not None:
+            failed += 1
+            message = f"{job.item_id}: {job.error}"
+            errors.append(message)
+            logger.error("[%s/%s] FAIL %s", job.index, total, message)
+            continue
+
+        if job.result is None:
+            failed += 1
+            message = f"{job.item_id}: no ingest result"
+            errors.append(message)
+            logger.error("[%s/%s] FAIL %s", job.index, total, message)
+            continue
+
+        ingested, skipped, failed = _record_terminal_result(
+            job.result,
+            index=job.index,
+            total=total,
+            item_id=job.item_id,
+            ingested=ingested,
+            skipped=skipped,
+            failed=failed,
+            errors=errors,
+        )
 
     return IngestManifestResult(
-        total=len(selected),
+        total=total,
         attempted=attempted,
         ingested=ingested,
         skipped=skipped,

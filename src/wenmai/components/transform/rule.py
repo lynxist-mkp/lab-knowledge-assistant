@@ -5,9 +5,9 @@ import re
 from wenmai.components.transform.base import BaseTransform
 from wenmai.config import Settings
 from wenmai.factories.transform import registry
+from wenmai.ingestion.prepare import TransformTraceRecorder
 from wenmai.ingestion.quality import effective_char_ratio
 from wenmai.models import Chunk
-from wenmai.tracing.context import TraceContext
 
 _HEADER_FOOTER_LINE = re.compile(
     r"^\s*(?:"
@@ -85,11 +85,11 @@ class RuleRefiner(BaseTransform):
     def __init__(self, settings: Settings, **kwargs: object) -> None:
         self._min_ratio = settings.transform.refiner_min_ratio
 
-    def apply(self, chunks: list[Chunk], trace: TraceContext) -> list[Chunk]:
+    def apply(self, chunks: list[Chunk], recorder: TransformTraceRecorder) -> list[Chunk]:
         kept: list[Chunk] = []
         discarded: list[dict[str, str]] = []
 
-        with trace.stage(
+        with recorder.stage(
             "transform",
             method="rule",
             provider="refiner",
@@ -125,6 +125,6 @@ class RuleRefiner(BaseTransform):
                 else f"{len(kept)} kept"
             )
             if discarded:
-                trace.metadata.setdefault("transform_discarded", []).extend(discarded)
+                recorder.metadata.setdefault("transform_discarded", []).extend(discarded)
 
         return kept

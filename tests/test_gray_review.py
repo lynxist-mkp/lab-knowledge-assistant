@@ -9,7 +9,7 @@ from wenmai.ingestion.quality import evaluate_quality_gate
 from wenmai.knowledge import create_knowledge
 from wenmai.pipelines.ingestion import ingest_source
 from wenmai.retrieval import retrieve
-from wenmai.tracing import get_ingestion_detail
+from wenmai.ops.observation import get_ingestion_detail
 
 
 def _write_gray_markdown(path: Path, test_settings: Settings, extra: str = "") -> Path:

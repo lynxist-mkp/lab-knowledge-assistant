@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from wenmai.config import Settings
-from wenmai.knowledge.document_card import DocumentNotFoundError, build_document_card
+from wenmai.knowledge.document_card import DocumentNotFoundError
 from wenmai.knowledge.store import Knowledge, create_knowledge
 
 
@@ -22,7 +22,7 @@ def get_document_summary(
     resolved = settings or Settings.load()
     kb = knowledge or create_knowledge(resolved)
     try:
-        card = build_document_card(kb, document_id)
+        card = kb.document_card(document_id)
     except DocumentNotFoundError as exc:
         raise GetDocumentSummaryError(str(exc), document_id) from exc
     return card.as_dict()
