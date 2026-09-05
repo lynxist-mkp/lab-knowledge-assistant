@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 
 from wenmai.knowledge.document_card import DocumentNotFoundError
 from wenmai.ops.observation import (
+    get_task_investigation,
     get_task_progress_detail,
     get_trace_detail,
     get_trace_summary,
@@ -12,6 +13,7 @@ from wenmai.ops.observation import (
     list_query_summaries,
     list_task_progress_summaries,
     list_trace_degradations,
+    load_health_snapshot,
     load_overview_stats,
 )
 
@@ -27,6 +29,18 @@ def create_ops_router() -> APIRouter:
     @router.get("/api/stats/overview")
     def api_overview_stats(request: Request) -> dict[str, object]:
         return load_overview_stats(request.app.state.settings).as_dict()
+
+    @router.get("/api/stats/health")
+    def api_health_snapshot(
+        request: Request,
+        task_type: str | None = None,
+        failure_kind: str | None = None,
+    ) -> dict[str, object]:
+        return load_health_snapshot(
+            request.app.state.settings,
+            task_type=task_type,
+            failure_kind=failure_kind,
+        ).as_dict()
 
     @router.get("/api/browse")
     def api_browse(request: Request) -> list[dict[str, object]]:
@@ -77,6 +91,10 @@ def create_ops_router() -> APIRouter:
         task_type: str | None = None,
         status: str | None = None,
         failure_kind: str | None = None,
+        degraded: bool | None = None,
+        has_trace: bool | None = None,
+        config_fingerprint: str | None = None,
+        needs_attention: bool | None = None,
     ) -> list[dict[str, object]]:
         return [
             item.as_dict()
@@ -85,12 +103,23 @@ def create_ops_router() -> APIRouter:
                 task_type=task_type,
                 status=status,
                 failure_kind=failure_kind,
+                degraded=degraded,
+                has_trace=has_trace,
+                config_fingerprint=config_fingerprint,
+                needs_attention=needs_attention,
             )
         ]
 
     @router.get("/api/tasks/progress/{task_id}")
     def api_task_progress_detail(request: Request, task_id: str) -> dict[str, object]:
         detail = get_task_progress_detail(request.app.state.settings, task_id)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="task progress not found")
+        return detail.as_dict()
+
+    @router.get("/api/tasks/progress/{task_id}/investigation")
+    def api_task_progress_investigation(request: Request, task_id: str) -> dict[str, object]:
+        detail = get_task_investigation(request.app.state.settings, task_id)
         if detail is None:
             raise HTTPException(status_code=404, detail="task progress not found")
         return detail.as_dict()

@@ -38,6 +38,12 @@ def list_eval_runs(settings: Settings) -> list[EvalRunView]:
     return runs
 
 
+def get_eval_run(settings: Settings, timestamp: str) -> EvalRunView | None:
+    if not timestamp:
+        return None
+    return _load_run_file(runs_dir(settings) / f"{timestamp}.json")
+
+
 def get_ragas_status(settings: Settings) -> RagasStatusView:
     judge = settings.evaluation.ragas_judge
     provider, provider_label = judge.provider, judge.provider_label

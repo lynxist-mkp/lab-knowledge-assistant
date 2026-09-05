@@ -143,6 +143,21 @@ def test_api_task_progress_detail(test_settings: Settings) -> None:
     assert detail_resp.status_code == 200
     assert detail_resp.json()["links"]["trace_id"] == "trace-demo"
 
+    filtered = client.get(
+        "/api/tasks/progress",
+        params={"task_type": "ingestion", "has_trace": "true", "needs_attention": "false"},
+    )
+    assert filtered.status_code == 200
+    assert filtered.json()[0]["task_id"] == "ingestion:demo"
+
+    investigation = client.get("/api/tasks/progress/ingestion:demo/investigation")
+    assert investigation.status_code == 200
+    payload = investigation.json()
+    assert payload["task"]["task_id"] == "ingestion:demo"
+    assert ("trace", "trace-demo") in {
+        (item["link_type"], item["target_id"]) for item in payload["links"]
+    }
+
 
 def test_task_progress_builders_import_cleanly() -> None:
     module = import_module("wenmai.task_progress_builders")
@@ -165,7 +180,12 @@ def test_ingest_writes_task_progress(test_settings: Settings, tmp_path: Path) ->
     detail = get_task_progress_detail(test_settings, f"ingestion:{trace_id}")
     assert detail is not None
     assert detail.children[0].trace_id == trace_id
-    assert detail.children[0].detail["ingest_status"] in {"ingested", "rebuilt", "rejected", "skipped"}
+    assert detail.children[0].detail["ingest_status"] in {
+        "ingested",
+        "rebuilt",
+        "rejected",
+        "skipped",
+    }
 
 
 def test_rejected_ingest_maps_to_blocked_task_progress(
@@ -218,6 +238,21 @@ def test_eval_writes_task_progress_without_query_trace_pollution(
     artifact_path = Path(test_settings.evaluation.runs) / f"{run.timestamp}.json"
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert artifact["timestamp"] == run.timestamp
+
+    client = TestClient(create_app(test_settings))
+    investigation = client.get(f"/api/tasks/progress/evaluation:{run.timestamp}/investigation")
+    assert investigation.status_code == 200
+    payload = investigation.json()
+    assert payload["eval_run"]["timestamp"] == run.timestamp
+    link_types = {(item["link_type"], item["target_id"]) for item in payload["links"]}
+    assert ("eval_run", run.timestamp) in link_types
+    assert ("document", "matsu-intro") in link_types
+    assert ("eval_item", "g001") in link_types
+
+    health = client.get("/api/stats/health", params={"task_type": "evaluation"})
+    assert health.status_code == 200
+    signals = {item["name"]: item["count"] for item in health.json()["signals"]}
+    assert signals["attention_needed"] == 0
 
 
 def test_task_progress_write_failure_does_not_break_eval_or_ingest(

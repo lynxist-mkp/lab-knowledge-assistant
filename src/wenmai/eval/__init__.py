@@ -14,7 +14,7 @@ from wenmai.eval.metrics import (
     refusal_accuracy,
     unique_corpus_doc_ids,
 )
-from wenmai.eval.read import eval_chart_data, get_eval_dashboard, list_eval_runs
+from wenmai.eval.read import eval_chart_data, get_eval_dashboard, get_eval_run, list_eval_runs
 from wenmai.eval.runner import run_eval, run_rewrite_compare
 from wenmai.eval.views import (
     EvalDashboardView,
@@ -35,6 +35,7 @@ __all__ = [
     "corpus_id_from_source_path",
     "eval_chart_data",
     "get_eval_dashboard",
+    "get_eval_run",
     "hit_at_5",
     "list_eval_runs",
     "load_golden_set",
