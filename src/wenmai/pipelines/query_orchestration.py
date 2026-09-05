@@ -23,7 +23,7 @@ from wenmai.retrieval.retrieve import (
     rerank_chunks,
     resolve_retrieval_mode,
 )
-from wenmai.tracing.ask_payload import ask_trace_payload_from_work
+from wenmai.tracing.ask_payload import AskOutcome, AskTracePayload
 from wenmai.tracing.query_trace import QueryTrace
 
 if TYPE_CHECKING:
@@ -102,10 +102,42 @@ class AskWorkContext:
 
 @dataclass
 class AskWorkOutcome:
-    work: OrchestrationWork
     context: AskWorkContext
     result: AskResult | None = None
     error: BaseException | None = None
+
+
+def ask_outcome_from_work(
+    work: OrchestrationWork,
+    context: AskWorkContext,
+) -> AskOutcome:
+    """Build the stable trace seam outcome after orchestration phases."""
+    assert work.retrieval_result is not None
+    generation_error = (
+        work.generation_error
+        if isinstance(work.generation_error, GenerationError)
+        else None
+    )
+    return AskOutcome(
+        question=context.question,
+        culture_domain=work.culture_domain,
+        payload=AskTracePayload(
+            settings=work.settings,
+            normalized=work.normalized,
+            retrieval_result=work.retrieval_result,
+            extras_elapsed_ms=work.extras_elapsed_ms,
+            term_extras=list(work.term_extras),
+            multi_query_extras=list(work.multi_query_extras),
+            rewriter_provider_name=work.rewriter_provider_name,
+            rerank_stages=list(work.rerank_stages),
+            chunks=list(work.chunks or []),
+            expanded_chunks=list(work.expanded_chunks or []),
+            expanded_from=list(work.expanded_from),
+            expanded_chunk_ids=list(work.expanded_chunk_ids),
+            generation=work.generation,
+        ),
+        generation_error=generation_error,
+    )
 
 
 @dataclass
@@ -458,45 +490,31 @@ def run_ask_works(
 
     outcomes: list[AskWorkOutcome] = []
     for work, context in pairs:
-        outcome = AskWorkOutcome(work=work, context=context)
+        outcome = AskWorkOutcome(context=context)
         trace = QueryTrace.begin(
             question=context.question,
             batch_id=context.batch_id,
             batch_size=context.batch_size,
             batch_wait_ms=context.batch_wait_ms,
         )
+        ask_outcome = ask_outcome_from_work(work, context)
         try:
-            if work.generation_error is not None:
-                trace.finalize_generation_error(
-                    payload=ask_trace_payload_from_work(work),
-                    question=context.question,
-                    culture_domain=work.culture_domain,
-                    error=work.generation_error,
-                )
-                raise QueryGenerationError(
-                    str(work.generation_error),
-                    trace.trace_id,
-                ) from work.generation_error
-            outcome.result = trace.finalize_ask_work(
-                payload=ask_trace_payload_from_work(work),
-                question=context.question,
-                culture_domain=work.culture_domain,
-            )
+            outcome.result = trace.finalize(ask_outcome)
         except QueryGenerationError as exc:
             outcome.error = exc
             if context.record_trace:
-                trace.save(work.settings)
+                trace.save(ask_outcome.payload.settings)
             outcomes.append(outcome)
             continue
         except BaseException as exc:
             outcome.error = exc
             if context.record_trace:
-                trace.save(work.settings)
+                trace.save(ask_outcome.payload.settings)
             outcomes.append(outcome)
             continue
 
         if context.record_trace:
-            trace.save(work.settings)
+            trace.save(ask_outcome.payload.settings)
         outcomes.append(outcome)
     return outcomes
 
@@ -552,6 +570,7 @@ __all__ = [
     "AskPipelineInput",
     "AskWorkContext",
     "AskWorkOutcome",
+    "ask_outcome_from_work",
     "ExtrasPhase",
     "GenerationPhase",
     "RerankPhase",

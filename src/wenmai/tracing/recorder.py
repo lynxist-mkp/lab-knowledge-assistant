@@ -5,7 +5,7 @@ from typing import Any
 
 from wenmai.config import Settings
 from wenmai.storage.paths import store_path
-from wenmai.tracing.ask_payload import AskTracePayload
+from wenmai.tracing.ask_payload import AskOutcome, AskTracePayload
 from wenmai.tracing.context import TraceContext
 from wenmai.tracing.stage_result import StageResult, stage_to_dict
 from wenmai.tracing.stages.query import QueryStage
@@ -128,6 +128,26 @@ class TraceRecorder:
 
     def save(self, settings: Settings) -> None:
         JsonlTraceWriter(store_path(settings, "traces")).write_payload(self.to_dict())
+
+    def finalize_ask(self, outcome: AskOutcome) -> object:
+        if outcome.generation_error is not None:
+            self.finalize_ask_generation_error(
+                payload=outcome.payload,
+                question=outcome.question,
+                culture_domain=outcome.culture_domain,
+                error=outcome.generation_error,
+            )
+            from wenmai.generation import QueryGenerationError
+
+            raise QueryGenerationError(
+                str(outcome.generation_error),
+                self.trace_id,
+            ) from outcome.generation_error
+        return self.finalize_ask_work(
+            payload=outcome.payload,
+            question=outcome.question,
+            culture_domain=outcome.culture_domain,
+        )
 
     def finalize_ask_generation_error(
         self,

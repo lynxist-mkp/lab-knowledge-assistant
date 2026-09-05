@@ -6,9 +6,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from wenmai.config import Settings
-from wenmai.eval.read import get_eval_run
-from wenmai.eval.views import EvalRunView
+from wenmai.eval.read import get_eval_run_summary
+from wenmai.eval.views import EvalRunSummary
 from wenmai.knowledge.browse import OverviewStats
+from wenmai.knowledge.read import ReadPath
 from wenmai.storage.catalog import DocumentCatalog
 from wenmai.task_progress import (
     TaskProgressDetail,
@@ -60,7 +61,7 @@ class EvidenceLink:
 class TaskInvestigationView:
     task: TaskProgressDetail
     trace_summaries: list[TraceSummary]
-    eval_run: EvalRunView | None
+    eval_run: EvalRunSummary | None
     links: list[EvidenceLink]
     config_related_tasks: list[TaskProgressSummary]
 
@@ -97,15 +98,15 @@ class ObservationHealthSnapshot:
 
 def load_overview_stats(settings: Settings) -> OverviewStats:
     """Settings → OverviewStats：目录计数 + 查询延迟分位（含 stage_latency）。"""
-    catalog = DocumentCatalog.from_settings(settings)
+    read = ReadPath.catalog_only(DocumentCatalog.from_settings(settings))
     latency = query_latency_percentiles(
         settings,
         recent_n=settings.observability.query_latency_recent_n,
     )
     total = latency.get("total") or {}
     return OverviewStats(
-        document_count=catalog.document_count,
-        chunk_count=catalog.chunk_count,
+        document_count=read.document_count,
+        chunk_count=read.chunk_count,
         avg_query_latency_ms=average_query_latency_ms(settings),
         query_latency_p50_ms=total.get("p50"),
         query_latency_p95_ms=total.get("p95"),
@@ -168,7 +169,7 @@ def get_task_investigation(settings: Settings, task_id: str) -> TaskInvestigatio
             for trace_id in _trace_ids(detail)
             if (summary := get_trace_summary(settings, trace_id)) is not None
         ],
-        eval_run=get_eval_run(settings, eval_run_id) if eval_run_id else None,
+        eval_run=get_eval_run_summary(settings, eval_run_id) if eval_run_id else None,
         links=_evidence_links(detail),
         config_related_tasks=[
             item

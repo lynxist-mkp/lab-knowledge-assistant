@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from wenmai.config import Settings
-from wenmai.eval.views import EvalRunView, parse_eval_run
+from wenmai.eval.views import EvalRunSummary, parse_eval_run_summary
 
 
 def runs_dir(settings: Settings, *, mkdir: bool = False) -> Path:
@@ -28,13 +28,13 @@ def write_run_json(settings: Settings, filename: str, payload: dict[str, Any]) -
     return output_path
 
 
-def persist_eval_artifact(settings: Settings, artifact: dict[str, Any]) -> EvalRunView:
+def persist_eval_artifact(settings: Settings, artifact: dict[str, Any]) -> EvalRunSummary:
     """Write EvalRun artifact and return the typed view."""
     timestamp = artifact.get("timestamp")
     if not isinstance(timestamp, str) or not timestamp:
         raise ValueError("eval artifact missing timestamp")
     write_run_json(settings, f"{timestamp}.json", artifact)
-    parsed = parse_eval_run(artifact)
+    parsed = parse_eval_run_summary(artifact)
     if parsed is None:
         raise RuntimeError("eval run artifact could not be parsed")
     return parsed

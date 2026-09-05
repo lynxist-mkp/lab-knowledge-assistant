@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,11 +12,11 @@ from wenmai.eval.corpus_ingest import (
     IngestManifestResult,
     ingest_corpus_manifest,
 )
-from wenmai.eval.golden import GoldItem, load_golden_set_from_settings
-from wenmai.eval.metrics import hit_at_5
+from wenmai.eval.golden import load_golden_set_from_settings
 from wenmai.eval.persist import runs_dir, write_run_json
+from wenmai.eval.read import get_eval_run_detail
 from wenmai.eval.runner import run_eval, run_rewrite_compare
-from wenmai.eval.views import EvalRunView
+from wenmai.eval.views import EvalRunSummary, HitAt5MissView, find_hit_at_5_misses
 
 DEFAULT_BAD_CASES_PATH = Path(".scratch/fuyun-wenmai/phase-b-bad-cases.md")
 PHASE_B_GROUP = "rrf_rerank"
@@ -27,8 +26,8 @@ PHASE_B_GROUP = "rrf_rerank"
 class PhaseBRunResult:
     timestamp: str
     summary_path: Path
-    ablation_run: EvalRunView
-    rewrite_compare_run: EvalRunView
+    ablation_run: EvalRunSummary
+    rewrite_compare_run: EvalRunSummary
     ingest_result: IngestManifestResult | None
     bad_cases_path: Path | None
 
@@ -43,37 +42,6 @@ def _resolve_bad_cases_path(settings: Settings, path: Path) -> Path:
     if path.as_posix() == DEFAULT_BAD_CASES_PATH.as_posix():
         return settings.root.parent / path
     return settings.root / path
-
-
-def find_hit_at_5_misses(
-    artifact: dict[str, Any],
-    items: list[GoldItem],
-    *,
-    group: str = PHASE_B_GROUP,
-) -> list[dict[str, str]]:
-    groups = artifact.get("groups") or {}
-    group_payload = groups.get(group) or {}
-    item_snapshots = group_payload.get("items") or {}
-    misses: list[dict[str, str]] = []
-    for item in items:
-        if not item.answerable:
-            continue
-        snapshot = item_snapshots.get(item.id)
-        if not isinstance(snapshot, dict):
-            continue
-        retrieval = snapshot.get("retrieval") or {}
-        ranked_doc_ids = retrieval.get("ranked_doc_ids") or []
-        score = hit_at_5(ranked_doc_ids, item)
-        if score == 0.0:
-            misses.append(
-                {
-                    "item_id": item.id,
-                    "question": item.question,
-                    "category": item.category,
-                    "evidence_doc_ids": ",".join(item.evidence_doc_ids),
-                }
-            )
-    return misses
 
 
 def ensure_bad_cases_template(path: Path) -> None:
@@ -102,7 +70,12 @@ def ensure_bad_cases_template(path: Path) -> None:
     )
 
 
-def append_bad_case_stubs(path: Path, misses: list[dict[str, str]], *, run_timestamp: str) -> None:
+def append_bad_case_stubs(
+    path: Path,
+    misses: list[HitAt5MissView],
+    *,
+    run_timestamp: str,
+) -> None:
     ensure_bad_cases_template(path)
     if not misses:
         return
@@ -110,10 +83,10 @@ def append_bad_case_stubs(path: Path, misses: list[dict[str, str]], *, run_times
     for miss in misses:
         lines.extend(
             [
-                f"#### {miss['item_id']}\n",
-                f"- **question**: {miss['question']}\n",
-                f"- **category**: {miss['category']}\n",
-                f"- **evidence_doc_ids**: {miss['evidence_doc_ids']}\n",
+                f"#### {miss.item_id}\n",
+                f"- **question**: {miss.question}\n",
+                f"- **category**: {miss.category}\n",
+                f"- **evidence_doc_ids**: {miss.evidence_doc_ids}\n",
                 "- **what went wrong**: （待填写）\n",
                 "- **trace stage**: （待填写）\n",
                 "- **trace_id**: （待填写）\n",
@@ -130,22 +103,19 @@ def build_phase_b_summary(
     timestamp: str,
     ablation_artifact_path: Path,
     rewrite_compare_artifact_path: Path,
-    ablation_run: EvalRunView,
-    rewrite_compare_run: EvalRunView,
+    ablation_run: EvalRunSummary,
+    rewrite_compare_run: EvalRunSummary,
     ingest_result: IngestManifestResult | None,
 ) -> dict[str, Any]:
-    ablation_artifact = json.loads(ablation_artifact_path.read_text(encoding="utf-8"))
-    rewrite_artifact = json.loads(rewrite_compare_artifact_path.read_text(encoding="utf-8"))
+    ablation_detail = get_eval_run_detail(settings, ablation_run.timestamp)
+    ragas = (
+        ablation_detail.ragas.as_dict()
+        if ablation_detail is not None
+        else {"status": "unavailable", "reason": "未执行 Ragas"}
+    )
     rrf_metrics = ablation_run.groups[PHASE_B_GROUP].metrics
     rewrite_off = rewrite_compare_run.groups["rewrite_off"].metrics
     rewrite_on = rewrite_compare_run.groups["rewrite_on"].metrics
-    ragas = ablation_artifact.get("ragas") or (
-        (ablation_artifact.get("groups", {}).get(PHASE_B_GROUP, {}).get("metrics") or {}).get(
-            "ragas"
-        )
-    )
-    if ragas is None:
-        ragas = {"status": "unavailable", "reason": "未执行 Ragas"}
     return {
         "timestamp": timestamp,
         "phase": "B",
@@ -190,8 +160,8 @@ def build_phase_b_summary(
             },
         },
         "ragas": ragas,
-        "rewrite_compare_item_count": rewrite_artifact.get("item_count"),
-        "ablation_item_count": ablation_artifact.get("item_count"),
+        "rewrite_compare_item_count": rewrite_compare_run.item_count,
+        "ablation_item_count": ablation_run.item_count,
     }
 
 
@@ -256,9 +226,11 @@ def run_phase_b_batch(
     )
     summary_path = write_run_json(settings, f"phase_b_{timestamp}.json", summary)
 
-    ablation_artifact = json.loads(ablation_path.read_text(encoding="utf-8"))
+    ablation_detail = get_eval_run_detail(settings, ablation_run.timestamp)
     golden_items = load_golden_set_from_settings(settings)
-    misses = find_hit_at_5_misses(ablation_artifact, golden_items)
+    misses: list[HitAt5MissView] = []
+    if ablation_detail is not None:
+        misses = find_hit_at_5_misses(ablation_detail, golden_items)
     append_bad_case_stubs(resolved_bad_cases, misses, run_timestamp=timestamp)
 
     return PhaseBRunResult(

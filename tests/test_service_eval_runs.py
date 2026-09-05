@@ -9,9 +9,14 @@ from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
-from wenmai.eval import get_eval_dashboard, list_eval_runs
-from wenmai.eval.read import get_ragas_status
-from wenmai.eval.views import GroupMetricsView, parse_eval_run
+from wenmai.eval import get_eval_dashboard
+from wenmai.eval.read import (
+    get_eval_run_detail,
+    get_eval_run_summary,
+    get_ragas_status,
+    list_eval_run_summaries,
+)
+from wenmai.eval.views import GroupMetricsView, parse_eval_run_summary
 
 
 def _sample_metrics(hit: float, mrr: float, refusal: float) -> dict[str, float | int]:
@@ -51,7 +56,7 @@ def _write_run(
             for name, metrics in groups.items()
         },
     }
-    parsed = parse_eval_run(artifact)
+    parsed = parse_eval_run_summary(artifact)
     assert parsed is not None
     path = runs_dir / f"{timestamp}.json"
     path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -61,7 +66,7 @@ def _write_run(
 def test_list_eval_runs_empty(test_settings: Settings, tmp_path: Path) -> None:
     test_settings.evaluation.runs = str(tmp_path / "runs")
 
-    assert list_eval_runs(test_settings) == []
+    assert list_eval_run_summaries(test_settings) == []
 
 
 def test_list_eval_runs_newest_first(test_settings: Settings, tmp_path: Path) -> None:
@@ -70,7 +75,7 @@ def test_list_eval_runs_newest_first(test_settings: Settings, tmp_path: Path) ->
     _write_run(runs_dir, "20260101T100000Z", dense_hit=0.1, rrf_rerank_hit=0.2)
     _write_run(runs_dir, "20260102T100000Z", dense_hit=0.3, rrf_rerank_hit=0.4)
 
-    runs = list_eval_runs(test_settings)
+    runs = list_eval_run_summaries(test_settings)
 
     assert [run.timestamp for run in runs] == ["20260102T100000Z", "20260101T100000Z"]
     assert runs[0].groups["rrf_rerank"].metrics.hit_at_5 == 0.4
@@ -144,3 +149,80 @@ def test_api_eval_runs_endpoint(test_settings: Settings, tmp_path: Path) -> None
     assert payload[0]["timestamp"] == "20260102T100000Z"
     assert payload[0]["groups"]["rrf_rerank"]["metrics"]["hit_at_5"] == 0.62
     assert payload[0]["failed_count"] == 0
+
+
+def _write_run_with_items(
+    runs_dir: Path,
+    timestamp: str,
+    *,
+    ragas: dict[str, object] | None = None,
+) -> Path:
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    metrics = _sample_metrics(0.5, 0.4, 0.9)
+    if ragas is not None:
+        metrics = {**metrics, "ragas": ragas}
+    artifact = {
+        "timestamp": timestamp,
+        "golden_set": "data/eval/golden.jsonl",
+        "ablations": ["rrf_rerank"],
+        "item_count": 2,
+        "failures": [],
+        "ragas": ragas,
+        "groups": {
+            "rrf_rerank": {
+                "config": {"ablation_group": "rrf_rerank"},
+                "metrics": metrics,
+                "items": {
+                    "g001": {
+                        "retrieval": {
+                            "ranked_doc_ids": ["doc-a"],
+                            "ranked_chunks": [
+                                {
+                                    "chunk_id": "c1",
+                                    "document_id": "d1",
+                                    "score": 0.9,
+                                }
+                            ],
+                        },
+                        "refused": False,
+                        "citation_count": 1,
+                    }
+                },
+            }
+        },
+    }
+    path = runs_dir / f"{timestamp}.json"
+    path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def test_eval_run_summary_and_detail_seams(test_settings: Settings, tmp_path: Path) -> None:
+    runs_dir = tmp_path / "runs"
+    test_settings.evaluation.runs = str(runs_dir)
+    _write_run_with_items(
+        runs_dir,
+        "20260103T100000Z",
+        ragas={
+            "status": "ok",
+            "faithfulness": 0.91,
+            "context_precision": 0.82,
+            "scored_count": 1,
+            "skipped_count": 0,
+        },
+    )
+
+    summaries = list_eval_run_summaries(test_settings)
+    assert len(summaries) == 1
+    assert summaries[0].timestamp == "20260103T100000Z"
+    assert "g001" not in summaries[0].as_dict()
+
+    summary = get_eval_run_summary(test_settings, "20260103T100000Z")
+    assert summary is not None
+    assert summary.groups["rrf_rerank"].metrics.hit_at_5 == 0.5
+
+    detail = get_eval_run_detail(test_settings, "20260103T100000Z")
+    assert detail is not None
+    assert detail.summary.timestamp == "20260103T100000Z"
+    assert detail.groups["rrf_rerank"].items["g001"].retrieval.ranked_doc_ids == ["doc-a"]
+    assert detail.ragas.status == "ok"
+    assert detail.ragas.faithfulness == 0.91

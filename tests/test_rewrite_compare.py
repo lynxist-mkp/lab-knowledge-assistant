@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 
 from wenmai.config import Settings
-from wenmai.eval import list_eval_runs, run_eval, run_rewrite_compare
-from wenmai.eval.views import parse_eval_run
+from wenmai.eval import list_eval_run_summaries, run_eval, run_rewrite_compare
+from wenmai.eval.views import parse_eval_run_summary
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import Chunk
 from wenmai.retrieval import retrieve
@@ -178,8 +178,8 @@ def test_rewrite_compare_artifact_shape(
         assert "multi_query" in config["query_processing"]
         assert "multi_query_n" in config["query_processing"]
 
-    parsed = parse_eval_run(artifact)
+    parsed = parse_eval_run_summary(artifact)
     assert parsed is not None
-    listed = list_eval_runs(test_settings)
+    listed = list_eval_run_summaries(test_settings)
     assert listed[0].timestamp == run.timestamp
     assert listed[0].groups["rewrite_on"].label == "术语归一+Multi-Query"

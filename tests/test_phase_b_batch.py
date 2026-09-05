@@ -16,12 +16,11 @@ from wenmai.eval.phase_b import (
     DEFAULT_BAD_CASES_PATH,
     _resolve_bad_cases_path,
     append_bad_case_stubs,
-    find_hit_at_5_misses,
     format_metrics_summary,
     run_phase_b_batch,
 )
 from wenmai.eval.ragas_metrics import compute_group_ragas_metrics, should_run_ragas
-from wenmai.eval.views import parse_eval_run
+from wenmai.eval.views import find_hit_at_5_misses, parse_eval_run_detail, parse_eval_run_summary
 from wenmai.generation import GenerationResult
 from wenmai.models import Chunk, ScoredChunk
 
@@ -233,7 +232,10 @@ def test_run_eval_attaches_ragas_with_fake_evaluator(
     assert ragas["status"] == "ok"
     assert ragas["faithfulness"] == pytest.approx(0.9)
     assert ragas["context_precision"] == pytest.approx(0.8)
-    assert parse_eval_run(artifact) is not None
+    assert parse_eval_run_summary(artifact) is not None
+    detail = parse_eval_run_detail(artifact)
+    assert detail is not None
+    assert detail.ragas.status == "ok"
 
 
 def test_find_hit_at_5_misses_and_bad_case_stub(tmp_path: Path) -> None:
@@ -258,19 +260,35 @@ def test_find_hit_at_5_misses_and_bad_case_stub(tmp_path: Path) -> None:
         ),
     ]
     artifact = {
+        "timestamp": "20260101T000000Z",
+        "golden_set": "data/eval/golden.jsonl",
+        "item_count": 2,
+        "failures": [],
         "groups": {
             "rrf_rerank": {
+                "config": {"ablation_group": "rrf_rerank"},
+                "metrics": {
+                    "hit_at_5": 0.5,
+                    "mrr": 0.5,
+                    "refusal_accuracy": 1.0,
+                    "citation_coverage": 1.0,
+                    "answerable_count": 2,
+                    "unanswerable_count": 0,
+                },
                 "items": {
                     "hit": {"retrieval": {"ranked_doc_ids": ["doc-a", "other"]}},
                     "miss": {"retrieval": {"ranked_doc_ids": ["other"]}},
-                }
+                },
             }
-        }
+        },
     }
 
-    misses = find_hit_at_5_misses(artifact, items)
+    detail = parse_eval_run_detail(artifact)
+    assert detail is not None
+
+    misses = find_hit_at_5_misses(detail, items)
     assert len(misses) == 1
-    assert misses[0]["item_id"] == "miss"
+    assert misses[0].item_id == "miss"
 
     bad_cases = tmp_path / "bad-cases.md"
     append_bad_case_stubs(bad_cases, misses, run_timestamp="20260101T000000Z")

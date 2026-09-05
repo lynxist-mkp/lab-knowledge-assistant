@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from wenmai.app import create_app
 from wenmai.components.model_guard import ModelResource, active_resource, end_batch
 from wenmai.config import Settings
-from wenmai.eval import get_eval_dashboard, list_eval_runs, run_eval
+from wenmai.eval import get_eval_dashboard, list_eval_run_summaries, run_eval
 from wenmai.eval import pipeline as eval_pipeline
 from wenmai.eval.golden import GoldItem
 from wenmai.generation import GenerationError, generate
@@ -79,7 +79,7 @@ def test_run_eval_round_trip_typed_views(
     _prepare_eval(test_settings, tmp_path)
 
     run = run_eval(test_settings)
-    listed = list_eval_runs(test_settings)
+    listed = list_eval_run_summaries(test_settings)
 
     assert listed[0].timestamp == run.timestamp
     assert listed[0].item_count == 2
@@ -118,7 +118,7 @@ def test_eval_retries_failed_item_then_succeeds(
 
     assert seen["n"] == 1
     assert run.failed_count == 0
-    assert list_eval_runs(test_settings)[0].failed_count == 0
+    assert list_eval_run_summaries(test_settings)[0].failed_count == 0
 
 
 def test_eval_keeps_failure_after_retries(
@@ -175,7 +175,7 @@ def test_eval_keeps_failure_after_retries(
     assert run.failures[0].item_id == "g001"
     assert run.failures[0].group == "dense_only"
     assert run.failures[0].group_label == "Dense 单路"
-    listed = list_eval_runs(test_settings)[0]
+    listed = list_eval_run_summaries(test_settings)[0]
     assert listed.failed_count == 1
     assert listed.failures[0].item_id == "g001"
 

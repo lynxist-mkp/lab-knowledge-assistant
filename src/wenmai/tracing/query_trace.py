@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from wenmai.config import Settings
-from wenmai.tracing.ask_payload import AskTracePayload
+from wenmai.tracing.ask_payload import AskOutcome, AskTracePayload
 from wenmai.tracing.recorder import TraceRecorder
 from wenmai.tracing.views.query import (
     CandidateRow,
@@ -19,6 +19,7 @@ from wenmai.tracing.views.query import (
 )
 
 __all__ = [
+    "AskOutcome",
     "AskTracePayload",
     "CandidateRow",
     "QueryTrace",
@@ -57,33 +58,8 @@ class QueryTrace:
             )
         )
 
-    def finalize_ask_work(
-        self,
-        *,
-        payload: AskTracePayload,
-        question: str,
-        culture_domain: str | None,
-    ) -> object:
-        return self._recorder.finalize_ask_work(
-            payload=payload,
-            question=question,
-            culture_domain=culture_domain,
-        )
-
-    def finalize_generation_error(
-        self,
-        *,
-        payload: AskTracePayload,
-        question: str,
-        culture_domain: str | None,
-        error: object,
-    ) -> None:
-        self._recorder.finalize_ask_generation_error(
-            payload=payload,
-            question=question,
-            culture_domain=culture_domain,
-            error=error,
-        )
+    def finalize(self, outcome: AskOutcome) -> object:
+        return self._recorder.finalize_ask(outcome)
 
     def save(self, settings: Settings) -> None:
         self._recorder.save(settings)

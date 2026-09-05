@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from wenmai.config import Settings
+from wenmai.knowledge.read import ReadPath
 from wenmai.ops.observation import (
     get_query_detail,
     get_task_investigation,
@@ -15,6 +16,7 @@ from wenmai.ops.observation import (
     load_health_snapshot,
     load_overview_stats,
 )
+from wenmai.storage.catalog import DocumentCatalog
 from wenmai.task_progress import ChildEvidence, TaskCounters, persist_task_progress
 
 
@@ -22,6 +24,32 @@ def test_load_overview_stats_empty_catalog(test_settings: Settings) -> None:
     stats = load_overview_stats(test_settings)
     assert stats.document_count == 0
     assert stats.chunk_count == 0
+
+
+def test_load_overview_stats_counts_via_knowledge_read_seam(
+    test_settings: Settings,
+) -> None:
+    class _FakeRead:
+        document_count = 1
+        chunk_count = 1
+
+    class _FakeCatalog:
+        @classmethod
+        def from_settings(cls, _settings: Settings) -> _FakeCatalog:
+            return cls()
+
+    original_catalog = DocumentCatalog.from_settings
+    original_catalog_only = ReadPath.catalog_only
+    try:
+        DocumentCatalog.from_settings = _FakeCatalog.from_settings  # type: ignore[method-assign]
+        ReadPath.catalog_only = classmethod(lambda cls, _catalog: _FakeRead())  # type: ignore[method-assign]
+        stats = load_overview_stats(test_settings)
+    finally:
+        DocumentCatalog.from_settings = original_catalog  # type: ignore[method-assign]
+        ReadPath.catalog_only = original_catalog_only  # type: ignore[method-assign]
+
+    assert stats.document_count == 1
+    assert stats.chunk_count == 1
 
 
 def test_list_query_summaries_via_observation_seam(

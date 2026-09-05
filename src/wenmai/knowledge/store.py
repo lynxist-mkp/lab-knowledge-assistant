@@ -8,7 +8,7 @@ from wenmai.factories import bm25 as bm25_factory
 from wenmai.factories import embedding as embedding_factory
 from wenmai.factories import vector_store as vector_store_factory
 from wenmai.factories.loader import ensure_providers
-from wenmai.knowledge.browse import CultureDomainGroup, chunk_detail_from_chunk
+from wenmai.knowledge.browse import CultureDomainGroup
 from wenmai.knowledge.document_card import DocumentCard
 from wenmai.knowledge.read import ReadPath
 from wenmai.knowledge.review import PendingReviewDocument
@@ -73,8 +73,12 @@ class Knowledge:
         return self._store.provider_name
 
     @property
-    def catalog(self) -> DocumentCatalog:
-        return self._catalog
+    def document_count(self) -> int:
+        return self._read.document_count
+
+    @property
+    def chunk_count(self) -> int:
+        return self._read.chunk_count
 
     def plan_document(
         self,
@@ -161,13 +165,10 @@ class Knowledge:
         return self._read.list_all()
 
     def browse_by_culture_domain(self) -> list[CultureDomainGroup]:
-        return self._catalog.browse_groups()
+        return self._read.browse_by_culture_domain()
 
     def chunk_detail(self, chunk_id: str) -> dict[str, Any] | None:
-        chunk = self.get_by_chunk_id(chunk_id)
-        if chunk is None:
-            return None
-        return chunk_detail_from_chunk(chunk)
+        return self._read.chunk_detail(chunk_id)
 
     def document_card(self, document_id: str) -> DocumentCard:
         return self._read.document_card(document_id)

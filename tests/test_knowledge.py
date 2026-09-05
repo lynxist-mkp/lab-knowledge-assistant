@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from wenmai.config import Settings
@@ -453,3 +455,50 @@ def test_document_card_delegates_to_read_path(test_settings: Settings) -> None:
     assert card.document_id == "doc-card"
     assert card.culture_domain == "妈祖"
     assert card.summary == "文档摘要"
+
+
+def test_browse_delegates_to_read_path(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-browse", "浏览委托测试", culture_domain="船政")
+    sentinel = knowledge._read.browse_by_culture_domain()
+
+    def fail_browse() -> list:
+        raise AssertionError("Knowledge.browse_by_culture_domain should delegate to ReadPath")
+
+    knowledge._read.browse_by_culture_domain = fail_browse  # type: ignore[method-assign]
+
+    with pytest.raises(AssertionError, match="should delegate to ReadPath"):
+        knowledge.browse_by_culture_domain()
+
+    knowledge._read.browse_by_culture_domain = lambda: sentinel  # type: ignore[method-assign]
+    assert knowledge.browse_by_culture_domain() == sentinel
+
+
+def test_counts_delegates_to_read_path(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-count", "计数委托测试", culture_domain="妈祖")
+
+    assert knowledge.document_count == knowledge._read.document_count == 1
+    assert knowledge.chunk_count == knowledge._read.chunk_count == 1
+
+    knowledge.delete_document("doc-count")
+    assert knowledge.document_count == 0
+    assert knowledge.chunk_count == 0
+
+
+def test_chunk_detail_delegates_to_read_path(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-detail", "片段详情委托测试", culture_domain="船政")
+    chunk_id = "doc-detail:0000"
+    sentinel = knowledge._read.chunk_detail(chunk_id)
+
+    def fail_chunk_detail(_chunk_id: str) -> dict[str, Any] | None:
+        raise AssertionError("Knowledge.chunk_detail should delegate to ReadPath")
+
+    knowledge._read.chunk_detail = fail_chunk_detail  # type: ignore[method-assign]
+
+    with pytest.raises(AssertionError, match="should delegate to ReadPath"):
+        knowledge.chunk_detail(chunk_id)
+
+    knowledge._read.chunk_detail = lambda _chunk_id: sentinel  # type: ignore[method-assign]
+    assert knowledge.chunk_detail(chunk_id) == sentinel

@@ -19,7 +19,7 @@ from wenmai.eval.golden import GoldItem, load_golden_set_from_settings
 from wenmai.eval.persist import persist_eval_artifact
 from wenmai.eval.pipeline import EvalGroupItem
 from wenmai.eval.ragas_metrics import attach_ragas_to_artifact, should_run_ragas
-from wenmai.eval.views import EvalRunView, FailedEvalItem
+from wenmai.eval.views import EvalRunSummary, FailedEvalItem
 from wenmai.generation import GenerationResult
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import ScoredChunk
@@ -180,7 +180,7 @@ def run_eval(
     ragas: bool | None = None,
     item_limit: int | None = None,
     groups: list[str] | None = None,
-) -> EvalRunView:
+) -> EvalRunSummary:
     items = load_golden_set_from_settings(settings)
     if item_limit is not None:
         items = items[:item_limit]
@@ -258,7 +258,7 @@ def run_rewrite_compare(
     settings: Settings,
     *,
     knowledge: Knowledge | None = None,
-) -> EvalRunView:
+) -> EvalRunSummary:
     items = load_golden_set_from_settings(settings)
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     groups = list(REWRITE_COMPARE_GROUPS)
