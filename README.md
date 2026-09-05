@@ -29,6 +29,18 @@ uv pip install -e ".[dev]"
 
 已验证：MPS 可用，`bge-m3` 已在本机 HuggingFace 缓存中。
 
+## CI
+
+GitHub Actions 会在对 `main` 的 push 和所有 PR 上执行基础 CI。
+
+本地复现同一套检查：
+
+```bash
+uv sync --dev --frozen
+uv run ruff check .
+uv run pytest
+```
+
 密钥与 MLX 服务见 `settings.yaml` 与 `docs/adr/`。开发期测试走 fake provider，不加载真实模型。
 
 **本机生成/图转文默认 Gemma MLX**（`providers.multimodal` = `mlx_gemma`）。首次 ask 或 caption 前建议先起服务（需 Terminal.app + Metal）：

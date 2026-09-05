@@ -136,8 +136,8 @@ def test_committed_golden_set_has_hundred_items_and_four_categories() -> None:
     assert all(item.evidence_doc_ids and item.reference_answer for item in answerable)
 
     images = [item for item in items if item.category == "图内信息"]
-    assert images
-    assert all(item.status == "placeholder" for item in images)
+    assert len(images) == 8
+    assert all(item.status == "ready" for item in images)
 
     new_batch = [item for item in ready if item.id >= "g051"]
     short_colloquial = [item for item in new_batch if _is_short_or_colloquial(item.question)]
