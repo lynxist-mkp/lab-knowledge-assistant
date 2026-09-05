@@ -11,6 +11,7 @@ import yaml
 from wenmai.config import Settings
 from wenmai.eval import run_eval
 from wenmai.eval.corpus_ingest import ingest_corpus_manifest, load_corpus_manifest
+from wenmai.eval.golden import GoldItem
 from wenmai.eval.phase_b import (
     DEFAULT_BAD_CASES_PATH,
     _resolve_bad_cases_path,
@@ -19,7 +20,6 @@ from wenmai.eval.phase_b import (
     format_metrics_summary,
     run_phase_b_batch,
 )
-from wenmai.eval.golden import GoldItem
 from wenmai.eval.ragas_metrics import compute_group_ragas_metrics, should_run_ragas
 from wenmai.eval.views import parse_eval_run
 from wenmai.generation import GenerationResult
@@ -218,6 +218,7 @@ def test_run_eval_attaches_ragas_with_fake_evaluator(
     )
 
     from fastapi.testclient import TestClient
+
     from wenmai.app import create_app
 
     client = TestClient(create_app(test_settings))
@@ -319,6 +320,7 @@ def test_run_phase_b_batch_skip_ingest(
     bad_cases = tmp_path / "bad-cases.md"
 
     from fastapi.testclient import TestClient
+
     from wenmai.app import create_app
 
     client = TestClient(create_app(test_settings))

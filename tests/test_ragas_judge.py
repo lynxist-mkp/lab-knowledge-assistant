@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from wenmai.config import Settings, resolve_ragas_judge
 from wenmai.components.evaluator.ragas_probe import build_ragas_judge_llm
+from wenmai.config import Settings, resolve_ragas_judge
 from wenmai.eval.read import get_ragas_status
 
 

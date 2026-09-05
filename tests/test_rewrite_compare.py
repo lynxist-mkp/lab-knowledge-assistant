@@ -9,7 +9,6 @@ import pytest
 
 from wenmai.config import Settings
 from wenmai.eval import list_eval_runs, run_eval, run_rewrite_compare
-from wenmai.eval import pipeline as eval_pipeline
 from wenmai.eval.views import parse_eval_run
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import Chunk

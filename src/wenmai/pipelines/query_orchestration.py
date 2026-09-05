@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
-from wenmai.components.model_guard import ModelResource, phase_batch as model_phase_batch
+from wenmai.components.model_guard import ModelResource
+from wenmai.components.model_guard import phase_batch as model_phase_batch
 from wenmai.config import Settings
 from wenmai.generation import GenerationError, GenerationResult, QueryGenerationError, generate
 from wenmai.generation.expand import expand_for_generation

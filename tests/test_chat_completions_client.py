@@ -76,7 +76,10 @@ def test_post_chat_completion_posts_json_and_returns_payload() -> None:
     mock_response.raise_for_status = MagicMock()
     mock_response.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
 
-    with patch("wenmai.components.chat_completions.client.httpx.post", return_value=mock_response) as post:
+    with patch(
+        "wenmai.components.chat_completions.client.httpx.post",
+        return_value=mock_response,
+    ) as post:
         payload = post_chat_completion(
             url="https://example.com/v1/chat/completions",
             model="test-model",

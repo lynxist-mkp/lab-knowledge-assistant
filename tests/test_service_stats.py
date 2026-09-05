@@ -190,7 +190,11 @@ def test_browse_groups_documents_by_culture_domain(test_settings: Settings) -> N
                 chunk_id="matsu-001",
                 document_id="doc-matsu",
                 text="妈祖信仰发源于湄洲岛。",
-                metadata={"title": "妈祖简介", "culture_domain": "妈祖", "document_id": "doc-matsu"},
+                metadata={
+                    "title": "妈祖简介",
+                    "culture_domain": "妈祖",
+                    "document_id": "doc-matsu",
+                },
             ),
         ],
     )
@@ -204,7 +208,11 @@ def test_browse_groups_documents_by_culture_domain(test_settings: Settings) -> N
                 chunk_id="zhuzi-001",
                 document_id="doc-zhuzi",
                 text="朱熹是理学集大成者。",
-                metadata={"title": "朱子理学", "culture_domain": "朱子", "document_id": "doc-zhuzi"},
+                metadata={
+                    "title": "朱子理学",
+                    "culture_domain": "朱子",
+                    "document_id": "doc-zhuzi",
+                },
             ),
         ],
     )

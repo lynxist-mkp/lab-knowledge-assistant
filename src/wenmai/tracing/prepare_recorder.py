@@ -62,7 +62,14 @@ class PrepareTraceRecorder:
             }
         )
 
-    def record_embed(self, *, provider: str, elapsed_ms: float, chunk_count: int, embed_dimension: int) -> None:
+    def record_embed(
+        self,
+        *,
+        provider: str,
+        elapsed_ms: float,
+        chunk_count: int,
+        embed_dimension: int,
+    ) -> None:
         self.append_stage(
             IngestionStage.embed(
                 provider=provider,

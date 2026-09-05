@@ -10,9 +10,9 @@ from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.ingestion.quality import evaluate_quality_gate
 from wenmai.knowledge import create_knowledge
+from wenmai.ops.observation import get_ingestion_detail
 from wenmai.pipelines.ingestion import ingest_source
 from wenmai.retrieval import retrieve
-from wenmai.ops.observation import get_ingestion_detail
 
 
 def _write_reject_markdown(path: Path) -> Path:

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from wenmai.config import Settings
 from wenmai.components.model_guard import configure
+from wenmai.config import Settings
 from wenmai.factories.loader import ensure_providers
 from wenmai.knowledge import Knowledge, create_knowledge
 

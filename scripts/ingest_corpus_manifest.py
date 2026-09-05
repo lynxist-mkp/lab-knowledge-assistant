@@ -8,8 +8,8 @@ import logging
 import sys
 from pathlib import Path
 
-from wenmai.config import Settings
 from wenmai.components.model_guard import configure
+from wenmai.config import Settings
 from wenmai.eval.corpus_ingest import (
     DEFAULT_ITEMS_DIR,
     DEFAULT_MANIFEST,

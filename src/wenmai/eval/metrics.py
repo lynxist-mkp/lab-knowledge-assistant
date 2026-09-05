@@ -71,7 +71,11 @@ def refusal_accuracy(items: list[GoldItem], refused_flags: list[bool]) -> float:
     """Fraction of unanswerable items correctly refused."""
     if len(items) != len(refused_flags):
         raise ValueError("items and refused_flags length mismatch")
-    unanswerable = [(item, refused) for item, refused in zip(items, refused_flags) if not item.answerable]
+    unanswerable = [
+        (item, refused)
+        for item, refused in zip(items, refused_flags)
+        if not item.answerable
+    ]
     if not unanswerable:
         return 1.0
     correct = sum(1 for item, refused in unanswerable if refused)

@@ -28,7 +28,7 @@ def main() -> int:
     try:
         faithfulness, context_precision = build_ragas_judge_llm(settings)
     except Exception as exc:
-        print(f"structured_output: no")
+        print("structured_output: no")
         print(f"reason: judge init failed: {exc}")
         return 1
 
@@ -44,7 +44,7 @@ def main() -> int:
             retrieved_contexts=_SAMPLE["retrieved_contexts"],
         )
     except Exception as exc:
-        print(f"structured_output: no")
+        print("structured_output: no")
         print(f"reason: metric scoring failed: {exc}")
         return 1
 

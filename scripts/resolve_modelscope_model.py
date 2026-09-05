@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import argparse
-import sys
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Resolve ModelScope model to a local path.")
-    parser.add_argument("model_id", help="ModelScope repo id, e.g. mlx-community/PaddleOCR-VL-1.6-5bit")
+    parser.add_argument(
+        "model_id",
+        help="ModelScope repo id, e.g. mlx-community/PaddleOCR-VL-1.6-5bit",
+    )
     args = parser.parse_args()
 
     from modelscope import snapshot_download

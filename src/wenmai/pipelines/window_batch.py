@@ -8,7 +8,7 @@ import uuid
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 JobT = TypeVar("JobT")
 ResultT = TypeVar("ResultT")
@@ -17,7 +17,7 @@ ProcessBatch = Callable[[list[JobT], dict[str, object]], None]
 
 
 @dataclass
-class WindowBatchJob(Generic[ResultT]):
+class WindowBatchJob[ResultT]:
     """Base job state for window-batch coordinators."""
 
     enqueued_at: float = field(default_factory=time.monotonic)
@@ -26,7 +26,7 @@ class WindowBatchJob(Generic[ResultT]):
     error: BaseException | None = None
 
 
-class WindowBatchCoordinator(Generic[JobT, ResultT]):
+class WindowBatchCoordinator[JobT: WindowBatchJob[ResultT], ResultT]:
     """Collect jobs for batch_window_seconds, then invoke process_batch once."""
 
     def __init__(

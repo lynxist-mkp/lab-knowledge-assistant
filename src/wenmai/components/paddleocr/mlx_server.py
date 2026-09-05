@@ -65,7 +65,10 @@ class MlxVlmServerManager:
 
     def _start_server(self) -> None:
         candidates = [self.config.mlx_model]
-        if self.config.mlx_fallback_model and self.config.mlx_fallback_model != self.config.mlx_model:
+        if (
+            self.config.mlx_fallback_model
+            and self.config.mlx_fallback_model != self.config.mlx_model
+        ):
             candidates.append(self.config.mlx_fallback_model)
 
         last_error: RuntimeError | None = None

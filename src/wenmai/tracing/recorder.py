@@ -4,11 +4,11 @@ from collections.abc import Iterable
 from typing import Any
 
 from wenmai.config import Settings
+from wenmai.storage.paths import store_path
 from wenmai.tracing.ask_payload import AskTracePayload
 from wenmai.tracing.context import TraceContext
 from wenmai.tracing.stage_result import StageResult, stage_to_dict
 from wenmai.tracing.stages.query import QueryStage
-from wenmai.storage.paths import store_path
 from wenmai.tracing.writer import JsonlTraceWriter
 
 QUERY_TRACE_SCHEMA_VERSION = 2
