@@ -8,8 +8,9 @@ import pytest
 
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
+from wenmai.models import AskResult
 from wenmai.pipelines.ingestion import ingest_source
-from wenmai.pipelines.query import ask_question
+from wenmai.pipelines.query_orchestration import AskPipelineInput, ask_pipeline_single
 from wenmai.tracing.store import get_trace_record
 
 
@@ -29,6 +30,24 @@ culture_domain: 妈祖
         encoding="utf-8",
     )
     return path
+
+
+def _run_query_pipeline(
+    question: str,
+    settings: Settings,
+    *,
+    retrieval_mode: str | None = None,
+    rerank_enabled: bool | None = None,
+) -> AskResult:
+    return ask_pipeline_single(
+        AskPipelineInput(
+            question=question,
+            settings=settings,
+            retrieval_mode=retrieval_mode,
+            rerank_enabled=rerank_enabled,
+        ),
+        phase_batch=settings.resources.query_phase_batch,
+    )
 
 
 def test_ingest_writes_sequential_chunk_index(
@@ -83,7 +102,7 @@ def test_query_expands_neighbors_into_generation_prompt(
         lambda settings: capturer,
     )
 
-    result = ask_question(
+    result = _run_query_pipeline(
         "朱子文化理学思想的独特关键词是什么？",
         test_settings,
         retrieval_mode="sparse_only",

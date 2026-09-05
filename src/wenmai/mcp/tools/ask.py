@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import time
 from typing import Any
 
+from wenmai.ask_surface import AskSurfaceError, ask_surface
 from wenmai.config import Settings
-from wenmai.http.ask_service import run_ask
 from wenmai.knowledge.collections import UnknownCollectionError, resolve_collection_id
 from wenmai.knowledge.store import Knowledge
 from wenmai.mcp.envelope import McpMeta, envelope, refs_from_ask_result, scope_for
-from wenmai.pipelines.query import QueryGenerationError
 
 
 class AskAnswerError(Exception):
@@ -32,27 +30,26 @@ def ask_answer(
     except UnknownCollectionError as exc:
         raise ValueError(str(exc)) from exc
 
-    started = time.perf_counter()
     try:
-        result = run_ask(
+        ask = ask_surface(
             question,
             settings,
             culture_domain=culture_domain,
             retrieval_mode=retrieval_mode,
             rerank_enabled=rerank_enabled,
             knowledge=knowledge,
+            entrypoint="mcp",
         )
-    except QueryGenerationError as exc:
+    except AskSurfaceError as exc:
         raise AskAnswerError(str(exc), exc.trace_id) from exc
 
-    elapsed_ms = (time.perf_counter() - started) * 1000
     return envelope(
-        data=result.as_dict(),
+        data=ask.result.as_dict(),
         scope=scope_for(
             settings,
             collection_id=collection_id,
             culture_domain=culture_domain,
         ),
-        refs=refs_from_ask_result(result),
-        meta=McpMeta(elapsed_ms=elapsed_ms, mode=retrieval_mode),
+        refs=refs_from_ask_result(ask.result),
+        meta=McpMeta(elapsed_ms=ask.elapsed_ms, mode=retrieval_mode),
     ).as_dict()

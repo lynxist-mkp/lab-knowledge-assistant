@@ -8,8 +8,9 @@ import yaml
 
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
+from wenmai.models import AskResult
 from wenmai.models import Chunk
-from wenmai.pipelines.query import ask_question
+from wenmai.pipelines.query_orchestration import AskPipelineInput, ask_pipeline_single
 from wenmai.query_processing.extras import prepare_query_extras
 from wenmai.retrieval import retrieve
 from wenmai.tracing.store import get_trace_record
@@ -57,6 +58,26 @@ def _settings_with_lexicon(
     return test_settings
 
 
+def _run_query_pipeline(
+    question: str,
+    settings: Settings,
+    *,
+    rerank_enabled: bool | None = None,
+    knowledge=None,
+    record_trace: bool = True,
+) -> AskResult:
+    return ask_pipeline_single(
+        AskPipelineInput(
+            question=question,
+            settings=settings,
+            rerank_enabled=rerank_enabled,
+            knowledge=knowledge,
+            record_trace=record_trace,
+        ),
+        phase_batch=settings.resources.query_phase_batch,
+    )
+
+
 def test_miss_lexicon_identical_retrieval(test_settings: Settings, tmp_path: Path) -> None:
     _settings_with_lexicon(test_settings, tmp_path, rewriter="lexicon", lexicon={})
     knowledge = create_knowledge(test_settings)
@@ -78,7 +99,7 @@ def test_miss_lexicon_identical_retrieval(test_settings: Settings, tmp_path: Pat
         item.chunk.chunk_id for item in disabled.chunks
     ]
 
-    result = ask_question(
+    result = _run_query_pipeline(
         "船政学堂哪年办的？",
         test_settings,
         rerank_enabled=False,
@@ -137,7 +158,7 @@ def test_trace_records_rewrite_strings(test_settings: Settings, tmp_path: Path) 
     knowledge = create_knowledge(test_settings)
     _commit(knowledge, "doc-ship", "船政学堂创办于1866年。")
 
-    result = ask_question(
+    result = _run_query_pipeline(
         "马尾学堂哪年办的？",
         test_settings,
         rerank_enabled=False,
@@ -165,7 +186,7 @@ def test_failure_open_missing_lexicon_file(
     knowledge = create_knowledge(test_settings)
     _commit(knowledge, "doc-a", "船政学堂创办于1866年。")
 
-    result = ask_question(
+    result = _run_query_pipeline(
         "船政学堂哪年办的？",
         test_settings,
         rerank_enabled=False,

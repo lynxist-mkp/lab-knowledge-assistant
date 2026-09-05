@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
+from wenmai.http.ask_service import run_ask
 from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
-from wenmai.pipelines.query import ask_question
 
 _SHARED_TERM = "通商口岸"
 _HAISI_CHUNK_ID = "doc-haisi:0000"
@@ -77,7 +77,7 @@ def test_ask_without_culture_domain_keeps_cross_domain_retrieval(
 ) -> None:
     _seed_cross_domain_chunks(test_settings)
 
-    result = ask_question(f"{_SHARED_TERM}的历史意义", test_settings)
+    result = run_ask(f"{_SHARED_TERM}的历史意义", test_settings)
     ranked_ids = [item.chunk.chunk_id for item in result.ranked_chunks]
     assert _HAISI_CHUNK_ID in ranked_ids
     assert _SHIP_CHUNK_ID in ranked_ids

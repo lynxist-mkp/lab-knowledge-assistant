@@ -9,7 +9,8 @@ import yaml
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
-from wenmai.pipelines.query import ask_question
+from wenmai.models import AskResult
+from wenmai.pipelines.query_orchestration import AskPipelineInput, ask_pipeline_single
 from wenmai.retrieval import retrieve
 from wenmai.tracing.store import get_trace_record
 
@@ -59,6 +60,26 @@ def _settings(
     return test_settings
 
 
+def _run_query_pipeline(
+    question: str,
+    settings: Settings,
+    *,
+    retrieval_mode: str | None = None,
+    rerank_enabled: bool | None = None,
+    knowledge=None,
+) -> AskResult:
+    return ask_pipeline_single(
+        AskPipelineInput(
+            question=question,
+            settings=settings,
+            retrieval_mode=retrieval_mode,
+            rerank_enabled=rerank_enabled,
+            knowledge=knowledge,
+        ),
+        phase_batch=settings.resources.query_phase_batch,
+    )
+
+
 def test_multi_query_extra_path_hits_fusion(test_settings: Settings, tmp_path: Path) -> None:
     _settings(test_settings, tmp_path, multi_query=True)
     knowledge = create_knowledge(test_settings)
@@ -97,7 +118,7 @@ def test_multi_query_disabled_misses_doc(test_settings: Settings, tmp_path: Path
         "马尾船政学堂创办于1866年，是中国最早的近代海军学堂。",
     )
 
-    missed = ask_question(
+    missed = _run_query_pipeline(
         "这所院校始于哪一年？",
         test_settings,
         rerank_enabled=False,
@@ -116,7 +137,7 @@ def test_multi_query_enabled_hits_doc(test_settings: Settings, tmp_path: Path) -
         "马尾船政学堂创办于1866年，是中国最早的近代海军学堂。",
     )
 
-    hit = ask_question(
+    hit = _run_query_pipeline(
         "这所院校始于哪一年？",
         test_settings,
         rerank_enabled=False,
@@ -137,7 +158,7 @@ def test_multi_query_timeout_fallback(test_settings: Settings, tmp_path: Path) -
     )
 
     disabled = _settings(test_settings, tmp_path, multi_query=False)
-    baseline = ask_question(
+    baseline = _run_query_pipeline(
         "这所院校始于哪一年？",
         disabled,
         rerank_enabled=False,
@@ -145,7 +166,7 @@ def test_multi_query_timeout_fallback(test_settings: Settings, tmp_path: Path) -
         knowledge=knowledge,
     )
 
-    timed_out = ask_question(
+    timed_out = _run_query_pipeline(
         "这所院校始于哪一年？",
         test_settings,
         rerank_enabled=False,
@@ -175,7 +196,7 @@ def test_lexicon_survives_multi_query_timeout(
     knowledge = create_knowledge(test_settings)
     _commit(knowledge, "doc-ship", "船政学堂创办于1866年，是中国最早的近代海军学堂。")
 
-    result = ask_question(
+    result = _run_query_pipeline(
         "马尾学堂哪年办的？",
         test_settings,
         rerank_enabled=False,
@@ -198,7 +219,7 @@ def test_multi_query_cap(test_settings: Settings, tmp_path: Path) -> None:
     knowledge = create_knowledge(test_settings)
     _commit(knowledge, "doc-a", "占位文本。")
 
-    result = ask_question(
+    result = _run_query_pipeline(
         "这所院校始于哪一年？",
         test_settings,
         rerank_enabled=False,
@@ -222,7 +243,7 @@ def test_trace_records_rewrite_and_path_counts(
         "马尾船政学堂创办于1866年，是中国最早的近代海军学堂。",
     )
 
-    result = ask_question(
+    result = _run_query_pipeline(
         "这所院校始于哪一年？",
         test_settings,
         rerank_enabled=False,

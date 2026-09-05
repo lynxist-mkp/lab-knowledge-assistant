@@ -70,6 +70,12 @@ class DocumentManagement:
         self._resolve_collection_id(collection_id)
         return self._knowledge.document_card(document_id)
 
+    def get_document_summary(
+        self, document_id: str, *, collection_id: str | None = None
+    ) -> dict[str, Any]:
+        """Return document card fields as a plain dict for adapter layers."""
+        return self.get_document(document_id, collection_id=collection_id).as_dict()
+
     def delete_document(self, document_id: str, *, collection_id: str | None = None) -> None:
         self._resolve_collection_id(collection_id)
         if not self._knowledge.get_by_document_id(document_id):

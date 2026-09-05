@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from wenmai.ask_surface import AskSurfaceError, ask_surface
 from wenmai.config import Settings
-from wenmai.http.ask_service import run_ask
-from wenmai.pipelines.query import QueryGenerationError
 
 
 class AskWenmaiError(Exception):
@@ -23,13 +22,14 @@ def ask_wenmai(
     """Legacy MCP ask helper: return answer, citations, and trace_id."""
     resolved = settings or Settings.load()
     try:
-        result = run_ask(
+        result = ask_surface(
             question,
             resolved,
             culture_domain=culture_domain,
             retrieval_mode=retrieval_mode,
             rerank_enabled=rerank_enabled,
+            entrypoint="mcp-legacy",
         )
-    except QueryGenerationError as exc:
+    except AskSurfaceError as exc:
         raise AskWenmaiError(str(exc), exc.trace_id) from exc
-    return result.as_dict()
+    return result.result.as_dict()

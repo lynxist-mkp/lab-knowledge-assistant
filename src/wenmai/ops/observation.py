@@ -10,6 +10,7 @@ from wenmai.eval.read import get_eval_run_summary
 from wenmai.eval.views import EvalRunSummary
 from wenmai.knowledge.browse import OverviewStats
 from wenmai.knowledge.read import ReadPath
+from wenmai.ops.ask_evidence import summarize_ask_evidence
 from wenmai.storage.catalog import DocumentCatalog
 from wenmai.task_progress import (
     TaskProgressDetail,
@@ -35,6 +36,7 @@ from wenmai.tracing.store import average_query_latency_ms, get_trace_record, rea
 
 TraceSummary = QueryTraceSummary | IngestionTraceSummary
 TraceDetail = QueryTraceDetail | IngestionTraceDetail
+_LONG_TASK_TYPES = frozenset({"ingestion", "evaluation"})
 
 
 @dataclass(frozen=True)
@@ -153,6 +155,13 @@ def list_task_progress_summaries(
     return summaries
 
 
+def has_running_long_tasks(settings: Settings) -> bool:
+    return any(
+        item.task_type in _LONG_TASK_TYPES
+        for item in list_task_progress_summaries(settings, status="running")
+    )
+
+
 def get_task_progress_detail(settings: Settings, task_id: str) -> TaskProgressDetail | None:
     return get_task_progress(settings, task_id)
 
@@ -193,6 +202,10 @@ def load_health_snapshot(
         task_type=task_type,
         failure_kind=failure_kind,
     )
+    ask_evidence = summarize_ask_evidence(
+        settings,
+        recent_n=settings.observability.ask_evidence_recent_n,
+    )
     signals = [
         HealthSignal(
             name="running",
@@ -215,6 +228,9 @@ def load_health_snapshot(
             name="attention_needed",
             count=sum(1 for item in summaries if _needs_attention(item)),
         ),
+        HealthSignal(name="ask_busy", count=ask_evidence.busy_total),
+        HealthSignal(name="ask_timeout", count=ask_evidence.timeout_total),
+        HealthSignal(name="ask_long_task_guard", count=ask_evidence.long_task_total),
     ]
     anomalies = [item for item in summaries if _needs_attention(item)]
     anomalies.sort(
@@ -423,6 +439,7 @@ __all__ = [
     "TraceSummary",
     "get_ingestion_detail",
     "get_query_detail",
+    "has_running_long_tasks",
     "get_trace_detail",
     "get_trace_summary",
     "list_ingestion_summaries",

@@ -4,7 +4,10 @@ from typing import Any
 
 from wenmai.config import Settings
 from wenmai.knowledge.document_card import DocumentNotFoundError
-from wenmai.knowledge.store import Knowledge, create_knowledge
+from wenmai.knowledge.document_management import (
+    DocumentManagement,
+    create_document_management,
+)
 
 
 class GetDocumentSummaryError(Exception):
@@ -16,13 +19,12 @@ class GetDocumentSummaryError(Exception):
 def get_document_summary(
     document_id: str,
     settings: Settings | None = None,
-    knowledge: Knowledge | None = None,
+    document_management: DocumentManagement | None = None,
 ) -> dict[str, Any]:
-    """MCP tool handler: fetch document card from catalog and chunk metadata."""
+    """MCP adapter: fetch document card summary via DocumentManagement."""
     resolved = settings or Settings.load()
-    kb = knowledge or create_knowledge(resolved)
+    mgmt = document_management or create_document_management(resolved)
     try:
-        card = kb.document_card(document_id)
+        return mgmt.get_document_summary(document_id)
     except DocumentNotFoundError as exc:
         raise GetDocumentSummaryError(str(exc), document_id) from exc
-    return card.as_dict()

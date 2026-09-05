@@ -10,6 +10,7 @@ from wenmai.config import Settings
 from wenmai.knowledge.read import ReadPath
 from wenmai.ops.observation import (
     get_query_detail,
+    has_running_long_tasks,
     get_task_investigation,
     list_query_summaries,
     list_task_progress_summaries,
@@ -339,3 +340,34 @@ def test_health_snapshot_and_task_filters(test_settings: Settings) -> None:
         "ingestion:partial",
         "ingestion:blocked",
     ]
+
+
+def test_has_running_long_tasks_reads_via_observation_seam(test_settings: Settings) -> None:
+    persist_task_progress(
+        test_settings,
+        task_id="ingestion:running",
+        task_type="ingestion",
+        status="running",
+        started_at="2026-06-01T12:00:00+00:00",
+        finished_at=None,
+        last_progress_at="2026-06-01T12:00:00+00:00",
+        trigger_source="ingest_api",
+        owner_surface="ops",
+        config_snapshot={"pdf_load_mode": "auto"},
+        counters=TaskCounters(total=1),
+    )
+    persist_task_progress(
+        test_settings,
+        task_id="sync:running",
+        task_type="sync",
+        status="running",
+        started_at="2026-06-01T12:00:01+00:00",
+        finished_at=None,
+        last_progress_at="2026-06-01T12:00:01+00:00",
+        trigger_source="sync_runner",
+        owner_surface="ops",
+        config_snapshot={"mode": "full"},
+        counters=TaskCounters(total=1),
+    )
+
+    assert has_running_long_tasks(test_settings) is True
