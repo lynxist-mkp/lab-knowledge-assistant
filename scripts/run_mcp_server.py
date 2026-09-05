@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 from wenmai.mcp.server import create_mcp_server
+from wenmai.mcp.stdio_safety import install_mcp_stdio_discipline
 
 
 def main() -> None:
+    install_mcp_stdio_discipline()
     server = create_mcp_server()
     server.run(transport="stdio")
 

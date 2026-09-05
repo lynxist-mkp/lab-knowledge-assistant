@@ -13,6 +13,7 @@ from wenmai.knowledge.domain import REVIEW_PENDING
 from wenmai.knowledge.image_refs import ImageReferenceService
 from wenmai.knowledge.store import Knowledge
 from wenmai.mcp.envelope import refs_from_citations, scope_for
+from wenmai.mcp.summary import GetDocumentSummaryError, get_document_summary
 from wenmai.mcp.tools.ask import ask_answer
 from wenmai.mcp.tools.collections import collections_get_stats, collections_list
 from wenmai.mcp.tools.documents import documents_delete, documents_get, documents_list
@@ -121,6 +122,66 @@ def test_mcp_envelope_shape_for_collections(test_settings: Settings) -> None:
     assert set(stats) == _envelope_keys()
     assert stats["data"]["document_count"] == 1
     assert stats["meta"]["count"] == 1
+
+
+def test_document_management_get_document_summary(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-summary", "摘要正文")
+    mgmt = create_document_management(test_settings, knowledge=knowledge)
+
+    summary = mgmt.get_document_summary(
+        "doc-summary",
+        collection_id=test_settings.product.collection,
+    )
+    card = mgmt.get_document(
+        "doc-summary",
+        collection_id=test_settings.product.collection,
+    )
+
+    assert summary == card.as_dict()
+    assert summary["document_id"] == "doc-summary"
+    assert summary["chunk_count"] == 1
+
+
+def test_document_management_get_document_summary_unknown_collection_raises(
+    test_settings: Settings,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-summary", "摘要正文")
+    mgmt = create_document_management(test_settings, knowledge=knowledge)
+
+    with pytest.raises(UnknownCollectionError, match="unknown collection: missing"):
+        mgmt.get_document_summary("doc-summary", collection_id="missing")
+
+
+def test_mcp_get_document_summary_uses_document_management(
+    test_settings: Settings,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-mcp-summary", "MCP 摘要正文")
+    mgmt = create_document_management(test_settings, knowledge=knowledge)
+
+    summary = get_document_summary(
+        "doc-mcp-summary",
+        settings=test_settings,
+        document_management=mgmt,
+    )
+
+    assert summary == mgmt.get_document_summary(
+        "doc-mcp-summary",
+        collection_id=test_settings.product.collection,
+    )
+
+
+def test_mcp_get_document_summary_unknown_id_raises(test_settings: Settings) -> None:
+    mgmt = create_document_management(test_settings, knowledge=create_knowledge(test_settings))
+
+    with pytest.raises(GetDocumentSummaryError, match="document not found"):
+        get_document_summary(
+            "missing-doc",
+            settings=test_settings,
+            document_management=mgmt,
+        )
 
 
 def test_mcp_documents_get_envelope(test_settings: Settings) -> None:

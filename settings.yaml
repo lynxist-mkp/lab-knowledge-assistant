@@ -79,7 +79,9 @@ server:
 observability:
   trace_file: "logs/traces.jsonl"
   task_progress_file: "logs/task_progress.jsonl"
+  ask_evidence_file: "logs/ask_evidence.jsonl"
   query_latency_recent_n: 50
+  ask_evidence_recent_n: 100
 
 evaluation:
   golden_set: "data/eval/golden.jsonl"
@@ -142,3 +144,10 @@ resources:
   batch_window_max_size: 4
   process_idle_timeout_seconds: 60.0  # 最后一次 HTTP 请求结束后 N 秒卸载进程内权重
   process_idle_unload: true           # 空闲超时自动调用 release_all_resources()
+  ask:
+    enabled: true
+    max_in_flight: 2
+    max_wait_seconds: 30.0
+    saturation_policy: wait  # wait | busy
+    long_task_guard: true
+    long_task_max_in_flight: 1

@@ -3,13 +3,30 @@ from __future__ import annotations
 from mcp.server.mcpserver import MCPServer
 
 from wenmai.config import Settings
+from wenmai.http.ask_governor import AskSaturationError
 from wenmai.knowledge.document_management import create_document_management
+from wenmai.mcp.errors import AskSaturationToolError
+from wenmai.mcp.stdio_safety import redact_error_message
 from wenmai.mcp.tools.ask import AskAnswerError, ask_answer
 from wenmai.mcp.tools.collections import collections_get_stats, collections_list
 from wenmai.mcp.tools.documents import documents_delete, documents_get, documents_list
 from wenmai.mcp.tools.images import images_get_content, images_get_ref
 from wenmai.mcp.tools.reviews import reviews_approve, reviews_list_pending, reviews_reject
 from wenmai.runtime import create_runtime
+
+
+def _mcp_error(exc: Exception) -> RuntimeError:
+    return RuntimeError(redact_error_message(str(exc)))
+
+
+def _ask_tool_error(exc: Exception) -> Exception:
+    if isinstance(exc, AskAnswerError):
+        return RuntimeError(
+            redact_error_message(f"{exc} (trace_id={exc.trace_id})")
+        )
+    if isinstance(exc, AskSaturationError):
+        return AskSaturationToolError(exc)
+    return _mcp_error(exc)
 
 
 def create_mcp_server(settings: Settings | None = None) -> MCPServer:
@@ -76,9 +93,9 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
                 rerank_enabled=rerank_enabled,
             )
         except ValueError as exc:
-            raise RuntimeError(str(exc)) from exc
-        except AskAnswerError as exc:
-            raise RuntimeError(f"{exc} (trace_id={exc.trace_id})") from exc
+            raise _mcp_error(exc) from exc
+        except (AskAnswerError, AskSaturationError) as exc:
+            raise _ask_tool_error(exc) from exc
 
     @server.tool(
         name="ask_wenmai",
@@ -98,9 +115,9 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
                 rerank_enabled=rerank_enabled,
             )
         except ValueError as exc:
-            raise RuntimeError(str(exc)) from exc
-        except AskAnswerError as exc:
-            raise RuntimeError(f"{exc} (trace_id={exc.trace_id})") from exc
+            raise _mcp_error(exc) from exc
+        except (AskAnswerError, AskSaturationError) as exc:
+            raise _ask_tool_error(exc) from exc
 
     @server.tool(
         name="collections.list",
@@ -117,7 +134,7 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
         try:
             return collections_get_stats(document_management, collection_id=collection_id)
         except ValueError as exc:
-            raise RuntimeError(str(exc)) from exc
+            raise _mcp_error(exc) from exc
 
     @server.tool(
         name="documents.list",
@@ -148,7 +165,7 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
                 collection_id=collection_id,
             )
         except ValueError as exc:
-            raise RuntimeError(str(exc)) from exc
+            raise _mcp_error(exc) from exc
 
     @server.tool(
         name="documents.delete",
@@ -165,7 +182,7 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
                 collection_id=collection_id,
             )
         except ValueError as exc:
-            raise RuntimeError(str(exc)) from exc
+            raise _mcp_error(exc) from exc
 
     @server.tool(
         name="reviews.list_pending",
@@ -189,7 +206,7 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
                 collection_id=collection_id,
             )
         except ValueError as exc:
-            raise RuntimeError(str(exc)) from exc
+            raise _mcp_error(exc) from exc
 
     @server.tool(
         name="reviews.reject",
@@ -206,7 +223,7 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
                 collection_id=collection_id,
             )
         except ValueError as exc:
-            raise RuntimeError(str(exc)) from exc
+            raise _mcp_error(exc) from exc
 
     @server.tool(
         name="images.get_ref",
@@ -223,7 +240,7 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
                 collection_id=collection_id,
             )
         except ValueError as exc:
-            raise RuntimeError(str(exc)) from exc
+            raise _mcp_error(exc) from exc
 
     @server.tool(
         name="images.get_content",
@@ -240,6 +257,6 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
                 collection_id=collection_id,
             )
         except ValueError as exc:
-            raise RuntimeError(str(exc)) from exc
+            raise _mcp_error(exc) from exc
 
     return server

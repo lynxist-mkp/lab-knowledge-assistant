@@ -7,6 +7,14 @@ from typing import Any
 import yaml
 
 
+def _build_resources(raw: dict[str, Any]) -> Resources:
+    payload = dict(raw)
+    ask_raw = payload.get("ask")
+    if isinstance(ask_raw, dict):
+        payload["ask"] = _build(AskConcurrencyConfig, ask_raw)
+    return _build(Resources, payload)
+
+
 def _build(cls: type, data: dict[str, Any]) -> Any:
     kwargs: dict[str, Any] = {}
     for item in fields(cls):
@@ -123,7 +131,9 @@ class Server:
 class Observability:
     trace_file: str
     task_progress_file: str = "logs/task_progress.jsonl"
+    ask_evidence_file: str = "logs/ask_evidence.jsonl"
     query_latency_recent_n: int = 50
+    ask_evidence_recent_n: int = 100
 
 
 @dataclass
@@ -193,6 +203,16 @@ class Gemma:
 
 
 @dataclass
+class AskConcurrencyConfig:
+    enabled: bool = True
+    max_in_flight: int = 2
+    max_wait_seconds: float = 30.0
+    saturation_policy: str = "wait"
+    long_task_guard: bool = True
+    long_task_max_in_flight: int = 1
+
+
+@dataclass
 class Resources:
     single_model_exclusive: bool = True
     query_phase_batch: bool = True
@@ -202,6 +222,7 @@ class Resources:
     batch_window_max_size: int = 4
     process_idle_timeout_seconds: float = 60.0
     process_idle_unload: bool = True
+    ask: AskConcurrencyConfig = field(default_factory=AskConcurrencyConfig)
 
 
 @dataclass
@@ -249,7 +270,7 @@ class Settings:
             quality_gate=_build(QualityGate, raw.get("quality_gate") or {}),
             paddleocr=_build(PaddleOCR, raw["paddleocr"]),
             gemma=_build(Gemma, raw["gemma"]),
-            resources=_build(Resources, raw.get("resources") or {}),
+            resources=_build_resources(raw.get("resources") or {}),
             fakes=dict(raw.get("fakes") or {}),
             root=Path(root) if root is not None else Path("."),
         )

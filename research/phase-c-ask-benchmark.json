@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-09-05T12:16:11Z",
+  "harness": {
+    "query_phase_batch": false,
+    "single_model_exclusive": false,
+    "note": "Phase-batch and exclusive model residency are disabled so concurrent failures reflect ask-governor saturation (busy/timeout/long_task_active), not model_guard batch mutex collisions."
+  },
+  "ask_config": {
+    "enabled": true,
+    "max_in_flight": 2,
+    "max_wait_seconds": 30.0,
+    "saturation_policy": "wait",
+    "long_task_guard": true,
+    "long_task_max_in_flight": 1
+  },
+  "scenarios": [
+    {
+      "workers": 1,
+      "requests_per_worker": 2,
+      "elapsed_ms": 17.9270840017125,
+      "summary": {
+        "total": 2,
+        "success": 2,
+        "failure": 0,
+        "failure_by_code": {},
+        "latency_ms": {
+          "p50": 8.952374992077239,
+          "mean": 8.952374992077239,
+          "max": 15.651791996788234
+        }
+      }
+    },
+    {
+      "workers": 2,
+      "requests_per_worker": 2,
+      "elapsed_ms": 5.680792004568502,
+      "summary": {
+        "total": 4,
+        "success": 4,
+        "failure": 0,
+        "failure_by_code": {},
+        "latency_ms": {
+          "p50": 2.6451044977875426,
+          "mean": 2.6982292474713176,
+          "max": 3.3883749856613576
+        }
+      }
+    }
+  ]
+}

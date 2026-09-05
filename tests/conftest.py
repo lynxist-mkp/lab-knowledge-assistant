@@ -27,6 +27,7 @@ def test_settings(tmp_path: Path) -> Settings:
     raw["observability"] = {
         "trace_file": str(tmp_path / "traces.jsonl"),
         "task_progress_file": str(tmp_path / "task_progress.jsonl"),
+        "ask_evidence_file": str(tmp_path / "ask_evidence.jsonl"),
     }
     raw["providers"]["multimodal"] = "fake"
     raw["providers"]["embedding"] = "fake"
