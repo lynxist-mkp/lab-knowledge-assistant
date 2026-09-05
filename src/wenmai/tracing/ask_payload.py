@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING, Any
 
 from wenmai.config import Settings
 from wenmai.models import ScoredChunk
-from wenmai.retrieval.fusion import RetrievalResult
 
 if TYPE_CHECKING:
     from wenmai.generation.generate import GenerationResult
+    from wenmai.retrieval.fusion import RetrievalResult
 
 
 @dataclass(frozen=True)

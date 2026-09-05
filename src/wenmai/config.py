@@ -84,6 +84,13 @@ class Retrieval:
 
 
 @dataclass
+class Generation:
+    """生成层拒答硬门：提问词与检索片段重叠过低则直接证据不足拒答。"""
+
+    min_question_overlap: float = 0.0  # 0 = 关闭；建议 0.12–0.2
+
+
+@dataclass
 class Bm25:
     k1: float
     b: float
@@ -203,6 +210,7 @@ class Settings:
     chunking: Chunking
     transform: TransformConfig
     retrieval: Retrieval
+    generation: Generation
     query_processing: QueryProcessing
     bm25: Bm25
     providers: Providers
@@ -226,6 +234,7 @@ class Settings:
             chunking=_build(Chunking, raw["chunking"]),
             transform=_build(TransformConfig, _normalize_transform(raw["transform"])),
             retrieval=_build(Retrieval, raw["retrieval"]),
+            generation=_build(Generation, raw.get("generation") or {}),
             query_processing=_build(
                 QueryProcessing, raw.get("query_processing") or {}
             ),

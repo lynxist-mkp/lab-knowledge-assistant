@@ -104,6 +104,27 @@ items:
     space: minpai_culture
     has_images: false
 
+  - id: haishi-unesco-quanzhou-maps
+    title: 泉州宋元海洋商贸中心世界遗产区位图
+    source_url: https://whc.unesco.org/document/188999
+    source_org: UNESCO World Heritage Centre
+    license_note: 说明文本 CC BY-SA IGO 3.0，引用保留 URL 与获取日期
+    culture_domain: 海丝
+    space: minpai_culture
+    has_images: true
+    # OCR 图册曾灰区待审且 caption 缺中英对齐；图内题用核对后的 md 摘录
+    prefer_pdf: false
+
+  - id: haishi-unesco-quanzhou-annex
+    title: 泉州世界遗产申遗文本附录
+    source_url: https://whc.unesco.org/document/180501
+    source_org: UNESCO World Heritage Centre
+    license_note: 说明文本 CC BY-SA IGO 3.0，引用保留 URL 与获取日期
+    culture_domain: 海丝
+    space: minpai_culture
+    has_images: true
+    prefer_pdf: true
+
   # ── 朱子（10）────────────────────────────────────────────
   - id: zhuzi-wlt-zhuzi-plan
     title: 福建省朱子文化旅游发展规划（2018–2022年）通知
@@ -194,6 +215,26 @@ items:
     culture_domain: 朱子
     space: minpai_culture
     has_images: false
+
+  - id: zhuzi-wuyi-trail-plan
+    title: 武夷山国家森林步道（福建段）旅游专项规划
+    source_url: http://wlt.fujian.gov.cn/zfxxgkzl/zfxxgkml/30qtyzdgkdzfxx/06zykf/202112/P020260319649239187987.pdf
+    source_org: 福建省文化和旅游厅
+    license_note: 政府网站公开信息，引用时保留 URL
+    culture_domain: 朱子
+    space: minpai_culture
+    has_images: true
+    # markitdown 全文在 .md；prefer_pdf 只会吃到封面图件，图内题用正文图件章节
+    prefer_pdf: false
+
+  - id: zhuzi-feiyi-handdrawn-map
+    title: 「跟着非遗游福建」手绘地图
+    source_url: https://wlt.fujian.gov.cn/wldt/tsdt/202601/t20260123_7084618.htm
+    source_org: 福建省文化和旅游厅
+    license_note: 政府网站公开信息，引用时保留 URL
+    culture_domain: 朱子
+    space: minpai_culture
+    has_images: true
 
   # ── 妈祖（10）────────────────────────────────────────────
   - id: mazu-mzmz-intro
@@ -286,6 +327,28 @@ items:
     space: minpai_culture
     has_images: false
 
+  - id: mazu-unesco-nomination-00227
+    title: 妈祖信俗申遗表
+    source_url: https://ich.unesco.org/doc/src/00227-English.pdf
+    source_org: UNESCO Intangible Cultural Heritage
+    license_note: UNESCO 公开申遗材料，引用保留 URL 与获取日期
+    culture_domain: 妈祖
+    space: minpai_culture
+    has_images: true
+    # 本地为 25638-EN.doc 转写的 .md（正文含 Mazu lanterns）；无图册 PDF
+    prefer_pdf: false
+
+  - id: mazu-unesco-consent-00227
+    title: 妈祖信俗社区同意书
+    source_url: https://ich.unesco.org/doc/download.php?versionID=29037
+    source_org: UNESCO Intangible Cultural Heritage
+    license_note: UNESCO 公开申遗材料，引用保留 URL 与获取日期
+    culture_domain: 妈祖
+    space: minpai_culture
+    has_images: true
+    # 59 页扫描件已落盘；为控负载用抽检 markdown 入库（全量 OCR 可另开）
+    prefer_pdf: false
+
   # ── 船政（10）────────────────────────────────────────────
   - id: chuanzheng-wlj-industrial-tourism
     title: 船政文化景区入选国家工业旅游示范基地（福州市文旅局）
@@ -376,3 +439,12 @@ items:
     culture_domain: 船政
     space: minpai_culture
     has_images: false
+
+  - id: chuanzheng-fuzhou-museum-opening
+    title: 中国船政文化博物馆新馆开馆
+    source_url: https://www.fuzhou.gov.cn/gzdt/rcyw/202201/t20220104_4283697.htm
+    source_org: 福州市人民政府
+    license_note: 政府网站公开信息，引用时保留 URL
+    culture_domain: 船政
+    space: minpai_culture
+    has_images: true

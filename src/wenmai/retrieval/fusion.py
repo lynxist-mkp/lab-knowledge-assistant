@@ -4,13 +4,15 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from wenmai.config import Settings
-from wenmai.knowledge.store import Knowledge
 from wenmai.models import Chunk, ScoredChunk
 from wenmai.retrieval.rrf import reciprocal_rank_fusion
 from wenmai.tracing.context import StageRecord
+
+if TYPE_CHECKING:
+    from wenmai.knowledge.store import Knowledge
 
 RetrievalMode = Literal["dense_only", "sparse_only", "rrf"]
 

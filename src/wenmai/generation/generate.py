@@ -11,6 +11,13 @@ from wenmai.models import Citation, ScoredChunk
 _CITATION_PATTERN = re.compile(r"\[(\d+)\]")
 _REFUSAL_PREFIX = "拒答："
 _INSUFFICIENT_EVIDENCE_ANSWER = "拒答：检索未返回可用片段，无法依据材料回答该问题。"
+_LOW_OVERLAP_ANSWER = "拒答：检索片段与问题缺少足够重合的依据，无法依据材料回答该问题。"
+
+_TOKEN_RE = re.compile(r"[\u4e00-\u9fff]|[a-zA-Z0-9]+")
+_STOPWORDS = frozenset(
+    "的了吗呢是在有和与及或对从到为被把等什么怎么多少哪里何时"
+    "今日今天昨晚本周一个一些如何是否可以"
+)
 
 RefusalReason = Literal["insufficient_evidence", "model_refused"]
 
@@ -102,6 +109,43 @@ def _citations_from_retrieved(scored_chunks: list[ScoredChunk]) -> list[Citation
     return citations
 
 
+def _content_tokens(text: str) -> set[str]:
+    parts = _TOKEN_RE.findall(text.lower())
+    tokens: set[str] = set()
+    cjk_chars: list[str] = []
+    for part in parts:
+        if part in _STOPWORDS:
+            continue
+        if len(part) == 1 and "\u4e00" <= part <= "\u9fff":
+            cjk_chars.append(part)
+            continue
+        tokens.add(part)
+    for left, right in zip(cjk_chars, cjk_chars[1:]):
+        bigram = left + right
+        if bigram not in _STOPWORDS:
+            tokens.add(bigram)
+    return tokens
+
+
+def question_evidence_overlap(question: str, scored_chunks: list[ScoredChunk]) -> float:
+    """Fraction of question content tokens that appear in any retrieved chunk text."""
+    question_tokens = _content_tokens(question)
+    if not question_tokens:
+        return 1.0
+    context_tokens: set[str] = set()
+    for item in scored_chunks:
+        context_tokens |= _content_tokens(item.chunk.text)
+        title = str(
+            item.chunk.metadata.get("title") or item.chunk.metadata.get("chunk_title") or ""
+        )
+        if title:
+            context_tokens |= _content_tokens(title)
+    if not context_tokens:
+        return 0.0
+    hit = sum(1 for token in question_tokens if token in context_tokens)
+    return hit / len(question_tokens)
+
+
 def _is_refusal(answer: str) -> bool:
     return answer.strip().startswith(_REFUSAL_PREFIX)
 
@@ -113,19 +157,42 @@ def _resolve_response(answer: str, scored_chunks: list[ScoredChunk]) -> tuple[bo
     return False, _extract_citations(answer, scored_chunks)
 
 
+def _insufficient_evidence(
+    *,
+    answer: str,
+    scored_chunks: list[ScoredChunk],
+    output_summary: str,
+) -> GenerationResult:
+    return GenerationResult(
+        answer=answer,
+        refused=True,
+        citations=_citations_from_retrieved(scored_chunks) if scored_chunks else [],
+        provider_name="local",
+        output_summary=output_summary,
+        candidate_count=len(scored_chunks),
+        refusal_reason="insufficient_evidence",
+    )
+
+
 def generate(
     question: str, scored_chunks: list[ScoredChunk], settings: Settings
 ) -> GenerationResult:
     if not scored_chunks:
-        return GenerationResult(
+        return _insufficient_evidence(
             answer=_INSUFFICIENT_EVIDENCE_ANSWER,
-            refused=True,
-            citations=[],
-            provider_name="local",
+            scored_chunks=[],
             output_summary="insufficient_evidence",
-            candidate_count=0,
-            refusal_reason="insufficient_evidence",
         )
+
+    min_overlap = settings.generation.min_question_overlap
+    if min_overlap > 0:
+        overlap = question_evidence_overlap(question, scored_chunks)
+        if overlap < min_overlap:
+            return _insufficient_evidence(
+                answer=_LOW_OVERLAP_ANSWER,
+                scored_chunks=scored_chunks,
+                output_summary="insufficient_evidence_low_overlap",
+            )
 
     llm = multimodal_factory.create(settings)
     template = _load_qa_prompt(settings)

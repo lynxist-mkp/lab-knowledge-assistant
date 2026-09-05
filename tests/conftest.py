@@ -42,6 +42,7 @@ def test_settings(tmp_path: Path) -> Settings:
     }
     raw["quality_gate"] = dict(raw.get("quality_gate") or {})
     raw["quality_gate"]["gray_review"] = False
+    raw["generation"] = {"min_question_overlap": 0.0}
     raw["query_processing"] = {
         "rewriter": "none",
         "lexicon": str(repo_settings.parent / "data/lexicon/synonyms.yaml"),
