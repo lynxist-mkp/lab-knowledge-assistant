@@ -255,6 +255,40 @@ class TaskProgressDetail:
         }
 
 
+@dataclass(frozen=True)
+class TaskProgressRun:
+    task_id: str
+    task_type: str
+    started_at: str
+    trigger_source: str
+    owner_surface: str
+    links: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class IngestionTaskProgressConfig:
+    pdf_load_mode: str | None
+
+
+@dataclass(frozen=True)
+class EvaluationTaskProgressConfig:
+    groups: list[str]
+    query_rewrite_by_group: dict[str, bool]
+
+
+TaskProgressConfig = IngestionTaskProgressConfig | EvaluationTaskProgressConfig | dict[str, Any]
+
+
+@dataclass(frozen=True)
+class TaskProgressOutcome:
+    finished_at: str | None
+    last_progress_at: str | None
+    stages: list[StageEvent] = field(default_factory=list)
+    children: list[ChildEvidence] = field(default_factory=list)
+    error: str | None = None
+    failure_kind_hint: FailureKind | None = None
+
+
 def task_progress_path(settings: Settings) -> Path:
     raw = Path(settings.observability.task_progress_file)
     return raw if raw.is_absolute() else settings.root / raw
@@ -315,6 +349,83 @@ def get_task_progress(settings: Settings, task_id: str) -> TaskProgressDetail | 
     return None
 
 
+def persist_task_progress_running(
+    settings: Settings,
+    run: TaskProgressRun,
+    *,
+    total: int,
+    config: TaskProgressConfig,
+) -> Path:
+    return persist_task_progress(
+        settings,
+        task_id=run.task_id,
+        task_type=run.task_type,
+        status="running",
+        started_at=run.started_at,
+        finished_at=None,
+        last_progress_at=run.started_at,
+        trigger_source=run.trigger_source,
+        owner_surface=run.owner_surface,
+        config_snapshot=resolve_task_progress_config(settings, config),
+        counters=TaskCounters(total=total),
+        links=run.links,
+    )
+
+
+def persist_task_progress_outcome(
+    settings: Settings,
+    run: TaskProgressRun,
+    *,
+    config: TaskProgressConfig,
+    outcome: TaskProgressOutcome,
+) -> Path:
+    status = derive_task_status(outcome)
+    return persist_task_progress(
+        settings,
+        task_id=run.task_id,
+        task_type=run.task_type,
+        status=status,
+        started_at=run.started_at,
+        finished_at=outcome.finished_at,
+        last_progress_at=outcome.last_progress_at or outcome.finished_at or run.started_at,
+        trigger_source=run.trigger_source,
+        owner_surface=run.owner_surface,
+        config_snapshot=resolve_task_progress_config(settings, config),
+        links=run.links,
+        stages=outcome.stages,
+        children=outcome.children,
+        counters=derive_task_counters(outcome, status=status),
+        error=outcome.error,
+        failure_kind=derive_failure_kind(outcome, status=status),
+    )
+
+
+def safe_persist_task_progress_running(
+    settings: Settings,
+    run: TaskProgressRun,
+    *,
+    total: int,
+    config: TaskProgressConfig,
+) -> Path | None:
+    try:
+        return persist_task_progress_running(settings, run, total=total, config=config)
+    except OSError:
+        return None
+
+
+def safe_persist_task_progress_outcome(
+    settings: Settings,
+    run: TaskProgressRun,
+    *,
+    config: TaskProgressConfig,
+    outcome: TaskProgressOutcome,
+) -> Path | None:
+    try:
+        return persist_task_progress_outcome(settings, run, config=config, outcome=outcome)
+    except OSError:
+        return None
+
+
 def persist_task_progress(
     settings: Settings,
     *,
@@ -367,6 +478,118 @@ def safe_persist_task_progress(settings: Settings, **kwargs: Any) -> Path | None
         return persist_task_progress(settings, **kwargs)
     except OSError:
         return None
+
+
+def resolve_task_progress_config(
+    settings: Settings,
+    config: TaskProgressConfig,
+) -> dict[str, Any]:
+    if isinstance(config, IngestionTaskProgressConfig):
+        return {
+            "pdf_load_mode": config.pdf_load_mode or settings.pdf_load.mode,
+            "quality_gate": {
+                "reject_below": settings.quality_gate.reject_below,
+                "approve_above": settings.quality_gate.approve_above,
+                "gray_review": settings.quality_gate.gray_review,
+            },
+            "transform": {
+                "stages": list(settings.transform.stages),
+                "refiner": settings.transform.refiner,
+                "enricher": settings.transform.enricher,
+                "captioner": settings.transform.captioner,
+            },
+            "providers": {
+                "splitter": settings.providers.splitter,
+                "embedding": settings.providers.embedding,
+                "vector_store": settings.providers.vector_store,
+            },
+        }
+    if isinstance(config, EvaluationTaskProgressConfig):
+        return {
+            "golden_set": settings.evaluation.golden_set,
+            "groups": list(config.groups),
+            "query_rewrite_by_group": dict(config.query_rewrite_by_group),
+            "providers": {
+                "embedding": settings.providers.embedding,
+                "reranker": settings.providers.reranker,
+                "multimodal": settings.providers.multimodal,
+            },
+            "retrieval": {
+                "dense_k": settings.retrieval.dense_k,
+                "sparse_k": settings.retrieval.sparse_k,
+                "fused_k": settings.retrieval.fused_k,
+                "rerank_top": settings.retrieval.rerank_top,
+            },
+        }
+    return dict(config)
+
+
+def derive_task_status(outcome: TaskProgressOutcome) -> TaskStatus:
+    child_statuses = [child.status for child in outcome.children]
+    success_count = sum(status in {"succeeded", "partial_success"} for status in child_statuses)
+    failed_count = child_statuses.count("failed")
+    blocked_count = child_statuses.count("blocked")
+    partial_count = child_statuses.count("partial_success")
+    degraded = any(stage.degraded for stage in outcome.stages) or any(
+        child.degraded for child in outcome.children
+    )
+    if outcome.error and success_count == 0 and partial_count == 0 and blocked_count == 0:
+        return "failed"
+    if blocked_count and success_count == 0 and failed_count == 0 and partial_count == 0:
+        return "blocked"
+    if (
+        partial_count > 0
+        or degraded
+        or (success_count > 0 and (failed_count > 0 or blocked_count > 0))
+    ):
+        return "partial_success"
+    if failed_count and success_count == 0 and blocked_count == 0:
+        return "failed"
+    if blocked_count and success_count == 0:
+        return "blocked"
+    return "succeeded"
+
+
+def derive_task_counters(
+    outcome: TaskProgressOutcome,
+    *,
+    status: TaskStatus | None = None,
+) -> TaskCounters:
+    resolved_status = status or derive_task_status(outcome)
+    total = len(outcome.children)
+    completed = sum(child.status in {"succeeded", "partial_success"} for child in outcome.children)
+    failed = sum(child.status == "failed" for child in outcome.children)
+    blocked = sum(child.status == "blocked" for child in outcome.children)
+    partial = sum(child.status == "partial_success" for child in outcome.children)
+    if partial == 0 and resolved_status == "partial_success":
+        partial = 1
+    return TaskCounters(
+        total=total,
+        completed=completed,
+        failed=failed,
+        partial=partial,
+        blocked=blocked,
+    )
+
+
+def derive_failure_kind(
+    outcome: TaskProgressOutcome,
+    *,
+    status: TaskStatus | None = None,
+) -> FailureKind:
+    if outcome.failure_kind_hint and outcome.failure_kind_hint != "none":
+        return outcome.failure_kind_hint
+    inferred = infer_failure_kind(outcome.error)
+    if inferred != "none":
+        return inferred
+    for child in outcome.children:
+        if child.failure_kind != "none":
+            return child.failure_kind
+    for stage in outcome.stages:
+        if stage.failure_kind != "none":
+            return stage.failure_kind
+    resolved_status = status or derive_task_status(outcome)
+    return "unknown" if resolved_status in {"failed", "partial_success", "blocked"} else "none"
 
 
 def config_fingerprint(payload: dict[str, Any]) -> str:
@@ -434,18 +657,31 @@ def _string_dict(raw: object) -> dict[str, str]:
 
 __all__ = [
     "ChildEvidence",
+    "EvaluationTaskProgressConfig",
     "FailureKind",
+    "IngestionTaskProgressConfig",
     "StageEvent",
     "TaskCounters",
+    "TaskProgressConfig",
     "TaskProgressDetail",
+    "TaskProgressOutcome",
+    "TaskProgressRun",
     "TaskProgressSummary",
     "TaskStatus",
     "config_fingerprint",
+    "derive_failure_kind",
+    "derive_task_counters",
+    "derive_task_status",
     "get_task_progress",
     "infer_failure_kind",
     "list_task_progress",
     "persist_task_progress",
+    "persist_task_progress_outcome",
+    "persist_task_progress_running",
     "read_task_progress_records",
+    "resolve_task_progress_config",
+    "safe_persist_task_progress_outcome",
+    "safe_persist_task_progress_running",
     "safe_persist_task_progress",
     "task_progress_path",
 ]

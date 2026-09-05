@@ -4,17 +4,26 @@ import json
 from importlib import import_module
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.eval import run_eval
+from wenmai.models import IngestResult
 from wenmai.ops.observation import get_task_progress_detail, list_task_progress_summaries
+from wenmai.pipelines.ingestion import commit_prepared_ingest, prepare_ingest_source
 from wenmai.task_progress import (
     ChildEvidence,
+    EvaluationTaskProgressConfig,
+    IngestionTaskProgressConfig,
     StageEvent,
     TaskCounters,
+    TaskProgressOutcome,
+    TaskProgressRun,
     persist_task_progress,
+    persist_task_progress_outcome,
+    persist_task_progress_running,
 )
 from wenmai.tracing.store import read_trace_records
 
@@ -59,7 +68,7 @@ def _prepare_eval(test_settings: Settings, tmp_path: Path) -> None:
     test_settings.evaluation.golden_set = str(golden)
     test_settings.evaluation.runs = str(tmp_path / "runs")
     client = TestClient(create_app(test_settings))
-    ingest = client.post("/ingest", json={"source_path": str(source)})
+    ingest = client.post("/ingest", json={"source_path": str(source), "pdf_load_mode": "ocr"})
     assert ingest.status_code == 200
 
 
@@ -164,11 +173,149 @@ def test_task_progress_builders_import_cleanly() -> None:
     assert hasattr(module, "build_ingestion_progress")
 
 
+def test_task_progress_running_and_outcome_seam_owns_config_and_failed_status(
+    test_settings: Settings,
+) -> None:
+    run = TaskProgressRun(
+        task_id="ingestion:failed-demo",
+        task_type="ingestion",
+        started_at="2026-09-05T00:00:00+00:00",
+        trigger_source="ingest_api",
+        owner_surface="ops",
+        links={"trace_id": "trace-failed"},
+    )
+
+    persist_task_progress_running(
+        test_settings,
+        run,
+        total=1,
+        config=IngestionTaskProgressConfig(pdf_load_mode="manual"),
+    )
+    persist_task_progress_outcome(
+        test_settings,
+        run,
+        config=IngestionTaskProgressConfig(pdf_load_mode="manual"),
+        outcome=TaskProgressOutcome(
+            finished_at="2026-09-05T00:00:02+00:00",
+            last_progress_at="2026-09-05T00:00:02+00:00",
+            stages=[
+                StageEvent(
+                    name="load",
+                    status="failed",
+                    started_at=None,
+                    finished_at=None,
+                    elapsed_ms=12.0,
+                    failure_kind="input",
+                    error="pdf parse failed",
+                )
+            ],
+            children=[
+                ChildEvidence(
+                    child_id="doc-1",
+                    child_type="document",
+                    label="坏文档",
+                    status="failed",
+                    failure_kind="input",
+                )
+            ],
+            error="pdf parse failed",
+        ),
+    )
+
+    detail = get_task_progress_detail(test_settings, "ingestion:failed-demo")
+    assert detail is not None
+    assert detail.summary.status == "failed"
+    assert detail.summary.counters.failed == 1
+    assert detail.summary.config_fingerprint
+    assert detail.config_snapshot["pdf_load_mode"] == "manual"
+    assert "quality_gate" in detail.config_snapshot
+
+
+def test_task_progress_outcome_seam_derives_eval_partial_and_blocked_status(
+    test_settings: Settings,
+) -> None:
+    blocked_run = TaskProgressRun(
+        task_id="ingestion:blocked-demo",
+        task_type="ingestion",
+        started_at="2026-09-05T00:00:00+00:00",
+        trigger_source="ingest_api",
+        owner_surface="ops",
+    )
+    persist_task_progress_outcome(
+        test_settings,
+        blocked_run,
+        config=IngestionTaskProgressConfig(pdf_load_mode=None),
+        outcome=TaskProgressOutcome(
+            finished_at="2026-09-05T00:00:01+00:00",
+            last_progress_at="2026-09-05T00:00:01+00:00",
+            children=[
+                ChildEvidence(
+                    child_id="doc-2",
+                    child_type="document",
+                    label="待拦截文档",
+                    status="blocked",
+                    failure_kind="input",
+                )
+            ],
+        ),
+    )
+    blocked_detail = get_task_progress_detail(test_settings, "ingestion:blocked-demo")
+    assert blocked_detail is not None
+    assert blocked_detail.summary.status == "blocked"
+    assert blocked_detail.summary.failure_kind == "input"
+
+    eval_run = TaskProgressRun(
+        task_id="evaluation:partial-demo",
+        task_type="evaluation",
+        started_at="2026-09-05T00:10:00+00:00",
+        trigger_source="eval_runner",
+        owner_surface="ops",
+        links={"eval_run": "partial-demo"},
+    )
+    persist_task_progress_outcome(
+        test_settings,
+        eval_run,
+        config=EvaluationTaskProgressConfig(
+            groups=["dense_only", "rrf"],
+            query_rewrite_by_group={"dense_only": False, "rrf": False},
+        ),
+        outcome=TaskProgressOutcome(
+            finished_at="2026-09-05T00:11:00+00:00",
+            last_progress_at="2026-09-05T00:11:00+00:00",
+            children=[
+                ChildEvidence(
+                    child_id="dense_only:g001",
+                    child_type="eval_item",
+                    label="dense_only/g001",
+                    status="failed",
+                    failure_kind="unknown",
+                    degraded=True,
+                ),
+                ChildEvidence(
+                    child_id="rrf:g001",
+                    child_type="eval_item",
+                    label="rrf/g001",
+                    status="succeeded",
+                    failure_kind="none",
+                ),
+            ],
+        ),
+    )
+    eval_detail = get_task_progress_detail(test_settings, "evaluation:partial-demo")
+    assert eval_detail is not None
+    assert eval_detail.summary.status == "partial_success"
+    assert eval_detail.summary.counters.total == 2
+    assert eval_detail.summary.counters.completed == 1
+    assert eval_detail.summary.counters.failed == 1
+    assert eval_detail.summary.counters.partial == 1
+    assert eval_detail.config_snapshot["query_rewrite_by_group"]["rrf"] is False
+
+
 def test_ingest_writes_task_progress(test_settings: Settings, tmp_path: Path) -> None:
     source = _write_markdown(tmp_path / "doc.md")
     client = TestClient(create_app(test_settings))
 
-    ingest = client.post("/ingest", json={"source_path": str(source)})
+    ingest = client.post("/ingest", json={"source_path": str(source), "pdf_load_mode": "ocr"})
     assert ingest.status_code == 200
     trace_id = ingest.json()["trace_id"]
 
@@ -196,7 +343,7 @@ def test_rejected_ingest_maps_to_blocked_task_progress(
     source = _write_markdown(tmp_path / "bad.md", body="12345\n67890\n")
     client = TestClient(create_app(test_settings))
 
-    ingest = client.post("/ingest", json={"source_path": str(source)})
+    ingest = client.post("/ingest", json={"source_path": str(source), "pdf_load_mode": "ocr"})
     assert ingest.status_code == 200
     assert ingest.json()["status"] == "rejected"
 
@@ -206,7 +353,35 @@ def test_rejected_ingest_maps_to_blocked_task_progress(
     detail = get_task_progress_detail(test_settings, summaries[0].task_id)
     assert detail is not None
     assert detail.children[0].status == "blocked"
+    assert detail.children[0].failure_kind == "input"
     assert detail.children[0].detail["ingest_status"] == "rejected"
+    assert detail.config_snapshot["pdf_load_mode"] == "ocr"
+
+
+def test_failed_commit_keeps_document_link_in_task_progress(
+    test_settings: Settings,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source = _write_markdown(tmp_path / "doc.md")
+    prepared = prepare_ingest_source(source, test_settings)
+    assert not isinstance(prepared, IngestResult)
+
+    def boom(*_args: object, **_kwargs: object) -> object:
+        raise RuntimeError("upsert failed")
+
+    monkeypatch.setattr("wenmai.knowledge.store.Knowledge.commit_document", boom)
+
+    with pytest.raises(RuntimeError, match="upsert failed"):
+        commit_prepared_ingest(prepared, test_settings)
+
+    detail = get_task_progress_detail(
+        test_settings,
+        f"ingestion:{prepared.recorder.trace_id}",
+    )
+    assert detail is not None
+    assert detail.summary.status == "failed"
+    assert detail.summary.links["document_id"] == prepared.body.document_id
 
 
 def test_eval_writes_task_progress_without_query_trace_pollution(

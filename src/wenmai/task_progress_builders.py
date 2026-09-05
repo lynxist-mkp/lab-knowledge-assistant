@@ -8,8 +8,9 @@ from wenmai.generation import GenerationResult
 from wenmai.models import ScoredChunk
 from wenmai.task_progress import (
     ChildEvidence,
+    FailureKind,
     StageEvent,
-    TaskCounters,
+    TaskProgressOutcome,
     infer_failure_kind,
 )
 from wenmai.tracing.ingestion_views import list_degradations
@@ -19,34 +20,9 @@ if TYPE_CHECKING:
     from wenmai.eval.views import FailedEvalItem
 
 
-def ingestion_config_snapshot(settings: Any, *, pdf_load_mode: str | None) -> dict[str, Any]:
-    return {
-        "pdf_load_mode": pdf_load_mode or settings.pdf_load.mode,
-        "quality_gate": {
-            "reject_below": settings.quality_gate.reject_below,
-            "approve_above": settings.quality_gate.approve_above,
-            "gray_review": settings.quality_gate.gray_review,
-        },
-        "transform": {
-            "stages": list(settings.transform.stages),
-            "refiner": settings.transform.refiner,
-            "enricher": settings.transform.enricher,
-            "captioner": settings.transform.captioner,
-        },
-        "providers": {
-            "splitter": settings.providers.splitter,
-            "embedding": settings.providers.embedding,
-            "vector_store": settings.providers.vector_store,
-        },
-    }
-
-
 def build_ingestion_progress(
     record: dict[str, Any],
-    *,
-    settings: Any,
-    pdf_load_mode: str | None,
-) -> dict[str, Any]:
+) -> TaskProgressOutcome:
     metadata = record.get("metadata") or {}
     trace_id = str(record.get("trace_id") or "")
     degradations = list_degradations(record)
@@ -70,19 +46,15 @@ def build_ingestion_progress(
         if isinstance(stage, dict)
     ]
     ingest_status = str(metadata.get("status") or "")
+    task_failure_kind: FailureKind | None = None
+    child_failure_kind = infer_failure_kind(record.get("error"))
     if record.get("error"):
-        status = "failed"
-    elif ingest_status == "rejected":
-        status = "blocked"
-    else:
-        status = "succeeded"
-    if status == "succeeded" and any(stage.degraded for stage in stages):
-        status = "partial_success"
-    if status == "failed":
         child_status = "failed"
-    elif status == "blocked":
+    elif ingest_status == "rejected":
         child_status = "blocked"
-    elif status == "partial_success":
+        task_failure_kind = "input"
+        child_failure_kind = "input"
+    elif any(stage.degraded for stage in stages):
         child_status = "partial_success"
     else:
         child_status = "succeeded"
@@ -91,10 +63,10 @@ def build_ingestion_progress(
         child_type="document",
         label=str(metadata.get("title") or metadata.get("source_path") or "document"),
         status=child_status,
-        failure_kind=infer_failure_kind(record.get("error")),
+        failure_kind=child_failure_kind,
         summary=str(metadata.get("status") or ""),
         trace_id=trace_id or None,
-        degraded=status == "partial_success",
+        degraded=child_status == "partial_success",
         links={
             "trace_id": trace_id,
             "document_id": str(metadata.get("document_id") or ""),
@@ -106,66 +78,27 @@ def build_ingestion_progress(
             "gray_review": _gray_review_seen(record),
         },
     )
-    return {
-        "task_id": f"ingestion:{trace_id}",
-        "task_type": "ingestion",
-        "status": status,
-        "started_at": str(record.get("started_at") or ""),
-        "finished_at": _maybe_str(record.get("finished_at")),
-        "last_progress_at": _maybe_str(record.get("finished_at")) or str(record.get("started_at") or ""),
-        "trigger_source": "ingest_api",
-        "owner_surface": "ops",
-        "config_snapshot": ingestion_config_snapshot(settings, pdf_load_mode=pdf_load_mode),
-        "links": {"trace_id": trace_id, "document_id": str(metadata.get("document_id") or "")},
-        "stages": stages,
-        "children": [child],
-        "counters": TaskCounters(
-            total=1,
-            completed=1 if status in {"succeeded", "partial_success"} else 0,
-            failed=1 if status == "failed" else 0,
-            partial=1 if status == "partial_success" else 0,
-            blocked=1 if status == "blocked" else 0,
+    return TaskProgressOutcome(
+        finished_at=_maybe_str(record.get("finished_at")),
+        last_progress_at=(
+            _maybe_str(record.get("finished_at")) or str(record.get("started_at") or "")
         ),
-        "error": _maybe_str(record.get("error")),
-        "failure_kind": "input" if ingest_status == "rejected" else infer_failure_kind(record.get("error")),
-    }
-
-
-def evaluation_config_snapshot(
-    settings: Any,
-    *,
-    groups: list[str],
-    query_rewrite_by_group: dict[str, bool],
-) -> dict[str, Any]:
-    return {
-        "golden_set": settings.evaluation.golden_set,
-        "groups": list(groups),
-        "query_rewrite_by_group": dict(query_rewrite_by_group),
-        "providers": {
-            "embedding": settings.providers.embedding,
-            "reranker": settings.providers.reranker,
-            "multimodal": settings.providers.multimodal,
-        },
-        "retrieval": {
-            "dense_k": settings.retrieval.dense_k,
-            "sparse_k": settings.retrieval.sparse_k,
-            "fused_k": settings.retrieval.fused_k,
-            "rerank_top": settings.retrieval.rerank_top,
-        },
-    }
+        stages=stages,
+        children=[child],
+        error=_maybe_str(record.get("error")),
+        failure_kind_hint=task_failure_kind,
+    )
 
 
 def build_evaluation_progress(
     *,
     timestamp: str,
-    settings: Any,
     items: list[GoldItem],
     groups: list[str],
-    query_rewrite_by_group: dict[str, bool],
     ranked_chunks: dict[str, dict[str, list[ScoredChunk]]],
     generation_results: dict[str, dict[str, GenerationResult]],
     failures: list[FailedEvalItem],
-) -> dict[str, Any]:
+) -> TaskProgressOutcome:
     failure_pairs = {(item.group, item.item_id) for item in failures}
     stages: list[StageEvent] = []
     children: list[ChildEvidence] = []
@@ -182,7 +115,9 @@ def build_evaluation_progress(
                 failure_kind="unknown" if degraded else "none",
                 error=f"{len(failed_in_group)} failed items" if degraded else None,
                 upstream_summary="evaluation group",
-                output_summary=f"{len(generation_results.get(group, {}))}/{len(items)} items generated",
+                output_summary=(
+                    f"{len(generation_results.get(group, {}))}/{len(items)} items generated"
+                ),
                 degraded=degraded,
                 links={"eval_run": timestamp, "group": group},
             )
@@ -215,38 +150,19 @@ def build_evaluation_progress(
                         "retrieval_chunk_count": len(chunks),
                         "generated": generation is not None,
                         "refused": generation.refused if generation is not None else None,
-                        "citation_count": len(generation.citations) if generation is not None else None,
+                        "citation_count": (
+                            len(generation.citations) if generation is not None else None
+                        ),
                     },
                 )
             )
-    status = "partial_success" if failures else "succeeded"
-    total = len(items) * len(groups)
-    return {
-        "task_id": f"evaluation:{timestamp}",
-        "task_type": "evaluation",
-        "status": status,
-        "started_at": timestamp,
-        "finished_at": timestamp,
-        "last_progress_at": timestamp,
-        "trigger_source": "eval_runner",
-        "owner_surface": "ops",
-        "config_snapshot": evaluation_config_snapshot(
-            settings,
-            groups=groups,
-            query_rewrite_by_group=query_rewrite_by_group,
-        ),
-        "links": {"eval_run": timestamp},
-        "stages": stages,
-        "children": children,
-        "counters": TaskCounters(
-            total=total,
-            completed=total - len(failures),
-            failed=len(failures),
-            partial=1 if failures else 0,
-        ),
-        "error": None,
-        "failure_kind": "unknown" if failures else "none",
-    }
+    return TaskProgressOutcome(
+        finished_at=timestamp,
+        last_progress_at=timestamp,
+        stages=stages,
+        children=children,
+        error=None,
+    )
 
 
 def _ingestion_stage_status(stage: dict[str, Any], degraded_names: set[str]) -> str:
