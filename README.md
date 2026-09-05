@@ -36,7 +36,7 @@ GitHub Actions 会在对 `main` 的 push 和所有 PR 上执行基础 CI。
 本地复现同一套检查：
 
 ```bash
-uv sync --dev --frozen
+uv sync --extra dev --frozen
 uv run ruff check .
 uv run pytest
 ```
