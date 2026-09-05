@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from wenmai.config import Settings
 from wenmai.knowledge.browse import OverviewStats
+from wenmai.task_progress import (
+    TaskProgressDetail,
+    TaskProgressSummary,
+    get_task_progress,
+    list_task_progress,
+)
 from wenmai.storage.catalog import DocumentCatalog
 from wenmai.tracing.ingestion_views import (
     IngestionTraceDetail,
@@ -48,6 +54,25 @@ def list_query_summaries(settings: Settings) -> list[QueryTraceSummary]:
         record for record in read_trace_records(settings) if record.get("trace_type") == "query"
     ]
     return [QueryTrace.summarize(record) for record in reversed(records)]
+
+
+def list_task_progress_summaries(
+    settings: Settings,
+    *,
+    task_type: str | None = None,
+    status: str | None = None,
+    failure_kind: str | None = None,
+) -> list[TaskProgressSummary]:
+    return list_task_progress(
+        settings,
+        task_type=task_type,
+        status=status,
+        failure_kind=failure_kind,
+    )
+
+
+def get_task_progress_detail(settings: Settings, task_id: str) -> TaskProgressDetail | None:
+    return get_task_progress(settings, task_id)
 
 
 def list_ingestion_summaries(settings: Settings) -> list[IngestionTraceSummary]:
@@ -105,6 +130,9 @@ def list_trace_degradations(
 
 
 __all__ = [
+    "TaskProgressDetail",
+    "TaskProgressSummary",
+    "get_task_progress_detail",
     "TraceDetail",
     "TraceSummary",
     "get_ingestion_detail",
@@ -113,6 +141,7 @@ __all__ = [
     "get_trace_summary",
     "list_ingestion_summaries",
     "list_query_summaries",
+    "list_task_progress_summaries",
     "list_trace_degradations",
     "load_overview_stats",
 ]

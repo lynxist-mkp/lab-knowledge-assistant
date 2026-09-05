@@ -23,6 +23,8 @@ from wenmai.eval.views import EvalRunView, FailedEvalItem
 from wenmai.generation import GenerationResult
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import ScoredChunk
+from wenmai.task_progress import TaskCounters, safe_persist_task_progress
+from wenmai.task_progress_builders import build_evaluation_progress
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +182,24 @@ def run_eval(
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     resolved_groups = list(groups or settings.evaluation.ablations)
     resolved_knowledge = knowledge or create_knowledge(settings)
+    safe_persist_task_progress(
+        settings,
+        task_id=f"evaluation:{timestamp}",
+        task_type="evaluation",
+        status="running",
+        started_at=timestamp,
+        finished_at=None,
+        last_progress_at=timestamp,
+        trigger_source="eval_runner",
+        owner_surface="ops",
+        config_snapshot={
+            "golden_set": settings.evaluation.golden_set,
+            "groups": list(resolved_groups),
+            "query_rewrite": query_rewrite,
+        },
+        counters=TaskCounters(total=len(items) * len(resolved_groups)),
+        links={"eval_run": timestamp},
+    )
 
     ranked_chunks, generation_results, failures = _run_grouped_eval(
         items,
@@ -212,8 +232,21 @@ def run_eval(
             ranked_chunks["rrf_rerank"],
             settings,
         )
-
-    return persist_eval_artifact(settings, artifact)
+    run = persist_eval_artifact(settings, artifact)
+    safe_persist_task_progress(
+        settings,
+        **build_evaluation_progress(
+            timestamp=timestamp,
+            settings=settings,
+            items=items,
+            groups=resolved_groups,
+            query_rewrite_by_group={name: query_rewrite for name in resolved_groups},
+            ranked_chunks=ranked_chunks,
+            generation_results=generation_results,
+            failures=failures,
+        ),
+    )
+    return run
 
 
 def run_rewrite_compare(
@@ -225,6 +258,24 @@ def run_rewrite_compare(
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     groups = list(REWRITE_COMPARE_GROUPS)
     resolved_knowledge = knowledge or create_knowledge(settings)
+    safe_persist_task_progress(
+        settings,
+        task_id=f"evaluation:{timestamp}",
+        task_type="evaluation",
+        status="running",
+        started_at=timestamp,
+        finished_at=None,
+        last_progress_at=timestamp,
+        trigger_source="eval_runner",
+        owner_surface="ops",
+        config_snapshot={
+            "golden_set": settings.evaluation.golden_set,
+            "groups": list(groups),
+            "query_rewrite_by_group": REWRITE_COMPARE_FLAGS,
+        },
+        counters=TaskCounters(total=len(items) * len(groups)),
+        links={"eval_run": timestamp},
+    )
 
     ranked_chunks, generation_results, failures = _run_grouped_eval(
         items,
@@ -254,4 +305,18 @@ def run_rewrite_compare(
         },
     )
 
-    return persist_eval_artifact(settings, artifact)
+    run = persist_eval_artifact(settings, artifact)
+    safe_persist_task_progress(
+        settings,
+        **build_evaluation_progress(
+            timestamp=timestamp,
+            settings=settings,
+            items=items,
+            groups=groups,
+            query_rewrite_by_group=REWRITE_COMPARE_FLAGS,
+            ranked_chunks=ranked_chunks,
+            generation_results=generation_results,
+            failures=failures,
+        ),
+    )
+    return run

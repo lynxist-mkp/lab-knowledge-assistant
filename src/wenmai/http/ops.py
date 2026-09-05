@@ -5,10 +5,12 @@ from fastapi.responses import HTMLResponse
 
 from wenmai.knowledge.document_card import DocumentNotFoundError
 from wenmai.ops.observation import (
+    get_task_progress_detail,
     get_trace_detail,
     get_trace_summary,
     list_ingestion_summaries,
     list_query_summaries,
+    list_task_progress_summaries,
     list_trace_degradations,
     load_overview_stats,
 )
@@ -68,6 +70,30 @@ def create_ops_router() -> APIRouter:
         return [
             item.as_dict() for item in list_query_summaries(request.app.state.settings)
         ]
+
+    @router.get("/api/tasks/progress")
+    def api_task_progress(
+        request: Request,
+        task_type: str | None = None,
+        status: str | None = None,
+        failure_kind: str | None = None,
+    ) -> list[dict[str, object]]:
+        return [
+            item.as_dict()
+            for item in list_task_progress_summaries(
+                request.app.state.settings,
+                task_type=task_type,
+                status=status,
+                failure_kind=failure_kind,
+            )
+        ]
+
+    @router.get("/api/tasks/progress/{task_id}")
+    def api_task_progress_detail(request: Request, task_id: str) -> dict[str, object]:
+        detail = get_task_progress_detail(request.app.state.settings, task_id)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="task progress not found")
+        return detail.as_dict()
 
     @router.get("/api/traces/{trace_id}")
     def api_trace_detail(request: Request, trace_id: str) -> dict[str, object]:

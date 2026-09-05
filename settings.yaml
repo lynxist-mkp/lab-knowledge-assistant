@@ -78,6 +78,7 @@ server:
 
 observability:
   trace_file: "logs/traces.jsonl"
+  task_progress_file: "logs/task_progress.jsonl"
   query_latency_recent_n: 50
 
 evaluation:

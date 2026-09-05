@@ -122,6 +122,7 @@ class Server:
 @dataclass
 class Observability:
     trace_file: str
+    task_progress_file: str = "logs/task_progress.jsonl"
     query_latency_recent_n: int = 50
 
 

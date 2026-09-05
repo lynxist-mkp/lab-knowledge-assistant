@@ -9,6 +9,8 @@ from wenmai.config import Settings
 from wenmai.ingestion.orchestrator import PreparedIngest, count_chunks_with_images, prepare_ingest
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import IngestResult
+from wenmai.task_progress import safe_persist_task_progress
+from wenmai.task_progress_builders import build_ingestion_progress
 from wenmai.tracing import StageRecord
 
 
@@ -71,8 +73,24 @@ def commit_prepared_ingest(
             chunk_count=upserted.chunk_count,
         )
         recorder.close_and_save(settings)
+        safe_persist_task_progress(
+            settings,
+            **build_ingestion_progress(
+                recorder.trace_context.to_dict(),
+                settings=settings,
+                pdf_load_mode=body.pdf_load_mode,
+            ),
+        )
     except Exception:
         recorder.save_on_error(settings)
+        safe_persist_task_progress(
+            settings,
+            **build_ingestion_progress(
+                recorder.trace_context.to_dict(),
+                settings=settings,
+                pdf_load_mode=body.pdf_load_mode,
+            ),
+        )
         raise
 
     return IngestResult(

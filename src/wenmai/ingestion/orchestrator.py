@@ -17,6 +17,8 @@ from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.knowledge.domain import REVIEW_PENDING, REVIEW_STATUS_FIELD, stamp_review_status
 from wenmai.models import Chunk, IngestResult
 from wenmai.storage.document_images import IMAGE_PLACEHOLDER_RE
+from wenmai.task_progress import TaskCounters, safe_persist_task_progress
+from wenmai.task_progress_builders import build_ingestion_progress, ingestion_config_snapshot
 from wenmai.tracing import StageRecord
 from wenmai.tracing.prepare_recorder import PrepareTraceRecorder
 from wenmai.tracing.stages.ingestion import IngestionStage
@@ -32,6 +34,7 @@ class PrepareBody:
     document_source_path: str
     status: str
     gray_review: bool
+    pdf_load_mode: str | None
     chunks: list[Chunk]
     previous_document_id: str | None
 
@@ -65,6 +68,14 @@ def _finish_rejected_ingest(
         chunks_with_images=0,
     )
     recorder.close_and_save(settings)
+    safe_persist_task_progress(
+        settings,
+        **build_ingestion_progress(
+            recorder.trace_context.to_dict(),
+            settings=settings,
+            pdf_load_mode=None,
+        ),
+    )
     return IngestResult(
         document_id=document_id,
         chunk_count=0,
@@ -111,6 +122,20 @@ def prepare_ingest(
 ) -> PreparedIngest | IngestResult:
     """Phase-1 ingest: 入库准入 through transform; no embed/upsert."""
     trace_recorder = recorder or PrepareTraceRecorder(on_stage=on_stage)
+    safe_persist_task_progress(
+        settings,
+        task_id=f"ingestion:{trace_recorder.trace_id}",
+        task_type="ingestion",
+        status="running",
+        started_at=trace_recorder.trace_context.started_at,
+        finished_at=None,
+        last_progress_at=trace_recorder.trace_context.started_at,
+        trigger_source="ingest_api",
+        owner_surface="ops",
+        config_snapshot=ingestion_config_snapshot(settings, pdf_load_mode=pdf_load_mode),
+        counters=TaskCounters(total=1),
+        links={"trace_id": trace_recorder.trace_id},
+    )
     knowledge = knowledge or create_knowledge(settings)
     document_source_path = str(source_path)
 
@@ -235,6 +260,14 @@ def prepare_ingest(
                 chunks_with_images=0,
             )
             trace_recorder.close_and_save(settings)
+            safe_persist_task_progress(
+                settings,
+                **build_ingestion_progress(
+                    trace_recorder.trace_context.to_dict(),
+                    settings=settings,
+                    pdf_load_mode=pdf_load_mode,
+                ),
+            )
             return IngestResult(
                 document_id=document_id,
                 chunk_count=0,
@@ -277,12 +310,21 @@ def prepare_ingest(
             document_source_path=document_source_path,
             status=status,
             gray_review=stamp_pending_chunks,
+            pdf_load_mode=pdf_load_mode,
             chunks=chunks,
             previous_document_id=previous_document_id,
         )
         return PreparedIngest(body=body, recorder=trace_recorder)
     except Exception:
         trace_recorder.save_on_error(settings)
+        safe_persist_task_progress(
+            settings,
+            **build_ingestion_progress(
+                trace_recorder.trace_context.to_dict(),
+                settings=settings,
+                pdf_load_mode=pdf_load_mode,
+            ),
+        )
         raise
 
 

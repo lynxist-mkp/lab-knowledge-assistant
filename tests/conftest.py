@@ -24,7 +24,10 @@ def test_settings(tmp_path: Path) -> Settings:
         "corpus": str(tmp_path / "corpus"),
         "prompts": raw["paths"]["prompts"],
     }
-    raw["observability"] = {"trace_file": str(tmp_path / "traces.jsonl")}
+    raw["observability"] = {
+        "trace_file": str(tmp_path / "traces.jsonl"),
+        "task_progress_file": str(tmp_path / "task_progress.jsonl"),
+    }
     raw["providers"]["multimodal"] = "fake"
     raw["providers"]["embedding"] = "fake"
     raw["providers"]["reranker"] = "fake"
