@@ -3,21 +3,86 @@ from __future__ import annotations
 from mcp.server.mcpserver import MCPServer
 
 from wenmai.config import Settings
-from wenmai.mcp.summary import GetDocumentSummaryError, get_document_summary
-from wenmai.pipelines.query import QueryGenerationError, ask_question
+from wenmai.knowledge.document_management import create_document_management
+from wenmai.mcp.tools.ask import AskAnswerError, ask_answer
+from wenmai.mcp.tools.collections import collections_get_stats, collections_list
+from wenmai.mcp.tools.documents import documents_delete, documents_get, documents_list
+from wenmai.mcp.tools.images import images_get_content, images_get_ref
+from wenmai.mcp.tools.reviews import reviews_approve, reviews_list_pending, reviews_reject
 from wenmai.runtime import create_runtime
 
 
 def create_mcp_server(settings: Settings | None = None) -> MCPServer:
     runtime = create_runtime(settings)
+    document_management = create_document_management(
+        runtime.settings,
+        knowledge=runtime.knowledge,
+    )
     server = MCPServer(
         "wenmai",
-        instructions="Query the 福云·文脉助手 knowledge base with natural-language questions.",
+        instructions=(
+            "Query and manage the 福云·文脉助手 knowledge base. "
+            "Use ask.answer or ask_wenmai for questions; documents.* and reviews.* for admin."
+        ),
     )
+
+    def _ask_tool(
+        question: str,
+        collection_id: str | None = None,
+        culture_domain: str | None = None,
+        retrieval_mode: str | None = None,
+        rerank_enabled: bool | None = None,
+    ) -> dict[str, object]:
+        return ask_answer(
+            question,
+            runtime.settings,
+            collection_id=collection_id,
+            culture_domain=culture_domain,
+            retrieval_mode=retrieval_mode,
+            rerank_enabled=rerank_enabled,
+            knowledge=runtime.knowledge,
+        )
+
+    def _legacy_ask_tool(
+        question: str,
+        culture_domain: str | None = None,
+        retrieval_mode: str | None = None,
+        rerank_enabled: bool | None = None,
+    ) -> dict[str, object]:
+        return _ask_tool(
+            question,
+            culture_domain=culture_domain,
+            retrieval_mode=retrieval_mode,
+            rerank_enabled=rerank_enabled,
+        )["data"]
+
+    @server.tool(
+        name="ask.answer",
+        description="Ask the knowledge base and get an answer with citations.",
+    )
+    def ask_answer_tool(
+        question: str,
+        collection_id: str | None = None,
+        culture_domain: str | None = None,
+        retrieval_mode: str | None = None,
+        rerank_enabled: bool | None = None,
+    ) -> dict[str, object]:
+        try:
+            return _ask_tool(
+                question,
+                collection_id=collection_id,
+                culture_domain=culture_domain,
+                retrieval_mode=retrieval_mode,
+                rerank_enabled=rerank_enabled,
+            )
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+        except AskAnswerError as exc:
+            raise RuntimeError(f"{exc} (trace_id={exc.trace_id})") from exc
 
     @server.tool(
         name="ask_wenmai",
-        description="Ask the Minpai culture knowledge base and get an answer with citations.",
+        description="Legacy ask alias: ask the knowledge base and get an answer with citations.",
     )
     def ask_wenmai_tool(
         question: str,
@@ -26,33 +91,155 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
         rerank_enabled: bool | None = None,
     ) -> dict[str, object]:
         try:
-            result = ask_question(
+            return _legacy_ask_tool(
                 question,
-                runtime.settings,
                 culture_domain=culture_domain,
                 retrieval_mode=retrieval_mode,
                 rerank_enabled=rerank_enabled,
-                knowledge=runtime.knowledge,
             )
-            return result.as_dict()
-        except QueryGenerationError as exc:
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+        except AskAnswerError as exc:
             raise RuntimeError(f"{exc} (trace_id={exc.trace_id})") from exc
 
     @server.tool(
-        name="get_document_summary",
-        description=(
-            "Fetch a document card by document_id: title, culture domain, "
-            "enricher summary, and chunk count."
-        ),
+        name="collections.list",
+        description="List configured knowledge collections with status-layered stats.",
     )
-    def get_document_summary_tool(document_id: str) -> dict[str, object]:
+    def collections_list_tool() -> dict[str, object]:
+        return collections_list(document_management)
+
+    @server.tool(
+        name="collections.get_stats",
+        description="Get collection-level document and review-status statistics.",
+    )
+    def collections_get_stats_tool(collection_id: str | None = None) -> dict[str, object]:
         try:
-            return get_document_summary(
+            return collections_get_stats(document_management, collection_id=collection_id)
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+
+    @server.tool(
+        name="documents.list",
+        description="List documents in a collection, optionally filtered by culture domain.",
+    )
+    def documents_list_tool(
+        collection_id: str | None = None,
+        culture_domain: str | None = None,
+    ) -> dict[str, object]:
+        return documents_list(
+            document_management,
+            collection_id=collection_id,
+            culture_domain=culture_domain,
+        )
+
+    @server.tool(
+        name="documents.get",
+        description="Get document detail card and image references by document_id.",
+    )
+    def documents_get_tool(
+        document_id: str,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
+        try:
+            return documents_get(
+                document_management,
                 document_id,
-                runtime.settings,
-                knowledge=runtime.knowledge,
+                collection_id=collection_id,
             )
-        except GetDocumentSummaryError as exc:
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+
+    @server.tool(
+        name="documents.delete",
+        description="Delete a document and its chunks, indexes, and images.",
+    )
+    def documents_delete_tool(
+        document_id: str,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
+        try:
+            return documents_delete(
+                document_management,
+                document_id,
+                collection_id=collection_id,
+            )
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+
+    @server.tool(
+        name="reviews.list_pending",
+        description="List documents with pending-review chunks in a collection.",
+    )
+    def reviews_list_pending_tool(collection_id: str | None = None) -> dict[str, object]:
+        return reviews_list_pending(document_management, collection_id=collection_id)
+
+    @server.tool(
+        name="reviews.approve",
+        description="Approve a pending-review document for retrieval.",
+    )
+    def reviews_approve_tool(
+        document_id: str,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
+        try:
+            return reviews_approve(
+                document_management,
+                document_id,
+                collection_id=collection_id,
+            )
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+
+    @server.tool(
+        name="reviews.reject",
+        description="Reject a pending-review document and remove it from the knowledge base.",
+    )
+    def reviews_reject_tool(
+        document_id: str,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
+        try:
+            return reviews_reject(
+                document_management,
+                document_id,
+                collection_id=collection_id,
+            )
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+
+    @server.tool(
+        name="images.get_ref",
+        description="Get image reference metadata without inline bytes.",
+    )
+    def images_get_ref_tool(
+        image_id: str,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
+        try:
+            return images_get_ref(
+                document_management,
+                image_id,
+                collection_id=collection_id,
+            )
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+
+    @server.tool(
+        name="images.get_content",
+        description="Opt-in: fetch image bytes as base64 with MIME type; storage paths are hidden.",
+    )
+    def images_get_content_tool(
+        image_id: str,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
+        try:
+            return images_get_content(
+                document_management,
+                image_id,
+                collection_id=collection_id,
+            )
+        except ValueError as exc:
             raise RuntimeError(str(exc)) from exc
 
     return server

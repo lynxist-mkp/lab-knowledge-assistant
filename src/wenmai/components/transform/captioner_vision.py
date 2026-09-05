@@ -45,6 +45,12 @@ class VisionCaptioner(BaseTransform):
                 placeholders = IMAGE_PLACEHOLDER_RE.findall(chunk.text)
                 if not placeholders:
                     continue
+                existing_ids = chunk.metadata.get("image_ids")
+                image_ids = list(existing_ids) if isinstance(existing_ids, list) else []
+                for image_id in placeholders:
+                    if image_id not in image_ids:
+                        image_ids.append(image_id)
+                chunk.metadata["image_ids"] = image_ids
                 updated_text = chunk.text
                 for image_id in placeholders:
                     image_path = self._images.get(image_id)

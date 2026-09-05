@@ -44,6 +44,8 @@ Call through the seam's public interface. Do not reach into adapters unless the 
 
 | Term (`CONTEXT.md`) | Seam | Entry |
 | --- | --- | --- |
+| **提问服务** | HTTP + MCP 共用的服务层提问入口 | `http/ask_service.py` — `run_ask()`；内部再委托 **提问编排** |
+| **运维看板服务** | 运维看板 HTTP 共用的服务层入口 | `http/ops_service.py` — `OpsService`；内部再委托 **文档管理** / **运维观测** |
 | **提问编排** | ask + eval 共用四阶段编排 | `pipelines/query_orchestration.py` — `run_ask_works` / `run_eval_works`；builders: `ask_work_from_job` / `eval_work_from_item` / `gen_retry_work` |
 | **提问预处理** | 术语归一 + Multi-Query | `query_processing/extras.py` — `prepare_query_extras` |
 | **入库编排** | prepare → commit 两阶段入库 | `ingestion/orchestrator.py` + `pipelines/ingestion.py` |
@@ -60,7 +62,8 @@ Notes:
 
 - `retrieve()` only returns fused chunks.
 - `rerank_chunks` is only called in 提问编排 Phase 3.
-- Eval and `/ask` share the same orchestration, but eval does not write Trace.
+- HTTP 与 MCP 共享 `run_ask()` 这条**提问服务**入口；eval 直接走**提问编排**，但不写 Trace。
+- `ops.py` 路由统一经 **运维看板服务** 入口，再下探到 **文档管理** 或 **运维观测**。
 
 ## ADR conflicts
 

@@ -3,9 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
+from wenmai.http.ask_service import run_ask
 from wenmai.http.schemas import AskRequest
 from wenmai.knowledge.document_card import DocumentNotFoundError
-from wenmai.pipelines.query import QueryGenerationError, ask_question
+from wenmai.pipelines.query import QueryGenerationError
 
 
 def create_workbench_router() -> APIRouter:
@@ -20,7 +21,7 @@ def create_workbench_router() -> APIRouter:
     def ask(request: Request, body: AskRequest) -> dict[str, object]:
         settings = request.app.state.settings
         try:
-            result = ask_question(
+            result = run_ask(
                 body.question,
                 settings,
                 culture_domain=body.culture_domain,
@@ -47,7 +48,7 @@ def create_workbench_router() -> APIRouter:
     @router.get("/api/documents/{document_id}")
     def api_document_card(request: Request, document_id: str) -> dict[str, object]:
         try:
-            return request.app.state.knowledge.document_card(document_id).as_dict()
+            return request.app.state.document_management.get_document(document_id).as_dict()
         except DocumentNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 

@@ -4,18 +4,6 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from wenmai.knowledge.document_card import DocumentNotFoundError
-from wenmai.ops.observation import (
-    get_task_investigation,
-    get_task_progress_detail,
-    get_trace_detail,
-    get_trace_summary,
-    list_ingestion_summaries,
-    list_query_summaries,
-    list_task_progress_summaries,
-    list_trace_degradations,
-    load_health_snapshot,
-    load_overview_stats,
-)
 
 
 def create_ops_router() -> APIRouter:
@@ -28,7 +16,7 @@ def create_ops_router() -> APIRouter:
 
     @router.get("/api/stats/overview")
     def api_overview_stats(request: Request) -> dict[str, object]:
-        return load_overview_stats(request.app.state.settings).as_dict()
+        return request.app.state.ops_service.overview_stats().as_dict()
 
     @router.get("/api/stats/health")
     def api_health_snapshot(
@@ -36,8 +24,7 @@ def create_ops_router() -> APIRouter:
         task_type: str | None = None,
         failure_kind: str | None = None,
     ) -> dict[str, object]:
-        return load_health_snapshot(
-            request.app.state.settings,
+        return request.app.state.ops_service.health_snapshot(
             task_type=task_type,
             failure_kind=failure_kind,
         ).as_dict()
@@ -46,20 +33,20 @@ def create_ops_router() -> APIRouter:
     def api_browse(request: Request) -> list[dict[str, object]]:
         return [
             group.as_dict()
-            for group in request.app.state.knowledge.browse_by_culture_domain()
+            for group in request.app.state.ops_service.browse_groups()
         ]
 
     @router.get("/api/review/pending")
     def api_review_pending(request: Request) -> list[dict[str, object]]:
         return [
             item.as_dict()
-            for item in request.app.state.knowledge.list_pending_review_documents()
+            for item in request.app.state.ops_service.list_pending_reviews()
         ]
 
     @router.post("/api/review/{document_id}/approve")
     def api_review_approve(request: Request, document_id: str) -> dict[str, str]:
         try:
-            request.app.state.knowledge.approve_review(document_id)
+            request.app.state.ops_service.approve_review(document_id)
         except DocumentNotFoundError as exc:
             raise HTTPException(status_code=404, detail="document not found") from exc
         return {"document_id": document_id, "审阅状态": "已通过"}
@@ -67,23 +54,18 @@ def create_ops_router() -> APIRouter:
     @router.post("/api/review/{document_id}/reject")
     def api_review_reject(request: Request, document_id: str) -> dict[str, str]:
         try:
-            request.app.state.knowledge.reject_review(document_id)
+            request.app.state.ops_service.reject_review(document_id)
         except DocumentNotFoundError as exc:
             raise HTTPException(status_code=404, detail="document not found") from exc
         return {"document_id": document_id, "审阅状态": "已驳回"}
 
     @router.get("/api/traces/ingestion")
     def api_ingestion_traces(request: Request) -> list[dict[str, object]]:
-        return [
-            item.as_dict()
-            for item in list_ingestion_summaries(request.app.state.settings)
-        ]
+        return [item.as_dict() for item in request.app.state.ops_service.ingestion_traces()]
 
     @router.get("/api/traces/query")
     def api_query_traces(request: Request) -> list[dict[str, object]]:
-        return [
-            item.as_dict() for item in list_query_summaries(request.app.state.settings)
-        ]
+        return [item.as_dict() for item in request.app.state.ops_service.query_traces()]
 
     @router.get("/api/tasks/progress")
     def api_task_progress(
@@ -98,8 +80,7 @@ def create_ops_router() -> APIRouter:
     ) -> list[dict[str, object]]:
         return [
             item.as_dict()
-            for item in list_task_progress_summaries(
-                request.app.state.settings,
+            for item in request.app.state.ops_service.task_progress(
                 task_type=task_type,
                 status=status,
                 failure_kind=failure_kind,
@@ -112,28 +93,28 @@ def create_ops_router() -> APIRouter:
 
     @router.get("/api/tasks/progress/{task_id}")
     def api_task_progress_detail(request: Request, task_id: str) -> dict[str, object]:
-        detail = get_task_progress_detail(request.app.state.settings, task_id)
+        detail = request.app.state.ops_service.task_progress_detail(task_id)
         if detail is None:
             raise HTTPException(status_code=404, detail="task progress not found")
         return detail.as_dict()
 
     @router.get("/api/tasks/progress/{task_id}/investigation")
     def api_task_progress_investigation(request: Request, task_id: str) -> dict[str, object]:
-        detail = get_task_investigation(request.app.state.settings, task_id)
+        detail = request.app.state.ops_service.task_progress_investigation(task_id)
         if detail is None:
             raise HTTPException(status_code=404, detail="task progress not found")
         return detail.as_dict()
 
     @router.get("/api/traces/{trace_id}")
     def api_trace_detail(request: Request, trace_id: str) -> dict[str, object]:
-        detail = get_trace_detail(request.app.state.settings, trace_id)
+        detail = request.app.state.ops_service.trace_detail(trace_id)
         if detail is None:
             raise HTTPException(status_code=404, detail="trace not found")
         return detail.as_dict()
 
     @router.get("/api/traces/{trace_id}/summary")
     def api_trace_summary(request: Request, trace_id: str) -> dict[str, object]:
-        summary = get_trace_summary(request.app.state.settings, trace_id)
+        summary = request.app.state.ops_service.trace_summary(trace_id)
         if summary is None:
             raise HTTPException(status_code=404, detail="trace not found")
         return summary.as_dict()
@@ -142,7 +123,7 @@ def create_ops_router() -> APIRouter:
     def api_trace_degradations(
         request: Request, trace_id: str
     ) -> list[dict[str, str]]:
-        degradations = list_trace_degradations(request.app.state.settings, trace_id)
+        degradations = request.app.state.ops_service.trace_degradations(trace_id)
         if degradations is None:
             raise HTTPException(status_code=404, detail="trace not found")
         return [item.as_dict() for item in degradations]

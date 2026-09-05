@@ -13,6 +13,7 @@
 
 ## Decision
 
+1. **提问服务与提问编排分层**：HTTP 与 MCP 的对外提问入口统一经 `http/ask_service.py::run_ask()` 收口参数与返回契约，再委托更深一层的**提问编排**执行。
 1. **统一提问编排**：`pipelines/query_orchestration.py` 提供 `run_ask_works` / `run_eval_works` 双入口（别名 `run_ask` / `run_eval`），共享四阶段批处理（多查询扩展 → 检索 → 精排 → `prepare_generation_context` + 生成）。
 2. **生成前扩展统一**：评测与 `/ask` 均经 `prepare_generation_context`（封装 `expand_for_generation`）后再调用 `generate()`。
 3. **检索不再内联精排**：`retrieve()` 只返回融合后的 chunks；精排仅在编排 Phase 3 通过 `rerank_chunks` 执行。
@@ -22,6 +23,7 @@
 ## Consequences
 
 - 评测生成指标（拒答准确率、出处覆盖率）与生产行为对齐，更有参考价值。
+- HTTP 与 MCP 共享同一条**提问服务**入口；服务层契约调整时只改一处，不影响更深的**提问编排**。
 - **历史评测 run 与本次变更后的 run 不可直接对比**：扩展后的 prompt 更宽，指标可能偏移；对比时需重跑基线或标注变更版本。
 - Hit@5 / MRR 等检索指标不受扩展影响（仍基于精排后的 ranked chunks 计算）。
 - 运维 trace 仍只反映真实编辑提问，评测 artifact 是评测侧调试权威来源。

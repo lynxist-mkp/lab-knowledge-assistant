@@ -9,12 +9,14 @@ from fastapi.templating import Jinja2Templates
 
 from wenmai.components.model_guard import in_batch, release_all_resources
 from wenmai.config import Settings
+from wenmai.knowledge.document_management import create_document_management
 from wenmai.http import (
     create_eval_router,
     create_ingest_router,
     create_ops_router,
     create_workbench_router,
 )
+from wenmai.http.ops_service import create_ops_service
 from wenmai.runtime import create_runtime
 
 
@@ -71,6 +73,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title=resolved.product.name, lifespan=_lifespan)
     app.state.settings = resolved
     app.state.knowledge = runtime.knowledge
+    app.state.document_management = create_document_management(
+        resolved,
+        knowledge=runtime.knowledge,
+    )
+    app.state.ops_service = create_ops_service(
+        resolved,
+        document_management=app.state.document_management,
+    )
     app.state.templates = Jinja2Templates(directory=str(_templates_dir(resolved)))
 
     if resolved.resources.process_idle_unload:

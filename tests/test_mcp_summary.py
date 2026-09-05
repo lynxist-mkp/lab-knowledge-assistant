@@ -1,4 +1,4 @@
-"""MCP get_document_summary: document card without MCP wire protocol."""
+"""MCP documents.get: document card via document-management facade."""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
-from wenmai.mcp.summary import GetDocumentSummaryError, get_document_summary
+from wenmai.knowledge import create_document_management
+from wenmai.mcp.tools.documents import documents_get
 
 
 def _write_minpai_markdown(path: Path) -> Path:
@@ -31,7 +32,7 @@ title: 湄洲妈祖祖庙简介
     return path
 
 
-def test_get_document_summary_returns_card(
+def test_documents_get_returns_enveloped_card(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     app = create_app(test_settings)
@@ -41,30 +42,33 @@ def test_get_document_summary_returns_card(
     assert ingest.status_code == 200
     document_id = ingest.json()["document_id"]
 
-    result = get_document_summary(
+    mgmt = create_document_management(test_settings, knowledge=app.state.knowledge)
+    result = documents_get(
+        mgmt,
         document_id,
-        test_settings,
-        knowledge=app.state.knowledge,
+        collection_id=test_settings.product.collection,
     )
 
-    assert result["document_id"] == document_id
-    assert result["title"] == "湄洲妈祖祖庙简介"
-    assert result["culture_domain"] == "妈祖"
-    assert result["chunk_count"] >= 1
-    assert result["summary"] == "湄洲岛妈祖信仰中心"
+    assert result["data"]["document_id"] == document_id
+    assert result["data"]["title"] == "湄洲妈祖祖庙简介"
+    assert result["data"]["culture_domain"] == "妈祖"
+    assert result["data"]["chunk_count"] >= 1
+    assert result["scope"]["collection_id"] == test_settings.product.collection
+    assert "data" in result and "refs" in result
 
 
-def test_get_document_summary_unknown_id_raises(test_settings: Settings) -> None:
+def test_documents_get_unknown_id_raises(test_settings: Settings) -> None:
     app = create_app(test_settings)
-    with pytest.raises(GetDocumentSummaryError, match="document not found"):
-        get_document_summary(
+    mgmt = create_document_management(test_settings, knowledge=app.state.knowledge)
+    with pytest.raises(ValueError, match="document not found"):
+        documents_get(
+            mgmt,
             "no-such-document",
-            test_settings,
-            knowledge=app.state.knowledge,
+            collection_id=test_settings.product.collection,
         )
 
 
-def test_api_document_card_matches_mcp_handler(
+def test_api_document_card_matches_facade_detail(
     test_settings: Settings, tmp_path: Path
 ) -> None:
     app = create_app(test_settings)
@@ -76,11 +80,15 @@ def test_api_document_card_matches_mcp_handler(
 
     response = client.get(f"/api/documents/{document_id}")
     assert response.status_code == 200
-    assert response.json() == get_document_summary(
+
+    mgmt = create_document_management(test_settings, knowledge=app.state.knowledge)
+    facade = documents_get(
+        mgmt,
         document_id,
-        test_settings,
-        knowledge=app.state.knowledge,
-    )
+        collection_id=test_settings.product.collection,
+    )["data"]
+    for key in ("document_id", "title", "culture_domain", "summary", "chunk_count"):
+        assert response.json()[key] == facade[key]
 
 
 def test_api_document_card_returns_404_for_unknown(test_settings: Settings) -> None:

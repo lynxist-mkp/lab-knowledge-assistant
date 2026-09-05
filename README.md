@@ -10,7 +10,7 @@
 - 入库质量门（60/80 三档）+ 灰区复判 + 审阅状态 / 待审（#34–37 ✅）；生成前相邻块扩展（#38 ✅）
 - 生成：本地 Gemma MLX（`mlx_vlm.server` :8120），回答带引用，无依据则拒答
 - 提问处理：术语归一 + Multi-Query（#42、#43 ✅；失败回退原问）
-- 服务与监测：FastAPI + Jinja2；**编辑工作台**（`/`）与**运维看板**（`/ops`，含待审与 P50/P95）；MCP `ask_wenmai` + `get_document_summary`
+- 服务与监测：FastAPI + Jinja2；**编辑工作台**（`/`）与**运维看板**（`/ops`，含待审与 P50/P95）；MCP `ask.answer`、`collections.*`、`documents.*`、`reviews.*`、`images.*`（统一 envelope）
 - 评测：黄金集 100 条（#41 ✅）；Hit@5/MRR + 四组消融 + 改写对照（`scripts/run_eval_ablation.py` / `scripts/run_phase_b_batch.py`）；Ragas collections（缺钥降级）
 - 演示音频端到端（#31）无限期搁置；Dolphin 适配器（#30）保留
 
