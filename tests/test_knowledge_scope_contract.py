@@ -432,26 +432,21 @@ def test_ops_service_uses_collection_bound_document_management(test_settings: Se
     assert captured["collection_id"] == test_settings.product.collection
 
 
-def test_document_management_get_document_summary(test_settings: Settings) -> None:
+def test_document_management_get_document_returns_domain_card(test_settings: Settings) -> None:
     knowledge = create_knowledge(test_settings)
     _commit(knowledge, "doc-summary", "摘要正文")
     mgmt = create_document_management(test_settings, knowledge=knowledge)
 
-    summary = mgmt.get_document_summary(
-        "doc-summary",
-        collection_id=test_settings.product.collection,
-    )
     card = mgmt.get_document(
         "doc-summary",
         collection_id=test_settings.product.collection,
     )
 
-    assert summary == card.as_dict()
-    assert summary["document_id"] == "doc-summary"
-    assert summary["chunk_count"] == 1
+    assert card.document_id == "doc-summary"
+    assert card.chunk_count == 1
 
 
-def test_document_management_get_document_summary_unknown_collection_raises(
+def test_document_management_get_document_unknown_collection_raises(
     test_settings: Settings,
 ) -> None:
     knowledge = create_knowledge(test_settings)
@@ -459,7 +454,7 @@ def test_document_management_get_document_summary_unknown_collection_raises(
     mgmt = create_document_management(test_settings, knowledge=knowledge)
 
     with pytest.raises(UnknownCollectionError, match="unknown collection: missing"):
-        mgmt.get_document_summary("doc-summary", collection_id="missing")
+        mgmt.get_document("doc-summary", collection_id="missing")
 
 
 def test_mcp_get_document_summary_uses_document_management(
@@ -475,10 +470,10 @@ def test_mcp_get_document_summary_uses_document_management(
         document_management=mgmt,
     )
 
-    assert summary == mgmt.get_document_summary(
+    assert summary == mgmt.get_document(
         "doc-mcp-summary",
         collection_id=test_settings.product.collection,
-    )
+    ).as_dict()
 
 
 def test_mcp_get_document_summary_unknown_id_raises(test_settings: Settings) -> None:
@@ -951,10 +946,10 @@ def test_document_management_images_route_to_alternate_collection(
         mgmt.get_image_ref(
             default_image_id,
             collection_id=test_settings.product.collection,
-        )["image_id"]
+        ).image_id
         == default_image_id
     )
-    assert mgmt.get_image_ref(other_image_id, collection_id=other_id)["image_id"] == other_image_id
+    assert mgmt.get_image_ref(other_image_id, collection_id=other_id).image_id == other_image_id
 
     with pytest.raises(ImageNotFoundError):
         mgmt.get_image_ref(other_image_id, collection_id=test_settings.product.collection)
@@ -964,8 +959,8 @@ def test_document_management_images_route_to_alternate_collection(
         collection_id=test_settings.product.collection,
     )
     other_refs = mgmt.image_refs_for_document("img-doc", collection_id=other_id)
-    assert [ref["image_id"] for ref in default_refs] == [default_image_id]
-    assert [ref["image_id"] for ref in other_refs] == [other_image_id]
+    assert [ref.image_id for ref in default_refs] == [default_image_id]
+    assert [ref.image_id for ref in other_refs] == [other_image_id]
 
     default_content = mgmt.get_image_content(
         default_image_id,

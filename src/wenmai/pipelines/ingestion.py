@@ -7,12 +7,7 @@ from typing import Protocol
 from wenmai.components.model_guard import ModelResource
 from wenmai.components.model_guard import phase_batch as model_phase_batch
 from wenmai.config import Settings
-from wenmai.ingestion.orchestrator import (
-    PreparedIngest,
-    count_chunks_with_images,
-    persist_ingestion_outcome,
-    prepare_ingest,
-)
+from wenmai.ingestion.orchestrator import PreparedIngest, prepare_ingest
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import IngestResult
 from wenmai.tracing import StageRecord
@@ -45,17 +40,9 @@ def commit_prepared_ingest(
     """Phase-2 入库: embed + upsert for a prepared document."""
     knowledge = knowledge or create_knowledge(settings)
     body = prepared.body
-    recorder = prepared.recorder
 
     try:
-        recorder.set_summary(
-            source_path=body.document_source_path,
-            document_id=body.document_id,
-            title=body.document_title,
-            status=body.status,
-            chunk_count=len(body.chunks),
-            chunks_with_images=count_chunks_with_images(body.chunks),
-        )
+        prepared.set_summary()
 
         upserted = knowledge.commit_document(
             source_path=body.document_source_path,
@@ -65,41 +52,29 @@ def commit_prepared_ingest(
             chunks=body.chunks,
             previous_document_id=body.previous_document_id,
         )
-        recorder.record_embed(
+        prepared.record_embed(
             provider=upserted.embed_provider,
             elapsed_ms=upserted.embed_elapsed_ms,
             chunk_count=upserted.chunk_count,
             embed_dimension=upserted.embed_dimension,
         )
-        recorder.record_upsert(
+        prepared.record_upsert(
             provider=upserted.upsert_provider,
             elapsed_ms=upserted.upsert_elapsed_ms,
             chunk_count=upserted.chunk_count,
         )
-        recorder.close_and_save(settings)
-        persist_ingestion_outcome(
-            settings,
-            prepared.lifecycle,
-            recorder,
-            document_id=body.document_id,
-        )
+        prepared.close_and_save(settings)
+        prepared.persist_outcome(settings, document_id=body.document_id)
     except Exception as exc:
-        recorder.trace_context.error = f"{type(exc).__name__}: {exc}"
-        recorder.trace_context.close()
-        recorder.save_on_error(settings)
-        persist_ingestion_outcome(
-            settings,
-            prepared.lifecycle,
-            recorder,
-            document_id=body.document_id,
-        )
+        prepared.save_on_error(settings, exc)
+        prepared.persist_outcome(settings, document_id=body.document_id)
         raise
 
     return IngestResult(
         document_id=body.document_id,
         chunk_count=len(body.chunks),
-        elapsed_ms=recorder.trace_context.total_elapsed_ms,
-        trace_id=recorder.trace_id,
+        elapsed_ms=prepared.elapsed_ms,
+        trace_id=prepared.trace_id,
         status=body.status,
     )
 

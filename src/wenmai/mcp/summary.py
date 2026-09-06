@@ -27,7 +27,7 @@ def get_document_summary(
     resolved = settings or Settings.load()
     mgmt = document_management or create_document_management(resolved)
     try:
-        return mgmt.get_document_summary(document_id, collection_id=collection_id)
+        return mgmt.get_document(document_id, collection_id=collection_id).as_dict()
     except UnknownCollectionError as exc:
         raise ValueError(str(exc)) from exc
     except DocumentNotFoundError as exc:

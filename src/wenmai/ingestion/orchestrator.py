@@ -49,8 +49,76 @@ class PreparedIngest:
     """Prepared document plus trace recorder owned by pipeline."""
 
     body: PrepareBody
-    recorder: PrepareTraceRecorder
     lifecycle: IngestionLifecycle
+    _recorder: PrepareTraceRecorder
+
+    @property
+    def trace_id(self) -> str:
+        return self._recorder.trace_id
+
+    @property
+    def elapsed_ms(self) -> float:
+        return self._recorder.trace_context.total_elapsed_ms
+
+    def set_summary(self) -> None:
+        body = self.body
+        self._recorder.set_summary(
+            source_path=body.document_source_path,
+            document_id=body.document_id,
+            title=body.document_title,
+            status=body.status,
+            chunk_count=len(body.chunks),
+            chunks_with_images=count_chunks_with_images(body.chunks),
+        )
+
+    def record_embed(
+        self,
+        *,
+        provider: str,
+        elapsed_ms: float,
+        chunk_count: int,
+        embed_dimension: int | None,
+    ) -> None:
+        self._recorder.record_embed(
+            provider=provider,
+            elapsed_ms=elapsed_ms,
+            chunk_count=chunk_count,
+            embed_dimension=embed_dimension,
+        )
+
+    def record_upsert(
+        self,
+        *,
+        provider: str,
+        elapsed_ms: float,
+        chunk_count: int,
+    ) -> None:
+        self._recorder.record_upsert(
+            provider=provider,
+            elapsed_ms=elapsed_ms,
+            chunk_count=chunk_count,
+        )
+
+    def close_and_save(self, settings: Settings) -> None:
+        self._recorder.close_and_save(settings)
+
+    def save_on_error(self, settings: Settings, exc: Exception) -> None:
+        self._recorder.trace_context.error = f"{type(exc).__name__}: {exc}"
+        self._recorder.trace_context.close()
+        self._recorder.save_on_error(settings)
+
+    def persist_outcome(
+        self,
+        settings: Settings,
+        *,
+        document_id: str | None = None,
+    ) -> None:
+        persist_ingestion_outcome(
+            settings,
+            self.lifecycle,
+            self._recorder,
+            document_id=document_id,
+        )
 
 
 @dataclass(frozen=True)
@@ -368,7 +436,7 @@ def prepare_ingest(
             chunks=chunks,
             previous_document_id=previous_document_id,
         )
-        return PreparedIngest(body=body, recorder=trace_recorder, lifecycle=lifecycle)
+        return PreparedIngest(body=body, lifecycle=lifecycle, _recorder=trace_recorder)
     except Exception as exc:
         trace_recorder.trace_context.error = f"{type(exc).__name__}: {exc}"
         trace_recorder.trace_context.close()

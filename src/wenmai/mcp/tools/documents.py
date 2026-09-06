@@ -52,7 +52,7 @@ def documents_get(
     except DocumentNotFoundError as exc:
         raise ValueError(str(exc)) from exc
     return envelope(
-        data={**card.as_dict(), "image_refs": image_refs},
+        data={**card.as_dict(), "image_refs": [ref.as_dict() for ref in image_refs]},
         scope=scope_for(
             document_management.settings,
             collection_id=collection_id,

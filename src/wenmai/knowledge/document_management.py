@@ -12,7 +12,12 @@ from wenmai.knowledge.collections import (
     resolve_routable_collection_scope,
 )
 from wenmai.knowledge.document_card import DocumentCard, DocumentNotFoundError
-from wenmai.knowledge.image_refs import ImageContent, ImageNotFoundError, ImageReferenceService
+from wenmai.knowledge.image_refs import (
+    ImageContent,
+    ImageNotFoundError,
+    ImageRef,
+    ImageReferenceService,
+)
 from wenmai.knowledge.review import PendingReviewDocument
 from wenmai.knowledge.store import create_knowledge
 
@@ -85,12 +90,6 @@ class DocumentManagement:
     def get_document(self, document_id: str, *, collection_id: str | None = None) -> DocumentCard:
         return self.for_collection(collection_id)._knowledge.document_card(document_id)
 
-    def get_document_summary(
-        self, document_id: str, *, collection_id: str | None = None
-    ) -> dict[str, Any]:
-        """Return document card fields as a plain dict for adapter layers."""
-        return self.get_document(document_id, collection_id=collection_id).as_dict()
-
     def get_chunk_detail(
         self,
         chunk_id: str,
@@ -118,15 +117,15 @@ class DocumentManagement:
 
     def image_refs_for_document(
         self, document_id: str, *, collection_id: str | None = None
-    ) -> list[dict[str, Any]]:
+    ) -> list[ImageRef]:
         scoped = self.for_collection(collection_id)
-        return [ref.as_dict() for ref in scoped._images.list_refs_for_document(document_id)]
+        return scoped._images.list_refs_for_document(document_id)
 
-    def get_image_ref(self, image_id: str, *, collection_id: str | None = None) -> dict[str, Any]:
+    def get_image_ref(self, image_id: str, *, collection_id: str | None = None) -> ImageRef:
         ref = self.for_collection(collection_id)._images.get_ref(image_id)
         if ref is None:
             raise ImageNotFoundError(image_id)
-        return ref.as_dict()
+        return ref
 
     def get_image_content(
         self, image_id: str, *, collection_id: str | None = None

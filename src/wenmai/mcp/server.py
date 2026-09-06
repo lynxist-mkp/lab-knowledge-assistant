@@ -148,11 +148,14 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
         collection_id: str | None = None,
         culture_domain: str | None = None,
     ) -> dict[str, object]:
-        return documents_list(
-            document_management,
-            collection_id=collection_id,
-            culture_domain=culture_domain,
-        )
+        try:
+            return documents_list(
+                document_management,
+                collection_id=collection_id,
+                culture_domain=culture_domain,
+            )
+        except ValueError as exc:
+            raise _mcp_error(exc) from exc
 
     @server.tool(
         name="documents.get",
@@ -193,7 +196,10 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
         description="List documents with pending-review chunks in a collection.",
     )
     def reviews_list_pending_tool(collection_id: str | None = None) -> dict[str, object]:
-        return reviews_list_pending(document_management, collection_id=collection_id)
+        try:
+            return reviews_list_pending(document_management, collection_id=collection_id)
+        except ValueError as exc:
+            raise _mcp_error(exc) from exc
 
     @server.tool(
         name="reviews.approve",

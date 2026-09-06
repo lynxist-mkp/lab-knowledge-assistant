@@ -21,7 +21,7 @@ def images_get_ref(
     except ImageNotFoundError as exc:
         raise ValueError(str(exc)) from exc
     return envelope(
-        data=ref,
+        data=ref.as_dict(),
         scope=scope_for(document_management.settings, collection_id=collection_id),
         refs=McpRefs(image_ids=[image_id]),
         meta=McpMeta(count=1),

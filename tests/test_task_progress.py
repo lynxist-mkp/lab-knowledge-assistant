@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from tests.conftest import register_collection
 
+from tests.conftest import register_collection
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.eval import run_eval
@@ -393,7 +393,7 @@ def test_failed_commit_keeps_document_link_in_task_progress(
 
     detail = get_task_progress_detail(
         test_settings,
-        f"ingestion:{prepared.recorder.trace_id}",
+        f"ingestion:{prepared.trace_id}",
     )
     assert detail is not None
     assert detail.summary.status == "failed"
