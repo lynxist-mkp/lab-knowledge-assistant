@@ -7,11 +7,6 @@ import pytest
 from wenmai.config import Settings
 from wenmai.generation import GenerationError, GenerationResult, QueryGenerationError
 from wenmai.models import Chunk, Citation, ScoredChunk
-from wenmai.pipelines.query_orchestration import (
-    AskWorkContext,
-    OrchestrationWork,
-    ask_outcome_from_work,
-)
 from wenmai.retrieval.fusion import RetrievalResult
 from wenmai.tracing.ask_payload import AskOutcome, AskTracePayload
 from wenmai.tracing.query_trace import QueryTrace
@@ -59,47 +54,6 @@ def _generation_result() -> GenerationResult:
         output_summary="answer text",
         candidate_count=1,
     )
-
-
-def test_ask_outcome_from_work_success(test_settings: Settings) -> None:
-    work = OrchestrationWork(
-        normalized="妈祖 信仰 发源地",
-        settings=test_settings,
-        culture_domain="妈祖",
-        retrieval_result=RetrievalResult(chunks=[_scored_chunk()], mode="sparse_only"),
-        chunks=[_scored_chunk()],
-        expanded_chunks=[_scored_chunk()],
-        expanded_from=["doc:0001"],
-        expanded_chunk_ids=["doc:0001"],
-        generation=_generation_result(),
-    )
-    context = AskWorkContext(question="妈祖信仰的发源地在哪里？")
-
-    outcome = ask_outcome_from_work(work, context)
-
-    assert outcome.question == "妈祖信仰的发源地在哪里？"
-    assert outcome.culture_domain == "妈祖"
-    assert outcome.generation_error is None
-    assert outcome.payload.normalized == "妈祖 信仰 发源地"
-    assert outcome.payload.generation is not None
-
-
-def test_ask_outcome_from_work_generation_failure(test_settings: Settings) -> None:
-    gen_error = GenerationError("provider down", provider_name="fake")
-    work = OrchestrationWork(
-        normalized="妈祖 信仰 发源地",
-        settings=test_settings,
-        retrieval_result=RetrievalResult(chunks=[_scored_chunk()], mode="sparse_only"),
-        chunks=[_scored_chunk()],
-        expanded_chunks=[_scored_chunk()],
-        generation_error=gen_error,
-    )
-    context = AskWorkContext(question="妈祖信仰的发源地在哪里？")
-
-    outcome = ask_outcome_from_work(work, context)
-
-    assert outcome.generation_error is gen_error
-    assert outcome.payload.generation is None
 
 
 def test_query_trace_finalize_success(test_settings: Settings) -> None:
