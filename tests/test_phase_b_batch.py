@@ -215,6 +215,10 @@ def test_run_eval_attaches_ragas_with_fake_evaluator(
         "wenmai.eval.runner.should_run_ragas",
         lambda _settings, _ragas: True,
     )
+    monkeypatch.setattr(
+        "wenmai.eval.ragas_metrics.probe_ragas_judge",
+        lambda _settings: (True, None),
+    )
 
     from fastapi.testclient import TestClient
 
