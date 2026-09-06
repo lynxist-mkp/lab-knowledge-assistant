@@ -2,8 +2,8 @@
 
 **Status:** accepted  
 **Date:** 2026-09-05  
-**Parent:** [Spec: task progress and troubleshooting evidence for ops observation #59](https://github.com/lynxist-mkp/lab-knowledge-assistant/issues/59)  
-**Issue:** [#60 ADR: 任务进展与快速溯源证据模型](https://github.com/lynxist-mkp/lab-knowledge-assistant/issues/60)
+**Parent:** [Spec: task progress and troubleshooting evidence for ops observation #59](https://github.com/lynxist-mkp/wenmai-assistant/issues/59)  
+**Issue:** [#60 ADR: 任务进展与快速溯源证据模型](https://github.com/lynxist-mkp/wenmai-assistant/issues/60)
 
 ## Context
 

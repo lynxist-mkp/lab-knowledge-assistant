@@ -2,9 +2,9 @@
 
 **Status:** accepted  
 **Date:** 2026-08-28  
-**Parent:** [黄金集评测 #18](https://github.com/lynxist-mkp/lab-knowledge-assistant/issues/18)  
-**Issue:** [#24 评测分路径且不写 Trace](https://github.com/lynxist-mkp/lab-knowledge-assistant/issues/24)  
-**Updated:** [#29 评测单次检索](https://github.com/lynxist-mkp/lab-knowledge-assistant/issues/29), [ADR 0005 评测与生产共用生成前扩展](0005-eval-shared-generation-prep.md)
+**Parent:** [黄金集评测 #18](https://github.com/lynxist-mkp/wenmai-assistant/issues/18)  
+**Issue:** [#24 评测分路径且不写 Trace](https://github.com/lynxist-mkp/wenmai-assistant/issues/24)  
+**Updated:** [#29 评测单次检索](https://github.com/lynxist-mkp/wenmai-assistant/issues/29), [ADR 0005 评测与生产共用生成前扩展](0005-eval-shared-generation-prep.md)
 
 ## Context
 

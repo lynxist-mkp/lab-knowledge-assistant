@@ -2,7 +2,7 @@
 
 **Status:** accepted  
 **Date:** 2026-09-01  
-**Parent:** [提问编排 #47](https://github.com/lynxist-mkp/lab-knowledge-assistant/issues/47)  
+**Parent:** [提问编排 #47](https://github.com/lynxist-mkp/wenmai-assistant/issues/47)  
 **Related:** [ADR 0004 评测不写 Query Trace](0004-eval-no-trace.md)
 
 ## Context

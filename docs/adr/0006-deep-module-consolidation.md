@@ -2,7 +2,7 @@
 
 **Status:** accepted  
 **Date:** 2026-09-02  
-**Parent:** [架构加深 #51](https://github.com/lynxist-mkp/lab-knowledge-assistant/pull/51)  
+**Parent:** [架构加深 #51](https://github.com/lynxist-mkp/wenmai-assistant/pull/51)  
 **Related:** [ADR 0005 评测与生产共用生成前扩展](0005-eval-shared-generation-prep.md)
 
 ## Context
