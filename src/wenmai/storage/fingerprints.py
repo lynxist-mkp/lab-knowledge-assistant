@@ -8,6 +8,16 @@ from pathlib import Path
 from wenmai.config import Settings
 from wenmai.storage.paths import collection_storage_bindings
 
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS ingestion_fingerprints (
+    source_path TEXT PRIMARY KEY,
+    sha256 TEXT NOT NULL,
+    document_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+)
+"""
+
 
 @dataclass(frozen=True)
 class FingerprintRecord:
@@ -22,29 +32,35 @@ def _now() -> str:
 
 
 class FingerprintStore:
-    def __init__(self, db_path: Path) -> None:
-        self._db_path = db_path
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        self._conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS ingestion_fingerprints (
-                source_path TEXT PRIMARY KEY,
-                sha256 TEXT NOT NULL,
-                document_id TEXT NOT NULL,
-                status TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-            """
+    def __init__(self, db_path: Path, *, write_path: Path | None = None) -> None:
+        self._read_path = db_path
+        self._write_path = write_path or db_path
+        self._read_conn = self._open(self._read_path)
+        self._write_conn = (
+            self._read_conn
+            if self._write_path == self._read_path
+            else self._open(self._write_path)
         )
-        self._conn.commit()
 
     @classmethod
     def from_settings(cls, settings: Settings) -> FingerprintStore:
-        return cls(collection_storage_bindings(settings).shared_ingestion_history_path)
+        bindings = collection_storage_bindings(settings)
+        return cls(
+            bindings.ingestion_history_read_path(),
+            write_path=bindings.ingestion_history_path,
+        )
+
+    @staticmethod
+    def _open(path: Path) -> sqlite3.Connection:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(path, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute(_SCHEMA)
+        conn.commit()
+        return conn
 
     def get_by_source_path(self, source_path: str) -> FingerprintRecord | None:
-        row = self._conn.execute(
+        row = self._read_conn.execute(
             """
             SELECT source_path, sha256, document_id, status
             FROM ingestion_fingerprints
@@ -68,7 +84,7 @@ class FingerprintStore:
         document_id: str,
         status: str,
     ) -> None:
-        self._conn.execute(
+        self._write_conn.execute(
             """
             INSERT INTO ingestion_fingerprints (
                 source_path, sha256, document_id, status, updated_at
@@ -81,21 +97,23 @@ class FingerprintStore:
             """,
             (source_path, sha256, document_id, status, _now()),
         )
-        self._conn.commit()
+        self._write_conn.commit()
 
     def delete_by_document_id(self, document_id: str) -> None:
-        self._conn.execute(
+        self._write_conn.execute(
             "DELETE FROM ingestion_fingerprints WHERE document_id = ?",
             (document_id,),
         )
-        self._conn.commit()
+        self._write_conn.commit()
 
     def delete_by_source_path(self, source_path: str) -> None:
-        self._conn.execute(
+        self._write_conn.execute(
             "DELETE FROM ingestion_fingerprints WHERE source_path = ?",
             (source_path,),
         )
-        self._conn.commit()
+        self._write_conn.commit()
 
     def close(self) -> None:
-        self._conn.close()
+        self._read_conn.close()
+        if self._write_conn is not self._read_conn:
+            self._write_conn.close()

@@ -40,8 +40,8 @@ class OpsService:
             settings
         )
 
-    def overview_stats(self):
-        return load_overview_stats(self._settings)
+    def overview_stats(self, *, collection_id: str | None = None):
+        return load_overview_stats(self._settings, collection_id=collection_id)
 
     def health_snapshot(
         self,

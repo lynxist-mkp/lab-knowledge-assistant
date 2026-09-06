@@ -24,15 +24,17 @@ class CatalogDocument:
 class DocumentCatalog:
     """文档目录 sidecar: per-culture-domain document and chunk counts for browse/overview."""
 
-    def __init__(self, path: Path) -> None:
+    @classmethod
+    def from_settings(cls, settings: Settings) -> DocumentCatalog:
+        bindings = collection_storage_bindings(settings)
+        return cls(bindings.catalog_read_path(), write_path=bindings.catalog_path)
+
+    def __init__(self, path: Path, *, write_path: Path | None = None) -> None:
         self._path = path
+        self._write_path = write_path or path
         self._documents: dict[str, dict[str, Any]] = {}
         if path.exists():
             self._load()
-
-    @classmethod
-    def from_settings(cls, settings: Settings) -> DocumentCatalog:
-        return cls(collection_storage_bindings(settings).shared_catalog_path)
 
     def _load(self) -> None:
         raw = json.loads(self._path.read_text(encoding="utf-8"))
@@ -41,12 +43,13 @@ class DocumentCatalog:
 
     def _save(self) -> None:
         payload = {"documents": self._documents}
-        temp_path = self._path.with_suffix(".tmp")
+        self._write_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = self._write_path.with_suffix(".tmp")
         temp_path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        temp_path.replace(self._path)
+        temp_path.replace(self._write_path)
 
     def upsert_document(self, chunks: list[Chunk]) -> None:
         if not chunks:

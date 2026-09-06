@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 from wenmai.config import Settings
+from wenmai.knowledge import create_knowledge
 from wenmai.knowledge.read import ReadPath
+from wenmai.models import Chunk
 from wenmai.ops.observation import (
     get_query_detail,
-    has_running_long_tasks,
     get_task_investigation,
+    has_running_long_tasks,
     list_query_summaries,
     list_task_progress_summaries,
     load_health_snapshot,
@@ -25,6 +28,41 @@ def test_load_overview_stats_empty_catalog(test_settings: Settings) -> None:
     stats = load_overview_stats(test_settings)
     assert stats.document_count == 0
     assert stats.chunk_count == 0
+
+
+def test_load_overview_stats_routes_to_alternate_collection(test_settings: Settings) -> None:
+    other_id = "other-collection"
+    other_settings = replace(
+        test_settings,
+        product=replace(test_settings.product, collection=other_id),
+    )
+    other_knowledge = create_knowledge(other_settings)
+    other_knowledge.commit_document(
+        source_path="/tmp/overview-other.md",
+        sha256="overview-other",
+        document_id="overview-other",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="overview-other:0000",
+                document_id="overview-other",
+                text="其他集合概览",
+                metadata={
+                    "document_id": "overview-other",
+                    "title": "overview-other",
+                    "culture_domain": "妈祖",
+                    "审阅状态": "已通过",
+                },
+            )
+        ],
+    )
+
+    default_stats = load_overview_stats(test_settings)
+    other_stats = load_overview_stats(test_settings, collection_id=other_id)
+
+    assert default_stats.document_count == 0
+    assert other_stats.document_count == 1
+    assert other_stats.chunk_count == 1
 
 
 def test_load_overview_stats_counts_via_knowledge_read_seam(

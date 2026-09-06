@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
 from wenmai.config import Settings
+from wenmai.knowledge import create_knowledge
 
 
 def _write_markdown(path: Path, *, culture_domain: str, title: str, body: str) -> Path:
@@ -277,6 +279,56 @@ def test_ops_browse_shows_pending_review_status(test_settings: Settings) -> None
     ship_group = next(g for g in groups if g["culture_domain"] == "船政")
     chunk = ship_group["documents"][0]["chunks"][0]
     assert chunk["审阅状态"] == "待审"
+
+
+def test_ops_collection_query_params_route_overview_and_browse(
+    test_settings: Settings,
+) -> None:
+    from wenmai.models import Chunk
+
+    other_id = "other-collection"
+    other_settings = replace(
+        test_settings,
+        product=replace(test_settings.product, collection=other_id),
+    )
+    other_knowledge = create_knowledge(other_settings)
+    other_knowledge.commit_document(
+        source_path="/tmp/doc-other-ops.md",
+        sha256="doc-other-ops",
+        document_id="doc-other-ops",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="doc-other-ops:0000",
+                document_id="doc-other-ops",
+                text="其他集合运维路由",
+                metadata={
+                    "document_id": "doc-other-ops",
+                    "title": "其他集合运维路由",
+                    "culture_domain": "妈祖",
+                    "审阅状态": "已通过",
+                },
+            ),
+        ],
+    )
+
+    client = TestClient(create_app(test_settings))
+
+    default_overview = client.get("/api/stats/overview")
+    other_overview = client.get("/api/stats/overview", params={"collection_id": other_id})
+    assert default_overview.status_code == 200
+    assert other_overview.status_code == 200
+    assert default_overview.json()["document_count"] == 0
+    assert other_overview.json()["document_count"] == 1
+
+    default_browse = client.get("/api/browse")
+    other_browse = client.get("/api/browse", params={"collection_id": other_id})
+    assert default_browse.status_code == 200
+    assert other_browse.status_code == 200
+    assert default_browse.json() == []
+    other_groups = other_browse.json()
+    assert len(other_groups) == 1
+    assert other_groups[0]["documents"][0]["document_id"] == "doc-other-ops"
 
 
 def test_ops_ingestion_run_sse_stream_contract(
@@ -593,4 +645,54 @@ def test_review_pending_approve_reject_api_contract(
     }
     assert "doc-reject-me" not in all_doc_ids
     assert "doc-approve-me" in all_doc_ids
+
+
+def test_review_api_query_params_route_to_alternate_collection(
+    test_settings: Settings,
+) -> None:
+    from wenmai.models import Chunk
+
+    other_id = "other-collection"
+    other_settings = replace(
+        test_settings,
+        product=replace(test_settings.product, collection=other_id),
+    )
+    other_knowledge = create_knowledge(other_settings)
+    other_knowledge.commit_document(
+        source_path="/tmp/doc-other-review.md",
+        sha256="doc-other-review",
+        document_id="doc-other-review",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="doc-other-review:0000",
+                document_id="doc-other-review",
+                text="其他集合待审材料。",
+                metadata={
+                    "document_id": "doc-other-review",
+                    "title": "其他集合待审材料",
+                    "culture_domain": "船政",
+                },
+            ),
+        ],
+    )
+    other_knowledge.set_review_status("doc-other-review", "待审")
+
+    client = TestClient(create_app(test_settings))
+
+    pending = client.get("/api/review/pending", params={"collection_id": other_id})
+    assert pending.status_code == 200
+    items = pending.json()
+    assert [item["document_id"] for item in items] == ["doc-other-review"]
+
+    approve = client.post(
+        "/api/review/doc-other-review/approve",
+        params={"collection_id": other_id},
+    )
+    assert approve.status_code == 200
+    assert approve.json()["审阅状态"] == "已通过"
+
+    pending_after = client.get("/api/review/pending", params={"collection_id": other_id})
+    assert pending_after.status_code == 200
+    assert pending_after.json() == []
 

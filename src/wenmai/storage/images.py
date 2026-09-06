@@ -55,11 +55,15 @@ class ImageStore:
         self._collection = bindings.collection_id
         self._images_root = bindings.images_root
         self._images_root.mkdir(parents=True, exist_ok=True)
-        self._index_path = bindings.shared_image_index_path
-        self._ensure_schema()
+        self._index_read_path = bindings.image_index_read_path()
+        self._index_write_path = bindings.image_index_path
+        self._ensure_schema(self._index_write_path)
+        if self._index_read_path != self._index_write_path:
+            self._ensure_schema(self._index_read_path)
 
-    def _ensure_schema(self) -> None:
-        with sqlite3.connect(self._index_path) as conn:
+    def _ensure_schema(self, index_path: Path) -> None:
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(index_path) as conn:
             conn.execute(_SCHEMA)
             conn.commit()
 
@@ -78,7 +82,7 @@ class ImageStore:
         if not file_path.exists():
             file_path.write_bytes(image_bytes)
 
-        with sqlite3.connect(self._index_path) as conn:
+        with sqlite3.connect(self._index_write_path) as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO images
@@ -91,7 +95,15 @@ class ImageStore:
         return image_id
 
     def get(self, image_id: str) -> ImageRecord | None:
-        with sqlite3.connect(self._index_path) as conn:
+        record = self._fetch_one(self._index_read_path, image_id)
+        if record is not None:
+            return record
+        if self._index_read_path != self._index_write_path:
+            return self._fetch_one(self._index_write_path, image_id)
+        return None
+
+    def _fetch_one(self, index_path: Path, image_id: str) -> ImageRecord | None:
+        with sqlite3.connect(index_path) as conn:
             row = conn.execute(
                 """
                 SELECT image_id, document_id, source_path, page, file_path, mime_type
@@ -105,7 +117,15 @@ class ImageStore:
         return _row_to_record(row)
 
     def list_by_document_id(self, document_id: str) -> list[ImageRecord]:
-        with sqlite3.connect(self._index_path) as conn:
+        records = self._fetch_by_document(self._index_read_path, document_id)
+        if records:
+            return records
+        if self._index_read_path != self._index_write_path:
+            return self._fetch_by_document(self._index_write_path, document_id)
+        return []
+
+    def _fetch_by_document(self, index_path: Path, document_id: str) -> list[ImageRecord]:
+        with sqlite3.connect(index_path) as conn:
             rows = conn.execute(
                 """
                 SELECT image_id, document_id, source_path, page, file_path, mime_type
@@ -118,14 +138,17 @@ class ImageStore:
         return [_row_to_record(row) for row in rows]
 
     def delete_by_document_id(self, document_id: str) -> None:
-        with sqlite3.connect(self._index_path) as conn:
-            rows = conn.execute(
-                "SELECT file_path FROM images WHERE document_id = ?",
-                (document_id,),
-            ).fetchall()
-            conn.execute("DELETE FROM images WHERE document_id = ?", (document_id,))
-            conn.commit()
-        for (file_path,) in rows:
+        file_paths: list[str] = []
+        for index_path in {self._index_read_path, self._index_write_path}:
+            with sqlite3.connect(index_path) as conn:
+                rows = conn.execute(
+                    "SELECT file_path FROM images WHERE document_id = ?",
+                    (document_id,),
+                ).fetchall()
+                conn.execute("DELETE FROM images WHERE document_id = ?", (document_id,))
+                conn.commit()
+            file_paths.extend(str(row[0]) for row in rows)
+        for file_path in file_paths:
             path = Path(file_path)
             if path.is_file():
                 path.unlink()

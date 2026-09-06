@@ -247,11 +247,13 @@ class Settings:
     resources: Resources = field(default_factory=Resources)
     fakes: dict[str, str] = field(default_factory=dict)
     root: Path = field(default_factory=lambda: Path("."))
+    default_collection_id: str = ""
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any], root: Path | None = None) -> Settings:
+        product = _build(Product, raw["product"])
         return cls(
-            product=_build(Product, raw["product"]),
+            product=product,
             paths=_build(Paths, raw["paths"]),
             chunking=_build(Chunking, raw["chunking"]),
             transform=_build(TransformConfig, _normalize_transform(raw["transform"])),
@@ -273,6 +275,7 @@ class Settings:
             resources=_build_resources(raw.get("resources") or {}),
             fakes=dict(raw.get("fakes") or {}),
             root=Path(root) if root is not None else Path("."),
+            default_collection_id=product.collection,
         )
 
     @classmethod

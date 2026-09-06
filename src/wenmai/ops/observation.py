@@ -9,6 +9,7 @@ from wenmai.config import Settings
 from wenmai.eval.read import get_eval_run_summary
 from wenmai.eval.views import EvalRunSummary
 from wenmai.knowledge.browse import OverviewStats
+from wenmai.knowledge.collections import resolve_routable_collection_scope
 from wenmai.knowledge.read import ReadPath
 from wenmai.ops.ask_evidence import summarize_ask_evidence
 from wenmai.storage.catalog import DocumentCatalog
@@ -98,9 +99,12 @@ class ObservationHealthSnapshot:
         }
 
 
-def load_overview_stats(settings: Settings) -> OverviewStats:
+def load_overview_stats(
+    settings: Settings, *, collection_id: str | None = None
+) -> OverviewStats:
     """Settings → OverviewStats：目录计数 + 查询延迟分位（含 stage_latency）。"""
-    read = ReadPath.catalog_only(DocumentCatalog.from_settings(settings))
+    scoped_settings = resolve_routable_collection_scope(settings, collection_id).settings
+    read = ReadPath.catalog_only(DocumentCatalog.from_settings(scoped_settings))
     latency = query_latency_percentiles(
         settings,
         recent_n=settings.observability.query_latency_recent_n,

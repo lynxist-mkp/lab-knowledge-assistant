@@ -9,7 +9,7 @@ from wenmai.knowledge.collections import (
     CollectionReadModel,
     CollectionScope,
     CollectionStats,
-    resolve_collection_scope,
+    resolve_routable_collection_scope,
 )
 from wenmai.knowledge.document_card import DocumentCard, DocumentNotFoundError
 from wenmai.knowledge.image_refs import ImageContent, ImageNotFoundError, ImageReferenceService
@@ -23,11 +23,18 @@ if TYPE_CHECKING:
 class DocumentManagement:
     """Document lifecycle facade above Knowledge read/write seams."""
 
-    def __init__(self, settings: Settings, knowledge: Knowledge | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        knowledge: Knowledge | None = None,
+        *,
+        scope: CollectionScope | None = None,
+    ) -> None:
         self._settings = settings
         self._knowledge = knowledge or create_knowledge(settings)
         self._collections = CollectionReadModel(settings, self._knowledge)
         self._images = ImageReferenceService(settings)
+        self._scope = scope
 
     @property
     def knowledge(self) -> Knowledge:
@@ -39,6 +46,8 @@ class DocumentManagement:
 
     @property
     def scope(self) -> CollectionScope:
+        if self._scope is not None:
+            return self._scope
         return self._collections.resolve_scope()
 
     def list_collections(self) -> list[Collection]:
@@ -48,10 +57,10 @@ class DocumentManagement:
         return self.for_collection(collection_id)._collections.get_stats()
 
     def for_collection(self, collection_id: str | None = None) -> DocumentManagement:
-        # Today the facade only supports the configured default collection.
-        # Validate the requested scope without rebuilding injected adapters.
-        resolve_collection_scope(self._settings, collection_id)
-        return self
+        resolved = resolve_routable_collection_scope(self._settings, collection_id)
+        if self._scope is not None and self._scope.collection_id == resolved.collection_id:
+            return self
+        return DocumentManagement(resolved.settings, scope=resolved)
 
     def list_documents(
         self,
@@ -120,8 +129,13 @@ class DocumentManagement:
 def create_document_management(
     settings: Settings,
     knowledge: Knowledge | None = None,
+    *,
+    collection_id: str | None = None,
 ) -> DocumentManagement:
-    return DocumentManagement(settings, knowledge=knowledge)
+    if collection_id is None:
+        return DocumentManagement(settings, knowledge=knowledge)
+    scope = resolve_routable_collection_scope(settings, collection_id)
+    return DocumentManagement(scope.settings, scope=scope)
 
 
 __all__ = [

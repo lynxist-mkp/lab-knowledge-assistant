@@ -14,6 +14,7 @@ from reportlab.pdfgen import canvas
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
+from wenmai.storage.paths import collection_storage_bindings
 
 
 def _write_pdf_with_embedded_image(path: Path) -> Path:
@@ -58,7 +59,8 @@ def test_ingesting_pdf_extracts_image_writes_index_and_chunk_placeholder(
     assert len(image_files) == 1
     assert image_files[0].stat().st_size > 0
 
-    conn = sqlite3.connect(test_settings.paths.image_index)
+    bindings = collection_storage_bindings(test_settings)
+    conn = sqlite3.connect(bindings.image_index_path)
     try:
         row = conn.execute(
             """

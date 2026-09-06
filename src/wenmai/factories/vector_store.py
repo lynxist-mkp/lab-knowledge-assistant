@@ -12,7 +12,7 @@ def create(settings: Settings) -> BaseVectorStore:
     bindings = collection_storage_bindings(settings)
     return registry.create(
         settings.providers.vector_store,
-        persist_path=str(bindings.chroma_path),
+        persist_path=str(bindings.chroma_persist_path()),
         collection=bindings.collection_id,
         behavior=settings.fake_behavior("vector_store"),
     )

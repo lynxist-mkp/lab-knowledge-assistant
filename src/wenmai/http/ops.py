@@ -15,8 +15,13 @@ def create_ops_router() -> APIRouter:
         return templates.TemplateResponse(request, "ops.html", {})
 
     @router.get("/api/stats/overview")
-    def api_overview_stats(request: Request) -> dict[str, object]:
-        return request.app.state.ops_service.overview_stats().as_dict()
+    def api_overview_stats(
+        request: Request,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
+        return request.app.state.ops_service.overview_stats(
+            collection_id=collection_id
+        ).as_dict()
 
     @router.get("/api/stats/health")
     def api_health_snapshot(
@@ -30,31 +35,55 @@ def create_ops_router() -> APIRouter:
         ).as_dict()
 
     @router.get("/api/browse")
-    def api_browse(request: Request) -> list[dict[str, object]]:
+    def api_browse(
+        request: Request,
+        collection_id: str | None = None,
+    ) -> list[dict[str, object]]:
         return [
             group.as_dict()
-            for group in request.app.state.ops_service.browse_groups()
+            for group in request.app.state.ops_service.browse_groups(
+                collection_id=collection_id
+            )
         ]
 
     @router.get("/api/review/pending")
-    def api_review_pending(request: Request) -> list[dict[str, object]]:
+    def api_review_pending(
+        request: Request,
+        collection_id: str | None = None,
+    ) -> list[dict[str, object]]:
         return [
             item.as_dict()
-            for item in request.app.state.ops_service.list_pending_reviews()
+            for item in request.app.state.ops_service.list_pending_reviews(
+                collection_id=collection_id
+            )
         ]
 
     @router.post("/api/review/{document_id}/approve")
-    def api_review_approve(request: Request, document_id: str) -> dict[str, str]:
+    def api_review_approve(
+        request: Request,
+        document_id: str,
+        collection_id: str | None = None,
+    ) -> dict[str, str]:
         try:
-            request.app.state.ops_service.approve_review(document_id)
+            request.app.state.ops_service.approve_review(
+                document_id,
+                collection_id=collection_id,
+            )
         except DocumentNotFoundError as exc:
             raise HTTPException(status_code=404, detail="document not found") from exc
         return {"document_id": document_id, "审阅状态": "已通过"}
 
     @router.post("/api/review/{document_id}/reject")
-    def api_review_reject(request: Request, document_id: str) -> dict[str, str]:
+    def api_review_reject(
+        request: Request,
+        document_id: str,
+        collection_id: str | None = None,
+    ) -> dict[str, str]:
         try:
-            request.app.state.ops_service.reject_review(document_id)
+            request.app.state.ops_service.reject_review(
+                document_id,
+                collection_id=collection_id,
+            )
         except DocumentNotFoundError as exc:
             raise HTTPException(status_code=404, detail="document not found") from exc
         return {"document_id": document_id, "审阅状态": "已驳回"}

@@ -39,7 +39,7 @@ class Bm25Index:
         self.k1 = k1
         self.b = b
         self._chunks: dict[str, _ChunkStats] = {}
-        self._index_path = persist_path / collection / "index.json"
+        self._index_path = persist_path / "index.json"
         if self._index_path.exists():
             self._load()
 

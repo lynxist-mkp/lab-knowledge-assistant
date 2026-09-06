@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import base64
+import json
+from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -14,8 +17,9 @@ from wenmai.knowledge.collections import (
     CollectionScope,
     UnknownCollectionError,
 )
+from wenmai.knowledge.document_card import DocumentNotFoundError
 from wenmai.knowledge.domain import REVIEW_PENDING
-from wenmai.knowledge.image_refs import ImageReferenceService
+from wenmai.knowledge.image_refs import ImageNotFoundError, ImageReferenceService
 from wenmai.knowledge.store import Knowledge
 from wenmai.mcp.envelope import refs_from_citations, scope_for
 from wenmai.mcp.summary import GetDocumentSummaryError, get_document_summary
@@ -29,6 +33,7 @@ from wenmai.mcp.tools.reviews import (
     reviews_reject,
 )
 from wenmai.models import Chunk, Citation
+from wenmai.storage.catalog import DocumentCatalog
 from wenmai.storage.images import ImageStore
 from wenmai.storage.paths import collection_storage_bindings
 
@@ -66,6 +71,15 @@ def _commit(
 
 def _envelope_keys() -> set[str]:
     return {"data", "scope", "refs", "meta", "warnings"}
+
+
+def _other_collection_settings(
+    test_settings: Settings, other_id: str = "other-collection"
+) -> Settings:
+    return replace(
+        test_settings,
+        product=replace(test_settings.product, collection=other_id),
+    )
 
 
 def test_collection_stats_status_layering(test_settings: Settings) -> None:
@@ -115,14 +129,143 @@ def test_collection_storage_bindings_follow_scoped_settings(test_settings: Setti
     scope = CollectionReadModel(test_settings, knowledge).resolve_scope()
 
     bindings = collection_storage_bindings(scope.settings)
+    collection_id = test_settings.product.collection
 
-    assert bindings.collection_id == test_settings.product.collection
-    assert bindings.images_root.name == test_settings.product.collection
-    assert bindings.chroma_path.exists()
-    assert bindings.bm25_path.exists()
-    assert bindings.shared_catalog_path.parent.exists()
-    assert bindings.shared_ingestion_history_path.parent.exists()
-    assert bindings.shared_image_index_path.parent.exists()
+    assert bindings.collection_id == collection_id
+    assert bindings.legacy_read_fallback is True
+    assert bindings.images_root.name == collection_id
+    assert bindings.chroma_path == bindings.legacy_chroma_path / collection_id
+    assert bindings.bm25_path.name == collection_id
+    assert bindings.catalog_path.name == "catalog.json"
+    assert bindings.catalog_path.parent.name == collection_id
+    assert bindings.ingestion_history_path.parent.name == collection_id
+    assert bindings.image_index_path.parent.name == collection_id
+    assert bindings.chroma_path.parent.exists()
+    assert bindings.bm25_path.parent.exists()
+    assert bindings.catalog_path.parent.exists()
+    assert bindings.ingestion_history_path.parent.exists()
+    assert bindings.image_index_path.parent.exists()
+
+
+def test_collection_storage_bindings_isolate_physical_paths(test_settings: Settings) -> None:
+    default_bindings = collection_storage_bindings(test_settings)
+    other_settings = replace(
+        test_settings,
+        product=replace(test_settings.product, collection="other-collection"),
+    )
+    other_bindings = collection_storage_bindings(other_settings)
+
+    assert other_bindings.legacy_read_fallback is False
+    assert default_bindings.catalog_path != other_bindings.catalog_path
+    assert default_bindings.chroma_path != other_bindings.chroma_path
+    assert default_bindings.bm25_path != other_bindings.bm25_path
+    assert default_bindings.image_index_path != other_bindings.image_index_path
+    assert default_bindings.images_root != other_bindings.images_root
+    assert default_bindings.ingestion_history_path != other_bindings.ingestion_history_path
+
+
+def test_legacy_catalog_read_fallback_for_default_collection(test_settings: Settings) -> None:
+    legacy_catalog = Path(test_settings.paths.catalog)
+    if not legacy_catalog.is_absolute():
+        legacy_catalog = test_settings.root / legacy_catalog
+    legacy_catalog.parent.mkdir(parents=True, exist_ok=True)
+    legacy_catalog.write_text(
+        json.dumps(
+            {
+                "documents": {
+                    "legacy-doc": {
+                        "culture_domain": "妈祖",
+                        "title": "legacy-doc",
+                        "chunks": [
+                            {
+                                "chunk_id": "legacy-doc:0000",
+                                "document_id": "legacy-doc",
+                                "preview": "legacy preview",
+                                "审阅状态": "已通过",
+                            }
+                        ],
+                    }
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    catalog = DocumentCatalog.from_settings(test_settings)
+
+    entry = catalog.get_document("legacy-doc")
+    assert entry is not None
+    assert entry.title == "legacy-doc"
+
+
+def test_non_default_collection_does_not_fallback_to_legacy_catalog(
+    test_settings: Settings,
+) -> None:
+    legacy_catalog = Path(test_settings.paths.catalog)
+    if not legacy_catalog.is_absolute():
+        legacy_catalog = test_settings.root / legacy_catalog
+    legacy_catalog.parent.mkdir(parents=True, exist_ok=True)
+    legacy_catalog.write_text(
+        json.dumps(
+            {
+                "documents": {
+                    "legacy-doc": {
+                        "culture_domain": "妈祖",
+                        "title": "legacy-doc",
+                        "chunks": [],
+                    }
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    other_settings = replace(
+        test_settings,
+        product=replace(test_settings.product, collection="other-collection"),
+    )
+
+    catalog = DocumentCatalog.from_settings(other_settings)
+
+    assert catalog.get_document("legacy-doc") is None
+
+
+def test_commit_writes_to_per_collection_storage_layout(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "new-layout-doc", "新布局内容")
+
+    bindings = collection_storage_bindings(test_settings)
+
+    assert bindings.catalog_path.exists()
+    assert bindings.ingestion_history_path.exists()
+    catalog = DocumentCatalog(bindings.catalog_path)
+    assert catalog.get_document("new-layout-doc") is not None
+
+
+def test_create_knowledge_scoped_collections_do_not_share_catalog(
+    test_settings: Settings,
+) -> None:
+    default_knowledge = create_knowledge(test_settings)
+    _commit(default_knowledge, "default-only-doc", "默认集合文档")
+
+    other_settings = replace(
+        test_settings,
+        product=replace(test_settings.product, collection="other-collection"),
+    )
+    other_knowledge = create_knowledge(other_settings)
+    _commit(other_knowledge, "other-only-doc", "其他集合文档")
+
+    default_bindings = collection_storage_bindings(test_settings)
+    other_bindings = collection_storage_bindings(other_settings)
+
+    default_catalog = DocumentCatalog(default_bindings.catalog_path)
+    other_catalog = DocumentCatalog(other_bindings.catalog_path)
+
+    assert default_catalog.get_document("default-only-doc") is not None
+    assert default_catalog.get_document("other-only-doc") is None
+    assert other_catalog.get_document("other-only-doc") is not None
+    assert other_catalog.get_document("default-only-doc") is None
 
 
 def test_unknown_collection_id_raises(test_settings: Settings) -> None:
@@ -157,13 +300,57 @@ def test_document_management_list_and_delete(test_settings: Settings) -> None:
     assert remaining[0].document_id == "doc-b"
 
 
-def test_document_management_for_collection_binds_scope_once(test_settings: Settings) -> None:
+def test_document_management_for_collection_returns_scoped_view(test_settings: Settings) -> None:
     knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-scoped", "作用域文档")
     mgmt = create_document_management(test_settings, knowledge=knowledge)
 
     scoped = mgmt.for_collection(test_settings.product.collection)
 
-    assert scoped is mgmt
+    assert scoped is not mgmt
+    assert scoped.settings is not mgmt.settings
+    assert scoped.settings.product.collection == test_settings.product.collection
+    assert scoped.knowledge is not mgmt.knowledge
+    assert scoped.scope.collection_id == test_settings.product.collection
+    docs = scoped.list_documents()
+    assert {doc.document_id for doc in docs} == {"doc-scoped"}
+
+
+def test_document_management_for_collection_is_idempotent(test_settings: Settings) -> None:
+    mgmt = create_document_management(test_settings, knowledge=create_knowledge(test_settings))
+    scoped = mgmt.for_collection(test_settings.product.collection)
+
+    assert scoped.for_collection(test_settings.product.collection) is scoped
+    assert scoped.for_collection(None) is scoped
+
+
+def test_create_knowledge_with_collection_id_uses_collection_storage(
+    test_settings: Settings,
+) -> None:
+    knowledge = create_knowledge(test_settings, collection_id=test_settings.product.collection)
+    _commit(knowledge, "doc-knowledge", "知识库作用域")
+    scoped_mgmt = create_document_management(
+        test_settings,
+        collection_id=test_settings.product.collection,
+    )
+    assert scoped_mgmt.get_document("doc-knowledge").document_id == "doc-knowledge"
+
+
+def test_create_document_management_with_collection_id_binds_scoped_view(
+    test_settings: Settings,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-factory", "工厂作用域文档")
+
+    mgmt = create_document_management(
+        test_settings,
+        collection_id=test_settings.product.collection,
+    )
+
+    assert mgmt.settings is not test_settings
+    assert mgmt.settings.product.collection == test_settings.product.collection
+    assert mgmt.scope.collection_id == test_settings.product.collection
+    assert {doc.document_id for doc in mgmt.list_documents()} == {"doc-factory"}
 
 
 def test_document_management_for_collection_unknown_collection_raises(
@@ -558,3 +745,320 @@ def test_ask_answer_keeps_image_refs_after_caption_replacement(test_settings: Se
 def test_scope_for_defaults_to_configured_collection(test_settings: Settings) -> None:
     scope = scope_for(test_settings)
     assert scope.collection_id == test_settings.product.collection
+
+
+def test_document_management_routes_to_storage_backed_alternate_collection(
+    test_settings: Settings,
+) -> None:
+    default_id = test_settings.product.collection
+    other_id = "other-collection"
+
+    default_knowledge = create_knowledge(test_settings)
+    _commit(default_knowledge, "default-only", "默认集合文档")
+
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
+    _commit(other_knowledge, "other-only", "其他集合文档")
+
+    mgmt = create_document_management(test_settings)
+
+    assert {doc.document_id for doc in mgmt.list_documents(collection_id=default_id)} == {
+        "default-only"
+    }
+    assert {doc.document_id for doc in mgmt.list_documents(collection_id=other_id)} == {
+        "other-only"
+    }
+    assert mgmt.get_document("other-only", collection_id=other_id).document_id == "other-only"
+
+    with pytest.raises(DocumentNotFoundError):
+        mgmt.get_document("other-only", collection_id=default_id)
+
+    mgmt.delete_document("other-only", collection_id=other_id)
+    assert {doc.document_id for doc in mgmt.list_documents(collection_id=default_id)} == {
+        "default-only"
+    }
+    assert mgmt.list_documents(collection_id=other_id) == []
+
+
+def test_document_management_for_collection_accepts_storage_backed_alternate(
+    test_settings: Settings,
+) -> None:
+    other_id = "other-collection"
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
+    _commit(other_knowledge, "scoped-other", "作用域其他集合")
+
+    mgmt = create_document_management(test_settings)
+    scoped = mgmt.for_collection(other_id)
+
+    assert scoped.scope.collection_id == other_id
+    assert scoped.settings.product.collection == other_id
+    assert scoped.knowledge is not mgmt.knowledge
+    assert {doc.document_id for doc in scoped.list_documents()} == {"scoped-other"}
+
+
+def test_document_management_review_routes_to_alternate_collection(
+    test_settings: Settings,
+) -> None:
+    default_id = test_settings.product.collection
+    other_id = "other-collection"
+
+    default_knowledge = create_knowledge(test_settings)
+    _commit(
+        default_knowledge,
+        "pending-default",
+        "默认待审",
+        review_status=REVIEW_PENDING,
+    )
+
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
+    _commit(
+        other_knowledge,
+        "pending-other",
+        "其他待审",
+        review_status=REVIEW_PENDING,
+    )
+
+    mgmt = create_document_management(test_settings)
+
+    assert {doc.document_id for doc in mgmt.list_pending_reviews(collection_id=other_id)} == {
+        "pending-other"
+    }
+    assert {doc.document_id for doc in mgmt.list_pending_reviews(collection_id=default_id)} == {
+        "pending-default"
+    }
+
+    mgmt.approve_review("pending-other", collection_id=other_id)
+    mgmt.reject_review("pending-default", collection_id=default_id)
+
+    assert mgmt.list_pending_reviews(collection_id=other_id) == []
+    assert mgmt.list_pending_reviews(collection_id=default_id) == []
+
+
+def test_document_management_images_route_to_alternate_collection(
+    test_settings: Settings,
+) -> None:
+    other_id = "other-collection"
+    other_settings = _other_collection_settings(test_settings, other_id)
+
+    other_knowledge = create_knowledge(other_settings)
+    _commit(other_knowledge, "img-doc", "图片文档")
+
+    default_image_id = ImageStore(test_settings).save(
+        document_id="default-doc",
+        source_path="/tmp/default-doc.md",
+        page=1,
+        image_bytes=b"\x89PNG\r\n\x1a\ndefault",
+        mime_type="image/png",
+    )
+    other_image_id = ImageStore(other_settings).save(
+        document_id="img-doc",
+        source_path="/tmp/img-doc.md",
+        page=1,
+        image_bytes=b"\x89PNG\r\n\x1a\nother",
+        mime_type="image/png",
+    )
+
+    mgmt = create_document_management(test_settings)
+
+    assert (
+        mgmt.get_image_ref(
+            default_image_id,
+            collection_id=test_settings.product.collection,
+        )["image_id"]
+        == default_image_id
+    )
+    assert mgmt.get_image_ref(other_image_id, collection_id=other_id)["image_id"] == other_image_id
+
+    with pytest.raises(ImageNotFoundError):
+        mgmt.get_image_ref(other_image_id, collection_id=test_settings.product.collection)
+
+    default_refs = mgmt.image_refs_for_document(
+        "default-doc",
+        collection_id=test_settings.product.collection,
+    )
+    other_refs = mgmt.image_refs_for_document("img-doc", collection_id=other_id)
+    assert [ref["image_id"] for ref in default_refs] == [default_image_id]
+    assert [ref["image_id"] for ref in other_refs] == [other_image_id]
+
+    default_content = mgmt.get_image_content(
+        default_image_id,
+        collection_id=test_settings.product.collection,
+    )
+    other_content = mgmt.get_image_content(other_image_id, collection_id=other_id)
+    assert base64.b64decode(default_content.content_base64) == b"\x89PNG\r\n\x1a\ndefault"
+    assert base64.b64decode(other_content.content_base64) == b"\x89PNG\r\n\x1a\nother"
+
+
+def test_mcp_documents_routes_to_alternate_collection(test_settings: Settings) -> None:
+    other_id = "other-collection"
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
+    _commit(other_knowledge, "mcp-other", "MCP 其他集合")
+
+    mgmt = create_document_management(test_settings)
+
+    listed = documents_list(mgmt, collection_id=other_id)
+    assert listed["scope"]["collection_id"] == other_id
+    assert listed["refs"]["document_ids"] == ["mcp-other"]
+
+    fetched = documents_get(mgmt, "mcp-other", collection_id=other_id)
+    assert fetched["data"]["document_id"] == "mcp-other"
+
+    deleted = documents_delete(mgmt, "mcp-other", collection_id=other_id)
+    assert deleted["data"]["deleted"] is True
+    assert documents_list(mgmt, collection_id=other_id)["meta"]["count"] == 0
+
+
+def test_mcp_reviews_route_to_alternate_collection(test_settings: Settings) -> None:
+    other_id = "other-collection"
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
+    _commit(other_knowledge, "review-other", "审阅其他", review_status=REVIEW_PENDING)
+
+    mgmt = create_document_management(test_settings)
+
+    pending = reviews_list_pending(mgmt, collection_id=other_id)
+    assert pending["scope"]["collection_id"] == other_id
+    assert pending["refs"]["document_ids"] == ["review-other"]
+
+    approved = reviews_approve(mgmt, "review-other", collection_id=other_id)
+    assert approved["scope"]["collection_id"] == other_id
+    assert reviews_list_pending(mgmt, collection_id=other_id)["meta"]["count"] == 0
+
+
+def test_mcp_images_route_to_alternate_collection(test_settings: Settings) -> None:
+    other_id = "other-collection"
+    other_settings = _other_collection_settings(test_settings, other_id)
+    other_knowledge = create_knowledge(other_settings)
+    _commit(other_knowledge, "mcp-img-doc", "MCP 图片文档")
+
+    other_image_id = ImageStore(other_settings).save(
+        document_id="mcp-img-doc",
+        source_path="/tmp/mcp-img-doc.md",
+        page=1,
+        image_bytes=b"\x89PNG\r\n\x1a\nmcp-other",
+        mime_type="image/png",
+    )
+
+    mgmt = create_document_management(test_settings)
+
+    ref = images_get_ref(mgmt, other_image_id, collection_id=other_id)
+    assert ref["scope"]["collection_id"] == other_id
+    assert ref["refs"]["image_ids"] == [other_image_id]
+
+    content = images_get_content(mgmt, other_image_id, collection_id=other_id)
+    assert content["scope"]["collection_id"] == other_id
+    assert base64.b64decode(content["data"]["content_base64"]) == b"\x89PNG\r\n\x1a\nmcp-other"
+
+
+def test_ops_service_routes_browse_and_reviews_to_alternate_collection(
+    test_settings: Settings,
+) -> None:
+    default_id = test_settings.product.collection
+    other_id = "other-collection"
+
+    default_knowledge = create_knowledge(test_settings)
+    _commit(default_knowledge, "ops-default", "运维默认")
+
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
+    _commit(other_knowledge, "ops-other", "运维其他")
+    _commit(
+        other_knowledge,
+        "ops-pending",
+        "运维待审",
+        review_status=REVIEW_PENDING,
+    )
+
+    service = OpsService(test_settings)
+
+    default_groups = service.browse_groups(collection_id=default_id)
+    other_groups = service.browse_groups(collection_id=other_id)
+    default_doc_ids = {
+        doc.document_id for group in default_groups for doc in group.documents
+    }
+    other_doc_ids = {doc.document_id for group in other_groups for doc in group.documents}
+
+    assert default_doc_ids == {"ops-default"}
+    assert other_doc_ids == {"ops-other", "ops-pending"}
+
+    pending = service.list_pending_reviews(collection_id=other_id)
+    assert {item.document_id for item in pending} == {"ops-pending"}
+
+    service.approve_review("ops-pending", collection_id=other_id)
+    assert service.list_pending_reviews(collection_id=other_id) == []
+    assert service.list_pending_reviews(collection_id=default_id) == []
+
+
+def test_collection_read_model_stats_route_to_alternate_collection(
+    test_settings: Settings,
+) -> None:
+    default_id = test_settings.product.collection
+    other_id = "other-collection"
+
+    default_knowledge = create_knowledge(test_settings)
+    _commit(default_knowledge, "stats-default", "默认统计")
+
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
+    _commit(other_knowledge, "stats-other", "其他统计", review_status=REVIEW_PENDING)
+
+    model = CollectionReadModel(test_settings, default_knowledge)
+
+    default_stats = model.get_stats(default_id)
+    other_stats = model.get_stats(other_id)
+
+    assert default_stats.document_count == 1
+    assert other_stats.document_count == 1
+    assert default_stats.review.pending_documents == 0
+    assert other_stats.review.pending_documents == 1
+
+
+def test_collection_read_model_resolve_scope_accepts_storage_backed_alternate(
+    test_settings: Settings,
+) -> None:
+    other_id = "other-collection"
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
+    _commit(other_knowledge, "scope-other", "作用域其他")
+
+    scope = CollectionReadModel(
+        test_settings, create_knowledge(test_settings)
+    ).resolve_scope(other_id)
+
+    assert scope.collection_id == other_id
+    assert scope.settings.product.collection == other_id
+
+
+def test_mcp_collections_stats_route_to_alternate_collection(
+    test_settings: Settings,
+) -> None:
+    other_id = "other-collection"
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
+    _commit(other_knowledge, "mcp-stats-other", "MCP 统计其他", review_status=REVIEW_PENDING)
+
+    mgmt = create_document_management(test_settings)
+
+    stats = collections_get_stats(mgmt, collection_id=other_id)
+
+    assert stats["scope"]["collection_id"] == other_id
+    assert stats["data"]["document_count"] == 1
+    assert stats["data"]["review"]["pending_documents"] == 1
+    assert stats["meta"]["count"] == 1
+
+
+def test_ops_service_overview_stats_route_to_alternate_collection(
+    test_settings: Settings,
+) -> None:
+    default_id = test_settings.product.collection
+    other_id = "other-collection"
+
+    default_knowledge = create_knowledge(test_settings)
+    _commit(default_knowledge, "overview-default", "概览默认")
+
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
+    _commit(other_knowledge, "overview-other", "概览其他")
+
+    service = OpsService(test_settings)
+
+    default_stats = service.overview_stats(collection_id=default_id)
+    other_stats = service.overview_stats(collection_id=other_id)
+
+    assert default_stats.document_count == 1
+    assert other_stats.document_count == 1
+    assert default_stats.chunk_count == 1
+    assert other_stats.chunk_count == 1

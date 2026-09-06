@@ -9,6 +9,7 @@ from wenmai.factories import embedding as embedding_factory
 from wenmai.factories import vector_store as vector_store_factory
 from wenmai.factories.loader import ensure_providers
 from wenmai.knowledge.browse import CultureDomainGroup
+from wenmai.knowledge.collections import resolve_collection_scope
 from wenmai.knowledge.document_card import DocumentCard
 from wenmai.knowledge.read import ReadPath
 from wenmai.knowledge.review import PendingReviewDocument
@@ -174,6 +175,12 @@ class Knowledge:
         return self._read.document_card(document_id)
 
 
-def create_knowledge(settings: Settings) -> Knowledge:
+def create_knowledge(
+    settings: Settings,
+    *,
+    collection_id: str | None = None,
+) -> Knowledge:
     ensure_providers()
+    if collection_id is not None:
+        settings = resolve_collection_scope(settings, collection_id).settings
     return Knowledge(settings)

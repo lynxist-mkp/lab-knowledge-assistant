@@ -49,6 +49,35 @@ def _settings_for_collection(settings: Settings, collection_id: str) -> Settings
     )
 
 
+def _collection_storage_exists(settings: Settings, collection_id: str) -> bool:
+    from wenmai.storage.paths import collection_storage_bindings
+
+    bindings = collection_storage_bindings(_settings_for_collection(settings, collection_id))
+    return (
+        bindings.catalog_path.exists()
+        or bindings.catalog_read_path().exists()
+        or bindings.chroma_persist_path().exists()
+        or bindings.bm25_path.exists()
+    )
+
+
+def resolve_routable_collection_scope(
+    settings: Settings, collection_id: str | None = None
+) -> CollectionScope:
+    """Resolve a collection scope that can be routed to existing collection storage."""
+    if collection_id is None:
+        return resolve_collection_scope(settings, None)
+    if collection_id == settings.default_collection_id:
+        return resolve_collection_scope(settings, collection_id)
+    if _collection_storage_exists(settings, collection_id):
+        return CollectionScope(
+            collection_id=collection_id,
+            display_name=settings.product.name,
+            settings=_settings_for_collection(settings, collection_id),
+        )
+    raise UnknownCollectionError(collection_id)
+
+
 @dataclass(frozen=True)
 class ReviewStatusCounts:
     approved_documents: int
@@ -113,7 +142,7 @@ class CollectionReadModel:
         return self._settings.product.collection
 
     def resolve_scope(self, collection_id: str | None = None) -> CollectionScope:
-        return resolve_collection_scope(self._settings, collection_id)
+        return resolve_routable_collection_scope(self._settings, collection_id)
 
     def list_collections(self) -> list[Collection]:
         return [self.get_collection(self.default_collection_id)]
@@ -127,10 +156,21 @@ class CollectionReadModel:
         )
 
     def get_stats(self, collection_id: str | None = None) -> CollectionStats:
-        resolve_collection_id(self._settings, collection_id)
-        groups = self._knowledge.browse_by_culture_domain()
+        scope = resolve_routable_collection_scope(self._settings, collection_id)
+        knowledge = self._knowledge_for_scope(scope)
+        return self._stats_from_knowledge(knowledge)
 
-        pending_documents = len(self._knowledge.list_pending_review_documents())
+    def _knowledge_for_scope(self, scope: CollectionScope) -> Knowledge:
+        if scope.settings.product.collection == self._settings.product.collection:
+            return self._knowledge
+        from wenmai.knowledge.store import create_knowledge
+
+        return create_knowledge(scope.settings)
+
+    def _stats_from_knowledge(self, knowledge: Knowledge) -> CollectionStats:
+        groups = knowledge.browse_by_culture_domain()
+
+        pending_documents = len(knowledge.list_pending_review_documents())
         approved_chunks = 0
         pending_chunks = 0
         by_domain: list[CultureDomainStats] = []
@@ -153,12 +193,12 @@ class CollectionReadModel:
                 )
             )
 
-        document_count = self._knowledge.document_count
+        document_count = knowledge.document_count
         approved_documents = document_count - pending_documents
 
         return CollectionStats(
             document_count=document_count,
-            chunk_count=self._knowledge.chunk_count,
+            chunk_count=knowledge.chunk_count,
             review=ReviewStatusCounts(
                 approved_documents=approved_documents,
                 pending_documents=pending_documents,
@@ -177,6 +217,7 @@ __all__ = [
     "CultureDomainStats",
     "ReviewStatusCounts",
     "UnknownCollectionError",
+    "resolve_routable_collection_scope",
     "resolve_collection_id",
     "resolve_collection_scope",
 ]

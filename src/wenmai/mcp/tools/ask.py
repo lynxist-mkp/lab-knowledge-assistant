@@ -4,7 +4,7 @@ from typing import Any
 
 from wenmai.ask_surface import AskSurfaceError, ask_surface
 from wenmai.config import Settings
-from wenmai.knowledge.collections import UnknownCollectionError, resolve_collection_scope
+from wenmai.knowledge.collections import UnknownCollectionError, resolve_routable_collection_scope
 from wenmai.knowledge.store import Knowledge
 from wenmai.mcp.envelope import McpMeta, envelope, refs_from_ask_result, scope_for
 
@@ -26,7 +26,7 @@ def ask_answer(
     knowledge: Knowledge | None = None,
 ) -> dict[str, Any]:
     try:
-        scope = resolve_collection_scope(settings, collection_id)
+        scope = resolve_routable_collection_scope(settings, collection_id)
     except UnknownCollectionError as exc:
         raise ValueError(str(exc)) from exc
 
