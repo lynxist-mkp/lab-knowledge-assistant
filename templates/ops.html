@@ -3523,6 +3523,20 @@
   /* =========================================================
      5. 评测 (Eval) Logic
      ========================================================= */
+  function getCollectionIdFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const collectionId = params.get('collection_id');
+    return collectionId ? collectionId : null;
+  }
+
+  function buildEvalRunsUrl() {
+    const collectionId = getCollectionIdFromUrl();
+    if (!collectionId) {
+      return '/api/eval/runs';
+    }
+    return '/api/eval/runs?collection_id=' + encodeURIComponent(collectionId);
+  }
+
   async function loadEvalRuns() {
     if (!evalRunsList) return;
     evalError.classList.remove('visible');
@@ -3532,7 +3546,7 @@
     evalLoading.removeAttribute('hidden');
 
     try {
-      const response = await fetch('/api/eval/runs');
+      const response = await fetch(buildEvalRunsUrl());
       if (!response.ok) {
         throw new Error('服务响应异常 (HTTP ' + response.status + ')');
       }
@@ -3559,7 +3573,7 @@
     btnRunEval.querySelector('.btn-text').textContent = '评测中...';
 
     try {
-      const response = await fetch('/api/eval/runs', {
+      const response = await fetch(buildEvalRunsUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

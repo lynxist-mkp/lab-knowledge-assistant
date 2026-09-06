@@ -428,9 +428,23 @@ def test_ops_eval_panel_wiring(test_settings: Settings) -> None:
     assert "RRF 融合" in html
     assert "RRF + Rerank" in html
 
-    # Fetch and run wiring
-    assert "fetch('/api/eval/runs')" in html or 'fetch("/api/eval/runs")' in html
-    assert "fetch('/api/eval/runs', {" in html or 'fetch("/api/eval/runs", {' in html
+    # Fetch and run wiring — collection_id from page URL via buildEvalRunsUrl()
+    assert "function buildEvalRunsUrl" in html
+    assert "function getCollectionIdFromUrl" in html
+    assert "URLSearchParams" in html
+    assert "fetch(buildEvalRunsUrl())" in html
+    assert "fetch(buildEvalRunsUrl()," in html
+    assert "'/api/eval/runs?collection_id=' + encodeURIComponent(collectionId)" in html
+
+
+def test_ops_eval_panel_collection_id_url_wiring(test_settings: Settings) -> None:
+    """Eval panel: /ops?collection_id=... passes query through to eval API fetches."""
+    client = TestClient(create_app(test_settings))
+    html = _ops_html(client)
+
+    assert "params.get('collection_id')" in html
+    assert "buildEvalRunsUrl()" in html
+    assert "encodeURIComponent(collectionId)" in html
 
 
 def test_ops_trace_detail_api_contract(test_settings: Settings, tmp_path: Path) -> None:
