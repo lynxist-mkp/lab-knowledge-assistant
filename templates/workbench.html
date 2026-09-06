@@ -1674,7 +1674,9 @@
     if (!panel) return;
 
     try {
-      const res = await fetch('/api/traces/' + encodeURIComponent(traceId));
+      const res = await fetch(
+        buildWorkbenchApiUrl('/api/traces/' + encodeURIComponent(traceId))
+      );
       if (res.ok) {
         const data = await res.json();
         panel.innerHTML = renderTracePanel(data);
@@ -1682,7 +1684,9 @@
         return;
       }
       // Fallback to summary
-      const sumRes = await fetch('/api/traces/' + encodeURIComponent(traceId) + '/summary');
+      const sumRes = await fetch(
+        buildWorkbenchApiUrl('/api/traces/' + encodeURIComponent(traceId) + '/summary')
+      );
       if (sumRes.ok) {
         const sumData = await sumRes.json();
         panel.innerHTML = renderTracePanel(sumData);
@@ -1896,7 +1900,7 @@
 
       let response;
       try {
-        response = await fetch('/ask', {
+        response = await fetch(buildWorkbenchApiUrl('/ask'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'

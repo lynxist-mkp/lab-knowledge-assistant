@@ -33,20 +33,29 @@ def create_workbench_router() -> APIRouter:
         return templates.TemplateResponse(request, "workbench.html", {})
 
     @router.post("/ask")
-    def ask(request: Request, body: AskRequest) -> dict[str, object]:
+    @_translate_unknown_collection
+    def ask(
+        request: Request,
+        body: AskRequest,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
         settings = request.app.state.settings
+        knowledge = None if collection_id is not None else request.app.state.knowledge
         try:
             result = ask_surface(
                 body.question,
                 settings,
+                collection_id=collection_id,
                 culture_domain=body.culture_domain,
                 retrieval_mode=body.retrieval_mode,
                 rerank_enabled=body.rerank_enabled,
-                knowledge=request.app.state.knowledge,
+                knowledge=knowledge,
                 entrypoint="http",
             )
         except AskSaturationError as exc:
             raise HTTPException(status_code=503, detail=exc.as_dict()) from exc
+        except UnknownCollectionError:
+            raise
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except AskSurfaceError as exc:

@@ -62,12 +62,14 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
 
     def _legacy_ask_tool(
         question: str,
+        collection_id: str | None = None,
         culture_domain: str | None = None,
         retrieval_mode: str | None = None,
         rerank_enabled: bool | None = None,
     ) -> dict[str, object]:
         return _ask_tool(
             question,
+            collection_id=collection_id,
             culture_domain=culture_domain,
             retrieval_mode=retrieval_mode,
             rerank_enabled=rerank_enabled,
@@ -103,6 +105,7 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
     )
     def ask_wenmai_tool(
         question: str,
+        collection_id: str | None = None,
         culture_domain: str | None = None,
         retrieval_mode: str | None = None,
         rerank_enabled: bool | None = None,
@@ -110,6 +113,7 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
         try:
             return _legacy_ask_tool(
                 question,
+                collection_id=collection_id,
                 culture_domain=culture_domain,
                 retrieval_mode=retrieval_mode,
                 rerank_enabled=rerank_enabled,

@@ -10,6 +10,8 @@ from tests.conftest import register_collection
 
 from wenmai.app import create_app
 from wenmai.config import Settings
+from wenmai.knowledge import create_knowledge
+from wenmai.models import Chunk
 
 
 def _write_markdown(path: Path, *, culture_domain: str, title: str, body: str) -> Path:
@@ -150,7 +152,9 @@ def test_workbench_ask_flow_uses_ask_endpoint(test_settings: Settings) -> None:
     client = TestClient(create_app(test_settings))
     html = _workbench_html(client)
 
-    assert "fetch('/ask'" in html or "fetch(\"/ask\"" in html
+    assert "buildWorkbenchApiUrl('/ask')" in html
+    assert "fetch('/ask'" not in html
+    assert 'fetch("/ask"' not in html
     assert "ASK_TIMEOUT_MS" in html
     assert "AbortController" in html
     assert "ask-form" in html
@@ -249,6 +253,16 @@ def test_workbench_page_collection_scope_url_wiring(test_settings: Settings) -> 
     assert "params.get('collection_id')" in html
     assert "function buildWorkbenchApiUrl" in html
     assert "buildWorkbenchApiUrl('/api/chunks/' + encodeURIComponent(chunkId))" in html
+    assert "buildWorkbenchApiUrl('/api/traces/' + encodeURIComponent(traceId))" in html
+    assert (
+        "buildWorkbenchApiUrl('/api/traces/' + encodeURIComponent(traceId) + '/summary')"
+        in html
+    )
+    assert "fetch('/api/traces/' + encodeURIComponent(traceId))" not in html
+    assert "fetch('/api/traces/' + encodeURIComponent(traceId) + '/summary')" not in html
+    assert "buildWorkbenchApiUrl('/ask')" in html
+    assert "fetch('/ask'" not in html
+    assert 'fetch("/ask"' not in html
 
 
 def test_workbench_chunk_api_routes_by_collection_query_param(
@@ -319,3 +333,70 @@ def test_api_document_card_routes_by_collection_query_param(
     )
     assert unknown.status_code == 404
     assert unknown.json()["detail"] == "collection not found"
+
+
+def _commit(knowledge, document_id: str, text: str) -> None:
+    knowledge.commit_document(
+        source_path=f"/tmp/{document_id}.md",
+        sha256=document_id,
+        document_id=document_id,
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id=f"{document_id}:0000",
+                document_id=document_id,
+                text=text,
+                metadata={
+                    "document_id": document_id,
+                    "title": document_id,
+                    "culture_domain": "妈祖",
+                    "审阅状态": "已通过",
+                },
+            )
+        ],
+    )
+
+
+def test_workbench_ask_routes_by_collection_query_param(test_settings: Settings) -> None:
+    other_id = "other-collection"
+    default_id = test_settings.product.collection
+
+    default_knowledge = create_knowledge(test_settings)
+    _commit(default_knowledge, "default-doc", "DEFAULT_MARKER_abc 默认集合内容")
+
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
+    _commit(other_knowledge, "other-doc", "OTHER_MARKER_xyz 其他集合内容")
+
+    registered = register_collection(test_settings, other_id)
+    client = TestClient(create_app(registered))
+
+    other_response = client.post(
+        "/ask",
+        params={"collection_id": other_id},
+        json={"question": "OTHER_MARKER_xyz 在哪里"},
+    )
+    assert other_response.status_code == 200
+    other_body = other_response.json()
+    assert other_body["citations"]
+    assert other_body["citations"][0]["document_id"] == "other-doc"
+
+    default_response = client.post(
+        "/ask",
+        params={"collection_id": default_id},
+        json={"question": "DEFAULT_MARKER_abc 在哪里"},
+    )
+    assert default_response.status_code == 200
+    default_body = default_response.json()
+    assert default_body["citations"]
+    assert default_body["citations"][0]["document_id"] == "default-doc"
+
+
+def test_workbench_ask_unknown_collection_returns_404(test_settings: Settings) -> None:
+    client = TestClient(create_app(test_settings))
+    response = client.post(
+        "/ask",
+        params={"collection_id": "missing-collection"},
+        json={"question": "问题"},
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "collection not found"

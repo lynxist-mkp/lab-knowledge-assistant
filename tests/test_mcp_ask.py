@@ -185,6 +185,34 @@ def test_legacy_ask_wenmai_uses_shared_surface(
     assert captured["kwargs"]["rerank_enabled"] is False
 
 
+def test_legacy_ask_wenmai_forwards_collection_id(
+    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured = {}
+
+    def _fake_ask_surface(question, settings, **kwargs):
+        captured["kwargs"] = kwargs
+        return AskSurfaceResult(
+            result=AskResult(answer="ok", citations=[], trace_id="trace-scoped"),
+            elapsed_ms=1.0,
+        )
+
+    monkeypatch.setattr("wenmai.mcp.ask.ask_surface", _fake_ask_surface)
+
+    ask_wenmai(
+        "问题",
+        test_settings,
+        collection_id="other-collection",
+    )
+
+    assert captured["kwargs"]["collection_id"] == "other-collection"
+
+
+def test_legacy_ask_wenmai_unknown_collection_raises(test_settings: Settings) -> None:
+    with pytest.raises(ValueError, match="unknown collection"):
+        ask_wenmai("问题", test_settings, collection_id="missing")
+
+
 def test_mcp_server_registers_new_and_legacy_ask_tools(test_settings: Settings) -> None:
     server = create_mcp_server(test_settings)
     tool_names = {tool.name for tool in asyncio.run(server.list_tools())}

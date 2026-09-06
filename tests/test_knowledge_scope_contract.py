@@ -502,6 +502,58 @@ def test_mcp_get_document_summary_unknown_id_raises(test_settings: Settings) -> 
         )
 
 
+def test_mcp_get_document_summary_routes_by_collection_id(
+    test_settings: Settings,
+) -> None:
+    from dataclasses import replace
+
+    from tests.conftest import register_collection
+
+    other_id = "other-collection"
+    default_knowledge = create_knowledge(test_settings)
+    _commit(default_knowledge, "default-summary-doc", "默认集合摘要")
+
+    other_settings = replace(
+        register_collection(test_settings, other_id),
+        product=replace(test_settings.product, collection=other_id),
+    )
+    other_knowledge = create_knowledge(other_settings)
+    _commit(other_knowledge, "other-summary-doc", "其他集合摘要")
+
+    mgmt = create_document_management(
+        register_collection(test_settings, other_id),
+        knowledge=default_knowledge,
+    )
+
+    default_summary = get_document_summary(
+        "default-summary-doc",
+        settings=test_settings,
+        document_management=mgmt,
+        collection_id=test_settings.product.collection,
+    )
+    assert default_summary["document_id"] == "default-summary-doc"
+
+    other_summary = get_document_summary(
+        "other-summary-doc",
+        settings=register_collection(test_settings, other_id),
+        document_management=mgmt,
+        collection_id=other_id,
+    )
+    assert other_summary["document_id"] == "other-summary-doc"
+
+
+def test_mcp_get_document_summary_unknown_collection_raises(test_settings: Settings) -> None:
+    mgmt = create_document_management(test_settings, knowledge=create_knowledge(test_settings))
+
+    with pytest.raises(ValueError, match="unknown collection"):
+        get_document_summary(
+            "doc-1",
+            settings=test_settings,
+            document_management=mgmt,
+            collection_id="missing",
+        )
+
+
 def test_mcp_documents_get_envelope(test_settings: Settings) -> None:
     knowledge = create_knowledge(test_settings)
     _commit(knowledge, "doc-card", "卡片内容")
