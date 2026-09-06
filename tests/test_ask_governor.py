@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import replace
 
 import pytest
+from tests.conftest import register_collection
 
-from wenmai.config import AskConcurrencyConfig
 import wenmai.http.ask_governor as ask_governor
+from wenmai.config import AskConcurrencyConfig, Settings
 from wenmai.http.ask_governor import (
     AskConcurrencyGovernor,
     AskSaturationError,
@@ -169,13 +171,71 @@ def test_governor_long_task_guard_uses_observation_seam(test_settings, monkeypat
         long_task_max_in_flight=1,
         saturation_policy="busy",
     )
-    monkeypatch.setattr(ask_governor, "has_running_long_tasks", lambda _settings: True)
+    monkeypatch.setattr(
+        ask_governor,
+        "has_running_long_tasks",
+        lambda _settings, *, collection_id=None: True,
+    )
 
     governor = AskConcurrencyGovernor(test_settings.resources.ask)
     snapshot = governor.snapshot(test_settings)
 
     assert snapshot.long_task_active is True
     assert snapshot.max_in_flight == 1
+
+
+def test_governor_long_task_guard_scoped_by_collection(test_settings: Settings) -> None:
+    other_id = "other-collection"
+    settings = register_collection(test_settings, other_id)
+    other_settings = replace(
+        settings,
+        product=replace(settings.product, collection=other_id),
+    )
+
+    settings.resources.ask = AskConcurrencyConfig(
+        enabled=True,
+        max_in_flight=3,
+        long_task_guard=True,
+        long_task_max_in_flight=0,
+        saturation_policy="busy",
+    )
+    persist_task_progress(
+        other_settings,
+        task_id="ingestion:other-running",
+        task_type="ingestion",
+        status="running",
+        started_at="2026-01-01T00:00:00Z",
+        finished_at=None,
+        last_progress_at="2026-01-01T00:00:00Z",
+        trigger_source="ops",
+        owner_surface="ops",
+        config_snapshot={"pdf_load_mode": "auto"},
+        counters=TaskCounters(total=1),
+    )
+    governor = AskConcurrencyGovernor(settings.resources.ask)
+
+    default_snapshot = governor.snapshot(
+        settings,
+        collection_id=settings.product.collection,
+    )
+    assert default_snapshot.long_task_active is False
+    assert default_snapshot.max_in_flight == 3
+
+    other_snapshot = governor.snapshot(settings, collection_id=other_id)
+    assert other_snapshot.long_task_active is True
+    assert other_snapshot.max_in_flight == 0
+
+    with governor.acquire(
+        settings,
+        entrypoint="default",
+        collection_id=settings.product.collection,
+    ):
+        pass
+
+    with pytest.raises(AskSaturationError) as exc_info:
+        with governor.acquire(settings, entrypoint="other", collection_id=other_id):
+            pass
+    assert exc_info.value.code == "long_task_active"
 
 
 def test_governor_disabled_is_noop(test_settings) -> None:

@@ -29,7 +29,11 @@ def run_ask(
     if knowledge is None and collection_id is not None:
         resolved_knowledge = create_knowledge(scope.settings)
     governor = get_ask_governor(scope.settings)
-    with governor.acquire(scope.settings, entrypoint=entrypoint):
+    with governor.acquire(
+        scope.settings,
+        entrypoint=entrypoint,
+        collection_id=collection_id,
+    ):
         return ask_pipeline_single(
             AskPipelineInput(
                 question=question,

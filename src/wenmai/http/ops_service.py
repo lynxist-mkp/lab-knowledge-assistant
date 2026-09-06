@@ -48,11 +48,13 @@ class OpsService:
         *,
         task_type: str | None = None,
         failure_kind: str | None = None,
+        collection_id: str | None = None,
     ) -> ObservationHealthSnapshot:
         return load_health_snapshot(
             self._settings,
             task_type=task_type,
             failure_kind=failure_kind,
+            collection_id=collection_id,
         )
 
     def browse_groups(self, *, collection_id: str | None = None):

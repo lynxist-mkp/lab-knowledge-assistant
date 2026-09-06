@@ -439,6 +439,119 @@ def test_has_running_long_tasks_reads_via_observation_seam(test_settings: Settin
     assert has_running_long_tasks(test_settings) is True
 
 
+def test_has_running_long_tasks_scoped_by_collection(test_settings: Settings) -> None:
+    other_id = "other-collection"
+    settings = register_collection(test_settings, other_id)
+    other_settings = _other_collection_settings(settings, other_id)
+
+    persist_task_progress(
+        other_settings,
+        task_id="ingestion:other-running",
+        task_type="ingestion",
+        status="running",
+        started_at="2026-06-01T12:00:00+00:00",
+        finished_at=None,
+        last_progress_at="2026-06-01T12:00:00+00:00",
+        trigger_source="ingest_api",
+        owner_surface="ops",
+        config_snapshot={"pdf_load_mode": "auto"},
+        counters=TaskCounters(total=1),
+    )
+
+    assert has_running_long_tasks(settings) is True
+    assert has_running_long_tasks(settings, collection_id=other_id) is True
+    assert has_running_long_tasks(settings, collection_id=settings.product.collection) is False
+
+
+def test_load_health_snapshot_global_vs_scoped(test_settings: Settings) -> None:
+    other_id = "other-collection"
+    settings = register_collection(test_settings, other_id)
+    other_settings = _other_collection_settings(settings, other_id)
+
+    from wenmai.ops.ask_evidence import ask_evidence_path, write_ask_evidence
+
+    write_ask_evidence(
+        settings,
+        {
+            "event": "saturation",
+            "code": "busy",
+            "entrypoint": "default",
+            "in_flight": 1,
+            "max_in_flight": 1,
+            "wait_ms": 0.0,
+        },
+    )
+    write_ask_evidence(
+        other_settings,
+        {
+            "event": "saturation",
+            "code": "timeout",
+            "entrypoint": "other",
+            "in_flight": 1,
+            "max_in_flight": 1,
+            "wait_ms": 100.0,
+        },
+    )
+
+    evidence_path = ask_evidence_path(settings)
+    legacy_line = json.dumps(
+        {
+            "event": "saturation",
+            "code": "long_task_active",
+            "entrypoint": "legacy",
+            "in_flight": 0,
+            "max_in_flight": 0,
+            "wait_ms": 0.0,
+        },
+        ensure_ascii=False,
+    )
+    evidence_path.write_text(evidence_path.read_text(encoding="utf-8") + legacy_line + "\n")
+
+    persist_task_progress(
+        settings,
+        task_id="evaluation:default-failed",
+        task_type="evaluation",
+        status="failed",
+        started_at="2026-06-01T12:00:00+00:00",
+        finished_at="2026-06-01T12:00:01+00:00",
+        last_progress_at="2026-06-01T12:00:01+00:00",
+        trigger_source="eval_runner",
+        owner_surface="ops",
+        config_snapshot={"groups": ["rrf"]},
+        counters=TaskCounters(total=1, failed=1),
+        failure_kind="runtime",
+    )
+    persist_task_progress(
+        other_settings,
+        task_id="evaluation:other-failed",
+        task_type="evaluation",
+        status="failed",
+        started_at="2026-06-01T12:00:02+00:00",
+        finished_at="2026-06-01T12:00:03+00:00",
+        last_progress_at="2026-06-01T12:00:03+00:00",
+        trigger_source="eval_runner",
+        owner_surface="ops",
+        config_snapshot={"groups": ["rrf"]},
+        counters=TaskCounters(total=1, failed=1),
+        failure_kind="runtime",
+    )
+
+    global_health = load_health_snapshot(settings)
+    global_signals = {item.name: item.count for item in global_health.signals}
+    assert global_signals["failed"] == 2
+    assert global_signals["ask_busy"] == 1
+    assert global_signals["ask_timeout"] == 1
+    assert global_signals["ask_long_task_guard"] == 1
+
+    scoped_health = load_health_snapshot(settings, collection_id=other_id)
+    scoped_signals = {item.name: item.count for item in scoped_health.signals}
+    assert scoped_signals["failed"] == 1
+    assert scoped_signals["ask_busy"] == 0
+    assert scoped_signals["ask_timeout"] == 1
+    assert scoped_signals["ask_long_task_guard"] == 0
+    assert [item.task_id for item in scoped_health.anomalies] == ["evaluation:other-failed"]
+
+
 def test_trace_collection_filter_legacy_default_only_smoke(
     test_settings: Settings,
     tmp_path: Path,

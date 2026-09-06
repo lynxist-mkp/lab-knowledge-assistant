@@ -787,12 +787,77 @@ def test_api_traces_collection_query_params_route_list_and_detail(
     assert missing_on_default.status_code == 404
 
 
+def test_ops_health_snapshot_supports_collection_scope(test_settings: Settings) -> None:
+    from wenmai.ops.ask_evidence import write_ask_evidence
+    from wenmai.task_progress import TaskCounters, persist_task_progress
+
+    other_id = "other-collection"
+    settings = register_collection(test_settings, other_id)
+    other_settings = _other_collection_settings(settings, other_id)
+    client = TestClient(create_app(settings))
+
+    write_ask_evidence(
+        settings,
+        {
+            "event": "saturation",
+            "code": "busy",
+            "entrypoint": "default",
+            "in_flight": 1,
+            "max_in_flight": 1,
+            "wait_ms": 0.0,
+        },
+    )
+    write_ask_evidence(
+        other_settings,
+        {
+            "event": "saturation",
+            "code": "timeout",
+            "entrypoint": "other",
+            "in_flight": 1,
+            "max_in_flight": 1,
+            "wait_ms": 100.0,
+        },
+    )
+    persist_task_progress(
+        other_settings,
+        task_id="evaluation:other-failed",
+        task_type="evaluation",
+        status="failed",
+        started_at="2026-06-01T12:00:00+00:00",
+        finished_at="2026-06-01T12:00:01+00:00",
+        last_progress_at="2026-06-01T12:00:01+00:00",
+        trigger_source="eval_runner",
+        owner_surface="ops",
+        config_snapshot={"groups": ["rrf"]},
+        counters=TaskCounters(total=1, failed=1),
+        failure_kind="runtime",
+    )
+
+    global_health = client.get("/api/stats/health")
+    assert global_health.status_code == 200
+    global_signals = {
+        item["name"]: item["count"] for item in global_health.json()["signals"]
+    }
+    assert global_signals["ask_busy"] == 1
+    assert global_signals["ask_timeout"] == 1
+
+    scoped_health = client.get("/api/stats/health", params={"collection_id": other_id})
+    assert scoped_health.status_code == 200
+    scoped_signals = {
+        item["name"]: item["count"] for item in scoped_health.json()["signals"]
+    }
+    assert scoped_signals["ask_busy"] == 0
+    assert scoped_signals["ask_timeout"] == 1
+    assert scoped_signals["failed"] == 1
+
+
 def test_ops_unknown_collection_returns_404(test_settings: Settings) -> None:
     client = TestClient(create_app(test_settings))
     unknown = {"collection_id": "missing"}
 
     collection_scoped_gets = (
         "/api/stats/overview",
+        "/api/stats/health",
         "/api/browse",
         "/api/review/pending",
         "/api/traces/ingestion",

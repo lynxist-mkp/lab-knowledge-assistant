@@ -174,10 +174,23 @@ def list_task_progress_summaries(
     return summaries
 
 
-def has_running_long_tasks(settings: Settings) -> bool:
+def has_running_long_tasks(
+    settings: Settings,
+    *,
+    collection_id: str | None = None,
+) -> bool:
+    if collection_id is None:
+        summaries = list_task_progress(settings, status="running", collection_id=None)
+    else:
+        scope = resolve_routable_collection_scope(settings, collection_id)
+        summaries = list_task_progress(
+            settings,
+            status="running",
+            collection_id=scope.collection_id,
+        )
     return any(
         item.task_type in _LONG_TASK_TYPES
-        for item in list_task_progress_summaries(settings, status="running")
+        for item in summaries
     )
 
 
@@ -233,15 +246,29 @@ def load_health_snapshot(
     *,
     task_type: str | None = None,
     failure_kind: str | None = None,
+    collection_id: str | None = None,
 ) -> ObservationHealthSnapshot:
-    summaries = list_task_progress_summaries(
-        settings,
-        task_type=task_type,
-        failure_kind=failure_kind,
-    )
+    if collection_id is None:
+        summaries = list_task_progress(
+            settings,
+            task_type=task_type,
+            failure_kind=failure_kind,
+            collection_id=None,
+        )
+        ask_collection_id: str | None = None
+    else:
+        scope = resolve_routable_collection_scope(settings, collection_id)
+        summaries = list_task_progress_summaries(
+            settings,
+            task_type=task_type,
+            failure_kind=failure_kind,
+            collection_id=collection_id,
+        )
+        ask_collection_id = scope.collection_id
     ask_evidence = summarize_ask_evidence(
         settings,
         recent_n=settings.observability.ask_evidence_recent_n,
+        collection_id=ask_collection_id,
     )
     signals = [
         HealthSignal(

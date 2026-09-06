@@ -81,9 +81,20 @@ class AskConcurrencyGovernor:
         self._total_rejected_timeout = 0
         self._total_rejected_long_task = 0
 
-    def snapshot(self, settings: Settings) -> AskGovernorSnapshot:
-        max_in_flight = self._effective_max_in_flight(settings)
-        long_task_active = has_running_long_tasks(settings)
+    def snapshot(
+        self,
+        settings: Settings,
+        *,
+        collection_id: str | None = None,
+    ) -> AskGovernorSnapshot:
+        max_in_flight = self._effective_max_in_flight(
+            settings,
+            collection_id=collection_id,
+        )
+        long_task_active = has_running_long_tasks(
+            settings,
+            collection_id=collection_id,
+        )
         with self._lock:
             return AskGovernorSnapshot(
                 in_flight=self._in_flight,
@@ -96,13 +107,22 @@ class AskConcurrencyGovernor:
             )
 
     @contextmanager
-    def acquire(self, settings: Settings, *, entrypoint: str) -> Iterator[None]:
+    def acquire(
+        self,
+        settings: Settings,
+        *,
+        entrypoint: str,
+        collection_id: str | None = None,
+    ) -> Iterator[None]:
         config = settings.resources.ask
         if not config.enabled:
             yield
             return
 
-        max_in_flight = self._effective_max_in_flight(settings)
+        max_in_flight = self._effective_max_in_flight(
+            settings,
+            collection_id=collection_id,
+        )
         if max_in_flight <= 0:
             self._reject_long_task(
                 settings,
@@ -112,22 +132,38 @@ class AskConcurrencyGovernor:
 
         policy = config.saturation_policy.strip().lower()
         if policy == "busy":
-            self._acquire_immediate(settings, entrypoint=entrypoint, max_in_flight=max_in_flight)
+            self._acquire_immediate(
+                settings,
+                entrypoint=entrypoint,
+                max_in_flight=max_in_flight,
+            )
             try:
                 yield
             finally:
                 self._release(settings)
             return
 
-        self._acquire_with_wait(settings, entrypoint=entrypoint, max_in_flight=max_in_flight)
+        self._acquire_with_wait(
+            settings,
+            entrypoint=entrypoint,
+            max_in_flight=max_in_flight,
+        )
         try:
             yield
         finally:
             self._release(settings)
 
-    def _effective_max_in_flight(self, settings: Settings) -> int:
+    def _effective_max_in_flight(
+        self,
+        settings: Settings,
+        *,
+        collection_id: str | None = None,
+    ) -> int:
         config = settings.resources.ask
-        if config.long_task_guard and has_running_long_tasks(settings):
+        if config.long_task_guard and has_running_long_tasks(
+            settings,
+            collection_id=collection_id,
+        ):
             return min(config.max_in_flight, config.long_task_max_in_flight)
         return config.max_in_flight
 

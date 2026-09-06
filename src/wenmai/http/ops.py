@@ -40,14 +40,17 @@ def create_ops_router() -> APIRouter:
         ).as_dict()
 
     @router.get("/api/stats/health")
+    @_translate_unknown_collection
     def api_health_snapshot(
         request: Request,
         task_type: str | None = None,
         failure_kind: str | None = None,
+        collection_id: str | None = None,
     ) -> dict[str, object]:
         return request.app.state.ops_service.health_snapshot(
             task_type=task_type,
             failure_kind=failure_kind,
+            collection_id=collection_id,
         ).as_dict()
 
     @router.get("/api/browse")
