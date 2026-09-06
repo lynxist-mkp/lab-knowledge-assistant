@@ -6,7 +6,6 @@ import json
 from dataclasses import replace
 
 from tests.conftest import register_collection
-
 from wenmai.config import Settings
 from wenmai.ops.ask_evidence import (
     ask_evidence_path,

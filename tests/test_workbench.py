@@ -6,8 +6,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-from tests.conftest import register_collection
 
+from tests.conftest import register_collection
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
