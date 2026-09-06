@@ -7,13 +7,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from wenmai.ask_surface import AskSurfaceError, AskSurfaceResult
+import wenmai.pipelines.query as query_compat
 from wenmai.app import create_app
 from wenmai.config import Settings
+from wenmai.generation import QueryGenerationError
 from wenmai.http.ask_service import run_ask
 from wenmai.knowledge import create_knowledge
 from wenmai.models import AskResult
-import wenmai.pipelines.query as query_compat
 from wenmai.pipelines.query_orchestration import AskPipelineInput, ask_pipeline_single
 from wenmai.tracing.store import get_trace_record, read_trace_records
 
@@ -114,24 +114,18 @@ def test_query_compat_default_path_delegates_to_run_ask(
     assert captured["kwargs"]["rerank_enabled"] is False
 
 
-def test_query_compat_record_trace_false_stays_on_deeper_orchestration(
+def test_query_compat_record_trace_false_delegates_to_run_ask(
     test_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     captured = {}
 
-    def _unexpected_run_ask(question, settings, **kwargs):
-        raise AssertionError("compat helper should not use run_ask here")
-
-    def _fake_ask_pipeline_single(payload, *, phase_batch):
-        captured["payload"] = payload
-        captured["phase_batch"] = phase_batch
+    def _fake_run_ask(question, settings, **kwargs):
+        captured["question"] = question
+        captured["settings"] = settings
+        captured["kwargs"] = kwargs
         return AskResult(answer="ok", citations=[], trace_id="trace-deep")
 
-    monkeypatch.setattr("wenmai.http.ask_service.run_ask", _unexpected_run_ask)
-    monkeypatch.setattr(
-        "wenmai.pipelines.query.ask_pipeline_single",
-        _fake_ask_pipeline_single,
-    )
+    monkeypatch.setattr("wenmai.http.ask_service.run_ask", _fake_run_ask)
 
     result = query_compat.ask_question(
         "妈祖信仰的发源地在哪里？",
@@ -140,9 +134,10 @@ def test_query_compat_record_trace_false_stays_on_deeper_orchestration(
     )
 
     assert result.trace_id == "trace-deep"
-    assert captured["payload"].question == "妈祖信仰的发源地在哪里？"
-    assert captured["payload"].record_trace is False
-    assert captured["phase_batch"] == test_settings.resources.query_phase_batch
+    assert captured["question"] == "妈祖信仰的发源地在哪里？"
+    assert captured["settings"] is test_settings
+    assert captured["kwargs"]["record_trace"] is False
+    assert captured["kwargs"]["entrypoint"] == "query-compat"
 
 
 def test_ask_question_includes_ranked_chunks_for_eval(
@@ -190,23 +185,20 @@ def test_ask_accepts_retrieval_mode_and_keeps_public_result(
     }
 
 
-def test_http_ask_endpoint_uses_shared_surface(
+def test_http_ask_endpoint_uses_run_ask_service(
     test_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     app = create_app(test_settings)
     client = TestClient(app)
     captured = {}
 
-    def _fake_ask_surface(question, settings, **kwargs):
+    def _fake_run_ask(question, settings, **kwargs):
         captured["question"] = question
         captured["settings"] = settings
         captured["kwargs"] = kwargs
-        return AskSurfaceResult(
-            result=AskResult(answer="ok", citations=[], trace_id="trace-http"),
-            elapsed_ms=7.5,
-        )
+        return AskResult(answer="ok", citations=[], trace_id="trace-http")
 
-    monkeypatch.setattr("wenmai.http.workbench.ask_surface", _fake_ask_surface)
+    monkeypatch.setattr("wenmai.http.workbench.run_ask", _fake_run_ask)
 
     response = client.post(
         "/ask",
@@ -245,15 +237,15 @@ def test_ask_records_generation_failure_in_trace_and_returns_error(
     assert "error" in detail["message"].lower() or "fake" in detail["message"].lower()
 
 
-def test_http_ask_surface_error_returns_502(
+def test_http_ask_generation_error_returns_502(
     test_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client = TestClient(create_app(test_settings))
 
-    def _fail_ask_surface(question, settings, **kwargs):
-        raise AskSurfaceError("surface failed", "trace-surface")
+    def _fail_run_ask(question, settings, **kwargs):
+        raise QueryGenerationError("surface failed", "trace-surface")
 
-    monkeypatch.setattr("wenmai.http.workbench.ask_surface", _fail_ask_surface)
+    monkeypatch.setattr("wenmai.http.workbench.run_ask", _fail_run_ask)
 
     response = client.post("/ask", json={"question": "妈祖信仰的发源地在哪里？"})
 

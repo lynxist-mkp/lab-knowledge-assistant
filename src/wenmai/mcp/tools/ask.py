@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Any
 
-from wenmai.ask_surface import AskSurfaceError, ask_surface
 from wenmai.config import Settings
+from wenmai.generation import QueryGenerationError
+from wenmai.http.ask_service import run_ask
 from wenmai.knowledge.collections import UnknownCollectionError, resolve_routable_collection_scope
 from wenmai.knowledge.store import Knowledge
 from wenmai.mcp.envelope import McpMeta, envelope, refs_from_ask_result, scope_for
@@ -31,7 +33,8 @@ def ask_answer(
         raise ValueError(str(exc)) from exc
 
     try:
-        ask = ask_surface(
+        started = perf_counter()
+        result = run_ask(
             question,
             scope.settings,
             collection_id=scope.collection_id,
@@ -41,16 +44,17 @@ def ask_answer(
             knowledge=knowledge,
             entrypoint="mcp",
         )
-    except AskSurfaceError as exc:
+        elapsed_ms = (perf_counter() - started) * 1000
+    except QueryGenerationError as exc:
         raise AskAnswerError(str(exc), exc.trace_id) from exc
 
     return envelope(
-        data=ask.result.as_dict(),
+        data=result.as_dict(),
         scope=scope_for(
             scope.settings,
             collection_id=scope.collection_id,
             culture_domain=culture_domain,
         ),
-        refs=refs_from_ask_result(ask.result),
-        meta=McpMeta(elapsed_ms=ask.elapsed_ms, mode=retrieval_mode),
+        refs=refs_from_ask_result(result),
+        meta=McpMeta(elapsed_ms=elapsed_ms, mode=retrieval_mode),
     ).as_dict()

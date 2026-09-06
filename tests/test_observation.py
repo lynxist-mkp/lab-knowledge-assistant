@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from tests.conftest import register_collection
-
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.knowledge.read import ReadPath

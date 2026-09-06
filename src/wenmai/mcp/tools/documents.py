@@ -15,16 +15,19 @@ def documents_list(
     culture_domain: str | None = None,
 ) -> dict[str, Any]:
     try:
-        scoped = document_management.for_collection(collection_id)
+        documents = document_management.list_documents(
+            collection_id=collection_id,
+            culture_domain=culture_domain,
+        )
     except UnknownCollectionError as exc:
         raise ValueError(str(exc)) from exc
-    documents = scoped.list_documents(culture_domain=culture_domain)
     data = [document.as_dict() for document in documents]
     refs = McpRefs(document_ids=[document.document_id for document in documents])
     return envelope(
         data=data,
         scope=scope_for(
-            scoped.settings,
+            document_management.settings,
+            collection_id=collection_id,
             culture_domain=culture_domain,
         ),
         refs=refs,
@@ -39,18 +42,20 @@ def documents_get(
     collection_id: str | None = None,
 ) -> dict[str, Any]:
     try:
-        scoped = document_management.for_collection(collection_id)
+        card = document_management.get_document(document_id, collection_id=collection_id)
+        image_refs = document_management.image_refs_for_document(
+            document_id,
+            collection_id=collection_id,
+        )
     except UnknownCollectionError as exc:
         raise ValueError(str(exc)) from exc
-    try:
-        card = scoped.get_document(document_id)
     except DocumentNotFoundError as exc:
         raise ValueError(str(exc)) from exc
-    image_refs = scoped.image_refs_for_document(document_id)
     return envelope(
         data={**card.as_dict(), "image_refs": image_refs},
         scope=scope_for(
-            scoped.settings,
+            document_management.settings,
+            collection_id=collection_id,
             culture_domain=card.culture_domain,
         ),
         refs=McpRefs(document_ids=[document_id]),
@@ -65,16 +70,17 @@ def documents_delete(
     collection_id: str | None = None,
 ) -> dict[str, Any]:
     try:
-        scoped = document_management.for_collection(collection_id)
+        document_management.delete_document(
+            document_id,
+            collection_id=collection_id,
+        )
     except UnknownCollectionError as exc:
         raise ValueError(str(exc)) from exc
-    try:
-        scoped.delete_document(document_id)
     except DocumentNotFoundError as exc:
         raise ValueError(str(exc)) from exc
     return envelope(
         data={"document_id": document_id, "deleted": True},
-        scope=scope_for(scoped.settings),
+        scope=scope_for(document_management.settings, collection_id=collection_id),
         refs=McpRefs(document_ids=[document_id]),
         meta=McpMeta(count=1),
     ).as_dict()

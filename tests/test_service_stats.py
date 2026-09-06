@@ -8,12 +8,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.conftest import register_collection
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
 from wenmai.ops.observation import load_overview_stats
-from tests.conftest import register_collection
 from wenmai.tracing.latency import query_latency_percentiles
 
 

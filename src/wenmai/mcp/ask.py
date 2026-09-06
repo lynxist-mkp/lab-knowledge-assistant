@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from wenmai.ask_surface import AskSurfaceError, ask_surface
 from wenmai.config import Settings
+from wenmai.generation import QueryGenerationError
+from wenmai.http.ask_service import run_ask
 from wenmai.knowledge.collections import UnknownCollectionError
 
 
@@ -24,7 +25,7 @@ def ask_wenmai(
     """Legacy MCP ask helper: return answer, citations, and trace_id."""
     resolved = settings or Settings.load()
     try:
-        result = ask_surface(
+        result = run_ask(
             question,
             resolved,
             collection_id=collection_id,
@@ -35,6 +36,6 @@ def ask_wenmai(
         )
     except UnknownCollectionError as exc:
         raise ValueError(str(exc)) from exc
-    except AskSurfaceError as exc:
+    except QueryGenerationError as exc:
         raise AskWenmaiError(str(exc), exc.trace_id) from exc
-    return result.result.as_dict()
+    return result.as_dict()

@@ -8,8 +8,8 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from tests.conftest import register_collection
 
+from tests.conftest import register_collection
 from wenmai.config import Settings
 from wenmai.http.ops_service import OpsService
 from wenmai.knowledge import create_document_management, create_knowledge
@@ -390,23 +390,19 @@ def test_mcp_documents_list_uses_collection_bound_document_management(
     test_settings: Settings,
 ) -> None:
     captured: dict[str, object] = {}
-    scoped_settings = CollectionReadModel(
-        test_settings, create_knowledge(test_settings)
-    ).resolve_scope().settings
-
-    class ScopedDocumentManagement:
-        settings = scoped_settings
-
-        def list_documents(self, *, culture_domain: str | None = None):
-            captured["culture_domain"] = culture_domain
-            return []
 
     class RootDocumentManagement:
         settings = test_settings
 
-        def for_collection(self, collection_id: str | None = None):
+        def list_documents(
+            self,
+            *,
+            collection_id: str | None = None,
+            culture_domain: str | None = None,
+        ):
             captured["collection_id"] = collection_id
-            return ScopedDocumentManagement()
+            captured["culture_domain"] = culture_domain
+            return []
 
     result = documents_list(
         RootDocumentManagement(),  # type: ignore[arg-type]
@@ -422,15 +418,10 @@ def test_mcp_documents_list_uses_collection_bound_document_management(
 def test_ops_service_uses_collection_bound_document_management(test_settings: Settings) -> None:
     captured: dict[str, object] = {}
 
-    class ScopedDocumentManagement:
-        def browse_groups(self):
-            captured["scoped_browse"] = True
-            return ["ok"]
-
     class RootDocumentManagement:
-        def for_collection(self, collection_id: str | None = None):
+        def browse_groups(self, *, collection_id: str | None = None):
             captured["collection_id"] = collection_id
-            return ScopedDocumentManagement()
+            return ["ok"]
 
     service = OpsService(
         test_settings,
@@ -439,7 +430,6 @@ def test_ops_service_uses_collection_bound_document_management(test_settings: Se
 
     assert service.browse_groups(collection_id=test_settings.product.collection) == ["ok"]
     assert captured["collection_id"] == test_settings.product.collection
-    assert captured["scoped_browse"] is True
 
 
 def test_document_management_get_document_summary(test_settings: Settings) -> None:

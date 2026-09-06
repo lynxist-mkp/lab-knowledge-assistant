@@ -50,13 +50,80 @@ class PreparedIngest:
 
     body: PrepareBody
     recorder: PrepareTraceRecorder
+    lifecycle: IngestionLifecycle
+
+
+@dataclass(frozen=True)
+class IngestionLifecycle:
+    """Shared task-progress context for one ingestion run."""
+
+    run: TaskProgressRun
+    config: IngestionTaskProgressConfig
 
 
 def count_chunks_with_images(chunks: list[Chunk]) -> int:
     return sum(1 for chunk in chunks if IMAGE_PLACEHOLDER_RE.search(chunk.text))
 
 
+def build_ingestion_lifecycle(
+    recorder: PrepareTraceRecorder,
+    *,
+    pdf_load_mode: str | None,
+) -> IngestionLifecycle:
+    return IngestionLifecycle(
+        run=TaskProgressRun(
+            task_id=f"ingestion:{recorder.trace_id}",
+            task_type="ingestion",
+            started_at=recorder.trace_context.started_at,
+            trigger_source="ingest_api",
+            owner_surface="ops",
+            links={"trace_id": recorder.trace_id},
+        ),
+        config=IngestionTaskProgressConfig(pdf_load_mode=pdf_load_mode),
+    )
+
+
+def persist_ingestion_running(
+    settings: Settings,
+    lifecycle: IngestionLifecycle,
+    *,
+    total: int = 1,
+) -> None:
+    safe_persist_task_progress_running(
+        settings,
+        lifecycle.run,
+        total=total,
+        config=lifecycle.config,
+    )
+
+
+def persist_ingestion_outcome(
+    settings: Settings,
+    lifecycle: IngestionLifecycle,
+    recorder: PrepareTraceRecorder,
+    *,
+    document_id: str | None = None,
+) -> None:
+    links = dict(lifecycle.run.links)
+    if document_id is not None:
+        links["document_id"] = document_id
+    safe_persist_task_progress_outcome(
+        settings,
+        TaskProgressRun(
+            task_id=lifecycle.run.task_id,
+            task_type=lifecycle.run.task_type,
+            started_at=lifecycle.run.started_at,
+            trigger_source=lifecycle.run.trigger_source,
+            owner_surface=lifecycle.run.owner_surface,
+            links=links,
+        ),
+        config=lifecycle.config,
+        outcome=build_ingestion_progress(recorder.trace_context.to_dict()),
+    )
+
+
 def _finish_rejected_ingest(
+    lifecycle: IngestionLifecycle,
     recorder: PrepareTraceRecorder,
     source_path: Path,
     settings: Settings,
@@ -65,14 +132,6 @@ def _finish_rejected_ingest(
     pdf_load_mode: str | None,
 ) -> IngestResult:
     document_id = hashlib.sha256(source_path.read_bytes()).hexdigest()
-    run = TaskProgressRun(
-        task_id=f"ingestion:{recorder.trace_id}",
-        task_type="ingestion",
-        started_at=recorder.trace_context.started_at,
-        trigger_source="ingest_api",
-        owner_surface="ops",
-        links={"trace_id": recorder.trace_id, "document_id": document_id},
-    )
     recorder.set_summary(
         source_path=document_source_path,
         document_id=document_id,
@@ -82,12 +141,7 @@ def _finish_rejected_ingest(
         chunks_with_images=0,
     )
     recorder.close_and_save(settings)
-    safe_persist_task_progress_outcome(
-        settings,
-        run,
-        config=IngestionTaskProgressConfig(pdf_load_mode=pdf_load_mode),
-        outcome=build_ingestion_progress(recorder.trace_context.to_dict()),
-    )
+    persist_ingestion_outcome(settings, lifecycle, recorder, document_id=document_id)
     return IngestResult(
         document_id=document_id,
         chunk_count=0,
@@ -134,16 +188,8 @@ def prepare_ingest(
 ) -> PreparedIngest | IngestResult:
     """Phase-1 ingest: 入库准入 through transform; no embed/upsert."""
     trace_recorder = recorder or PrepareTraceRecorder(on_stage=on_stage)
-    run = TaskProgressRun(
-        task_id=f"ingestion:{trace_recorder.trace_id}",
-        task_type="ingestion",
-        started_at=trace_recorder.trace_context.started_at,
-        trigger_source="ingest_api",
-        owner_surface="ops",
-        links={"trace_id": trace_recorder.trace_id},
-    )
-    config = IngestionTaskProgressConfig(pdf_load_mode=pdf_load_mode)
-    safe_persist_task_progress_running(settings, run, total=1, config=config)
+    lifecycle = build_ingestion_lifecycle(trace_recorder, pdf_load_mode=pdf_load_mode)
+    persist_ingestion_running(settings, lifecycle)
     knowledge = knowledge or create_knowledge(settings)
     document_source_path = str(source_path)
 
@@ -183,6 +229,7 @@ def prepare_ingest(
                     )
                 )
             return _finish_rejected_ingest(
+                lifecycle,
                 trace_recorder,
                 source_path,
                 settings,
@@ -269,21 +316,11 @@ def prepare_ingest(
                 chunks_with_images=0,
             )
             trace_recorder.close_and_save(settings)
-            safe_persist_task_progress_outcome(
+            persist_ingestion_outcome(
                 settings,
-                TaskProgressRun(
-                    task_id=run.task_id,
-                    task_type=run.task_type,
-                    started_at=run.started_at,
-                    trigger_source=run.trigger_source,
-                    owner_surface=run.owner_surface,
-                    links={
-                        "trace_id": trace_recorder.trace_id,
-                        "document_id": document_id,
-                    },
-                ),
-                config=config,
-                outcome=build_ingestion_progress(trace_recorder.trace_context.to_dict()),
+                lifecycle,
+                trace_recorder,
+                document_id=document_id,
             )
             return IngestResult(
                 document_id=document_id,
@@ -331,18 +368,22 @@ def prepare_ingest(
             chunks=chunks,
             previous_document_id=previous_document_id,
         )
-        return PreparedIngest(body=body, recorder=trace_recorder)
+        return PreparedIngest(body=body, recorder=trace_recorder, lifecycle=lifecycle)
     except Exception as exc:
         trace_recorder.trace_context.error = f"{type(exc).__name__}: {exc}"
         trace_recorder.trace_context.close()
         trace_recorder.save_on_error(settings)
-        safe_persist_task_progress_outcome(
-            settings,
-            run,
-            config=config,
-            outcome=build_ingestion_progress(trace_recorder.trace_context.to_dict()),
-        )
+        persist_ingestion_outcome(settings, lifecycle, trace_recorder)
         raise
 
 
-__all__ = ["PrepareBody", "PreparedIngest", "count_chunks_with_images", "prepare_ingest"]
+__all__ = [
+    "IngestionLifecycle",
+    "PrepareBody",
+    "PreparedIngest",
+    "build_ingestion_lifecycle",
+    "count_chunks_with_images",
+    "persist_ingestion_outcome",
+    "persist_ingestion_running",
+    "prepare_ingest",
+]

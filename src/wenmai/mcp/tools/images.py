@@ -15,16 +15,14 @@ def images_get_ref(
     collection_id: str | None = None,
 ) -> dict[str, Any]:
     try:
-        scoped = document_management.for_collection(collection_id)
+        ref = document_management.get_image_ref(image_id, collection_id=collection_id)
     except UnknownCollectionError as exc:
         raise ValueError(str(exc)) from exc
-    try:
-        ref = scoped.get_image_ref(image_id)
     except ImageNotFoundError as exc:
         raise ValueError(str(exc)) from exc
     return envelope(
         data=ref,
-        scope=scope_for(scoped.settings),
+        scope=scope_for(document_management.settings, collection_id=collection_id),
         refs=McpRefs(image_ids=[image_id]),
         meta=McpMeta(count=1),
     ).as_dict()
@@ -37,16 +35,17 @@ def images_get_content(
     collection_id: str | None = None,
 ) -> dict[str, Any]:
     try:
-        scoped = document_management.for_collection(collection_id)
+        content = document_management.get_image_content(
+            image_id,
+            collection_id=collection_id,
+        )
     except UnknownCollectionError as exc:
         raise ValueError(str(exc)) from exc
-    try:
-        content = scoped.get_image_content(image_id)
     except ImageNotFoundError as exc:
         raise ValueError(str(exc)) from exc
     return envelope(
         data=content.as_dict(),
-        scope=scope_for(scoped.settings),
+        scope=scope_for(document_management.settings, collection_id=collection_id),
         refs=McpRefs(image_ids=[image_id]),
         meta=McpMeta(count=1),
     ).as_dict()

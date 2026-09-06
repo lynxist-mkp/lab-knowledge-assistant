@@ -91,6 +91,14 @@ class DocumentManagement:
         """Return document card fields as a plain dict for adapter layers."""
         return self.get_document(document_id, collection_id=collection_id).as_dict()
 
+    def get_chunk_detail(
+        self,
+        chunk_id: str,
+        *,
+        collection_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        return self.for_collection(collection_id)._knowledge.chunk_detail(chunk_id)
+
     def delete_document(self, document_id: str, *, collection_id: str | None = None) -> None:
         scoped = self.for_collection(collection_id)
         if not scoped._knowledge.get_by_document_id(document_id):

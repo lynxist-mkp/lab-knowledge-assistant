@@ -14,15 +14,14 @@ def reviews_list_pending(
     collection_id: str | None = None,
 ) -> dict[str, Any]:
     try:
-        scoped = document_management.for_collection(collection_id)
+        pending = document_management.list_pending_reviews(collection_id=collection_id)
     except UnknownCollectionError as exc:
         raise ValueError(str(exc)) from exc
-    pending = scoped.list_pending_reviews()
     data = [item.as_dict() for item in pending]
     refs = McpRefs(document_ids=[item.document_id for item in pending])
     return envelope(
         data=data,
-        scope=scope_for(scoped.settings),
+        scope=scope_for(document_management.settings, collection_id=collection_id),
         refs=refs,
         meta=McpMeta(count=len(data)),
     ).as_dict()
@@ -35,16 +34,14 @@ def reviews_approve(
     collection_id: str | None = None,
 ) -> dict[str, Any]:
     try:
-        scoped = document_management.for_collection(collection_id)
+        document_management.approve_review(document_id, collection_id=collection_id)
     except UnknownCollectionError as exc:
         raise ValueError(str(exc)) from exc
-    try:
-        scoped.approve_review(document_id)
     except DocumentNotFoundError as exc:
         raise ValueError(str(exc)) from exc
     return envelope(
         data={"document_id": document_id, "审阅状态": "已通过"},
-        scope=scope_for(scoped.settings),
+        scope=scope_for(document_management.settings, collection_id=collection_id),
         refs=McpRefs(document_ids=[document_id]),
         meta=McpMeta(count=1),
     ).as_dict()
@@ -57,16 +54,14 @@ def reviews_reject(
     collection_id: str | None = None,
 ) -> dict[str, Any]:
     try:
-        scoped = document_management.for_collection(collection_id)
+        document_management.reject_review(document_id, collection_id=collection_id)
     except UnknownCollectionError as exc:
         raise ValueError(str(exc)) from exc
-    try:
-        scoped.reject_review(document_id)
     except DocumentNotFoundError as exc:
         raise ValueError(str(exc)) from exc
     return envelope(
         data={"document_id": document_id, "审阅状态": "已驳回"},
-        scope=scope_for(scoped.settings),
+        scope=scope_for(document_management.settings, collection_id=collection_id),
         refs=McpRefs(document_ids=[document_id]),
         meta=McpMeta(count=1),
     ).as_dict()

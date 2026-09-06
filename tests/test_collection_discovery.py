@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
-from tests.conftest import register_collection
 
+from tests.conftest import register_collection
 from wenmai.config import CollectionRegistration, Settings
 from wenmai.knowledge import create_document_management, create_knowledge
 from wenmai.knowledge.collections import (

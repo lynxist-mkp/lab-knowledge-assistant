@@ -584,11 +584,6 @@ __all__ = [
     "run_ask_pipeline",
     "run_ask_works",
     "run_eval_works",
-    "run_ask",
-    "run_eval",
     "_run_generation_phase",
     "_run_phases",
 ]
-
-run_ask = run_ask_works
-run_eval = run_eval_works

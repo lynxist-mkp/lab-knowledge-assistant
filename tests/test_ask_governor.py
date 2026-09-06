@@ -6,9 +6,9 @@ import threading
 from dataclasses import replace
 
 import pytest
-from tests.conftest import register_collection
 
 import wenmai.http.ask_governor as ask_governor
+from tests.conftest import register_collection
 from wenmai.config import AskConcurrencyConfig, Settings
 from wenmai.http.ask_governor import (
     AskConcurrencyGovernor,

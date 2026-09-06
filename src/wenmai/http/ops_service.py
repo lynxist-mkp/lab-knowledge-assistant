@@ -58,22 +58,18 @@ class OpsService:
         )
 
     def browse_groups(self, *, collection_id: str | None = None):
-        scoped = self._document_management.for_collection(collection_id)
-        return scoped.browse_groups()
+        return self._document_management.browse_groups(collection_id=collection_id)
 
     def list_pending_reviews(self, *, collection_id: str | None = None):
-        scoped = self._document_management.for_collection(collection_id)
-        return scoped.list_pending_reviews()
+        return self._document_management.list_pending_reviews(collection_id=collection_id)
 
     def approve_review(
         self, document_id: str, *, collection_id: str | None = None
     ) -> None:
-        scoped = self._document_management.for_collection(collection_id)
-        scoped.approve_review(document_id)
+        self._document_management.approve_review(document_id, collection_id=collection_id)
 
     def reject_review(self, document_id: str, *, collection_id: str | None = None) -> None:
-        scoped = self._document_management.for_collection(collection_id)
-        scoped.reject_review(document_id)
+        self._document_management.reject_review(document_id, collection_id=collection_id)
 
     def ingestion_traces(
         self,

@@ -8,8 +8,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from wenmai.app import create_app
-from wenmai.ask_surface import AskSurfaceResult
 from wenmai.config import Settings
+from wenmai.generation import QueryGenerationError
 from wenmai.http.ask_service import run_ask
 from wenmai.mcp.ask import AskWenmaiError, ask_wenmai
 from wenmai.mcp.server import create_mcp_server
@@ -96,21 +96,18 @@ def test_ask_answer_envelope_contains_trace_id(
     assert result["scope"]["collection_id"] == test_settings.product.collection
 
 
-def test_ask_answer_uses_shared_surface(
+def test_ask_answer_uses_run_ask_service(
     test_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     captured = {}
 
-    def _fake_ask_surface(question, settings, **kwargs):
+    def _fake_run_ask(question, settings, **kwargs):
         captured["question"] = question
         captured["settings"] = settings
         captured["kwargs"] = kwargs
-        return AskSurfaceResult(
-            result=AskResult(answer="ok", citations=[], trace_id="trace-123"),
-            elapsed_ms=12.5,
-        )
+        return AskResult(answer="ok", citations=[], trace_id="trace-123")
 
-    monkeypatch.setattr("wenmai.mcp.tools.ask.ask_surface", _fake_ask_surface)
+    monkeypatch.setattr("wenmai.mcp.tools.ask.run_ask", _fake_run_ask)
 
     result = ask_answer(
         "妈祖信仰的发源地在哪里？",
@@ -122,7 +119,7 @@ def test_ask_answer_uses_shared_surface(
     )
 
     assert result["data"]["trace_id"] == "trace-123"
-    assert result["meta"]["elapsed_ms"] == 12.5
+    assert result["meta"]["elapsed_ms"] is not None
     assert captured["question"] == "妈祖信仰的发源地在哪里？"
     assert captured["settings"] is not test_settings
     assert captured["settings"].product.collection == test_settings.product.collection
@@ -152,21 +149,18 @@ def test_legacy_ask_wenmai_returns_plain_contract(
     assert "scope" not in result
 
 
-def test_legacy_ask_wenmai_uses_shared_surface(
+def test_legacy_ask_wenmai_uses_run_ask_service(
     test_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     captured = {}
 
-    def _fake_ask_surface(question, settings, **kwargs):
+    def _fake_run_ask(question, settings, **kwargs):
         captured["question"] = question
         captured["settings"] = settings
         captured["kwargs"] = kwargs
-        return AskSurfaceResult(
-            result=AskResult(answer="ok", citations=[], trace_id="trace-legacy"),
-            elapsed_ms=8.0,
-        )
+        return AskResult(answer="ok", citations=[], trace_id="trace-legacy")
 
-    monkeypatch.setattr("wenmai.mcp.ask.ask_surface", _fake_ask_surface)
+    monkeypatch.setattr("wenmai.mcp.ask.run_ask", _fake_run_ask)
 
     result = ask_wenmai(
         "妈祖信仰的发源地在哪里？",
@@ -190,14 +184,11 @@ def test_legacy_ask_wenmai_forwards_collection_id(
 ) -> None:
     captured = {}
 
-    def _fake_ask_surface(question, settings, **kwargs):
+    def _fake_run_ask(question, settings, **kwargs):
         captured["kwargs"] = kwargs
-        return AskSurfaceResult(
-            result=AskResult(answer="ok", citations=[], trace_id="trace-scoped"),
-            elapsed_ms=1.0,
-        )
+        return AskResult(answer="ok", citations=[], trace_id="trace-scoped")
 
-    monkeypatch.setattr("wenmai.mcp.ask.ask_surface", _fake_ask_surface)
+    monkeypatch.setattr("wenmai.mcp.ask.run_ask", _fake_run_ask)
 
     ask_wenmai(
         "问题",
@@ -243,3 +234,17 @@ def test_ask_surfaces_generation_failure_with_trace_id(
         ask_wenmai("妈祖信仰的发源地在哪里？", test_settings)
 
     assert legacy_exc_info.value.trace_id
+
+
+def test_ask_answer_wraps_query_generation_error(
+    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _fail_run_ask(question, settings, **kwargs):
+        raise QueryGenerationError("generation failed", "trace-ask")
+
+    monkeypatch.setattr("wenmai.mcp.tools.ask.run_ask", _fail_run_ask)
+
+    with pytest.raises(AskAnswerError) as exc_info:
+        ask_answer("问题", test_settings)
+
+    assert exc_info.value.trace_id == "trace-ask"

@@ -5,6 +5,7 @@ from wenmai.http.ask_governor import get_ask_governor
 from wenmai.knowledge.collections import resolve_routable_collection_scope
 from wenmai.knowledge.store import Knowledge, create_knowledge
 from wenmai.models import AskResult
+from wenmai.pipelines.query_batch import get_query_coordinator, window_batch_enabled
 from wenmai.pipelines.query_orchestration import AskPipelineInput, ask_pipeline_single
 
 
@@ -17,6 +18,7 @@ def run_ask(
     retrieval_mode: str | None = None,
     rerank_enabled: bool | None = None,
     knowledge: Knowledge | None = None,
+    record_trace: bool = True,
     entrypoint: str = "service",
 ) -> AskResult:
     """Stable service-layer seam for external ask entrypoints.
@@ -26,7 +28,11 @@ def run_ask(
     """
     scope = resolve_routable_collection_scope(settings, collection_id)
     resolved_knowledge = knowledge
-    if knowledge is None and collection_id is not None:
+    # Collection-routed asks must use collection-scoped knowledge instead of a
+    # possibly shared default-collection adapter supplied by the caller.
+    if collection_id is not None:
+        resolved_knowledge = create_knowledge(scope.settings)
+    elif resolved_knowledge is None:
         resolved_knowledge = create_knowledge(scope.settings)
     governor = get_ask_governor(scope.settings)
     with governor.acquire(
@@ -34,6 +40,16 @@ def run_ask(
         entrypoint=entrypoint,
         collection_id=collection_id,
     ):
+        if window_batch_enabled(scope.settings):
+            return get_query_coordinator(scope.settings).submit(
+                question,
+                scope.settings,
+                culture_domain,
+                retrieval_mode=retrieval_mode,
+                rerank_enabled=rerank_enabled,
+                knowledge=resolved_knowledge,
+                record_trace=record_trace,
+            )
         return ask_pipeline_single(
             AskPipelineInput(
                 question=question,
@@ -42,6 +58,7 @@ def run_ask(
                 retrieval_mode=retrieval_mode,
                 rerank_enabled=rerank_enabled,
                 knowledge=resolved_knowledge,
+                record_trace=record_trace,
             ),
-            phase_batch=settings.resources.query_phase_batch,
+            phase_batch=scope.settings.resources.query_phase_batch,
         )

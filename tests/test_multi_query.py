@@ -8,8 +8,7 @@ import yaml
 
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
-from wenmai.models import Chunk
-from wenmai.models import AskResult
+from wenmai.models import AskResult, Chunk
 from wenmai.pipelines.query_orchestration import AskPipelineInput, ask_pipeline_single
 from wenmai.retrieval import retrieve
 from wenmai.tracing.store import get_trace_record

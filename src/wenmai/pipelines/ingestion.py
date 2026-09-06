@@ -7,15 +7,14 @@ from typing import Protocol
 from wenmai.components.model_guard import ModelResource
 from wenmai.components.model_guard import phase_batch as model_phase_batch
 from wenmai.config import Settings
-from wenmai.ingestion.orchestrator import PreparedIngest, count_chunks_with_images, prepare_ingest
+from wenmai.ingestion.orchestrator import (
+    PreparedIngest,
+    count_chunks_with_images,
+    persist_ingestion_outcome,
+    prepare_ingest,
+)
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import IngestResult
-from wenmai.task_progress import (
-    IngestionTaskProgressConfig,
-    TaskProgressRun,
-    safe_persist_task_progress_outcome,
-)
-from wenmai.task_progress_builders import build_ingestion_progress
 from wenmai.tracing import StageRecord
 
 
@@ -78,41 +77,21 @@ def commit_prepared_ingest(
             chunk_count=upserted.chunk_count,
         )
         recorder.close_and_save(settings)
-        safe_persist_task_progress_outcome(
+        persist_ingestion_outcome(
             settings,
-            TaskProgressRun(
-                task_id=f"ingestion:{recorder.trace_id}",
-                task_type="ingestion",
-                started_at=recorder.trace_context.started_at,
-                trigger_source="ingest_api",
-                owner_surface="ops",
-                links={
-                    "trace_id": recorder.trace_id,
-                    "document_id": body.document_id,
-                },
-            ),
-            config=IngestionTaskProgressConfig(pdf_load_mode=body.pdf_load_mode),
-            outcome=build_ingestion_progress(recorder.trace_context.to_dict()),
+            prepared.lifecycle,
+            recorder,
+            document_id=body.document_id,
         )
     except Exception as exc:
         recorder.trace_context.error = f"{type(exc).__name__}: {exc}"
         recorder.trace_context.close()
         recorder.save_on_error(settings)
-        safe_persist_task_progress_outcome(
+        persist_ingestion_outcome(
             settings,
-            TaskProgressRun(
-                task_id=f"ingestion:{recorder.trace_id}",
-                task_type="ingestion",
-                started_at=recorder.trace_context.started_at,
-                trigger_source="ingest_api",
-                owner_surface="ops",
-                links={
-                    "trace_id": recorder.trace_id,
-                    "document_id": body.document_id,
-                },
-            ),
-            config=IngestionTaskProgressConfig(pdf_load_mode=body.pdf_load_mode),
-            outcome=build_ingestion_progress(recorder.trace_context.to_dict()),
+            prepared.lifecycle,
+            recorder,
+            document_id=body.document_id,
         )
         raise
 

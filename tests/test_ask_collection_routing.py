@@ -6,16 +6,13 @@ from dataclasses import replace
 
 import pytest
 
-from wenmai.ask_surface import ask_surface
+from tests.conftest import register_collection
 from wenmai.config import Settings
 from wenmai.http.ask_service import run_ask
 from wenmai.knowledge import create_knowledge
 from wenmai.knowledge.collections import UnknownCollectionError, resolve_routable_collection_scope
 from wenmai.mcp.tools.ask import ask_answer
 from wenmai.models import AskResult, Chunk
-
-
-from tests.conftest import register_collection
 
 
 def _other_collection_settings(
@@ -112,11 +109,15 @@ def test_run_ask_explicit_collection_id_supplies_scoped_knowledge(
 def test_run_ask_without_collection_id_does_not_bind_knowledge_in_service(
     test_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def unexpected_create(*args, **kwargs):
-        raise AssertionError("run_ask should not create knowledge without collection_id")
+    created: list[tuple[str | None, object]] = []
+    original_create = create_knowledge
 
-    monkeypatch.setattr("wenmai.http.ask_service.create_knowledge", unexpected_create)
+    def tracking_create(settings, *, collection_id=None):
+        instance = original_create(settings, collection_id=collection_id)
+        created.append((collection_id, instance))
+        return instance
 
+    monkeypatch.setattr("wenmai.http.ask_service.create_knowledge", tracking_create)
     captured: dict[str, object] = {}
 
     def fake_pipeline(payload, *, phase_batch):
@@ -127,18 +128,24 @@ def test_run_ask_without_collection_id_does_not_bind_knowledge_in_service(
 
     run_ask("问题", test_settings)
 
-    assert captured["knowledge"] is None
+    assert len(created) == 1
+    assert created[0][0] is None
+    assert captured["knowledge"] is created[0][1]
 
 
-def test_run_ask_preserves_injected_knowledge_with_explicit_collection_id(
+def test_run_ask_replaces_injected_default_knowledge_with_explicit_collection_id(
     test_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     injected = create_knowledge(test_settings)
+    created: list[tuple[str | None, object]] = []
+    original_create = create_knowledge
 
-    def unexpected_create(*args, **kwargs):
-        raise AssertionError("run_ask should not replace injected knowledge")
+    def tracking_create(settings, *, collection_id=None):
+        instance = original_create(settings, collection_id=collection_id)
+        created.append((collection_id, instance))
+        return instance
 
-    monkeypatch.setattr("wenmai.http.ask_service.create_knowledge", unexpected_create)
+    monkeypatch.setattr("wenmai.http.ask_service.create_knowledge", tracking_create)
 
     captured: dict[str, object] = {}
 
@@ -155,7 +162,8 @@ def test_run_ask_preserves_injected_knowledge_with_explicit_collection_id(
         knowledge=injected,
     )
 
-    assert captured["knowledge"] is injected
+    assert len(created) == 1
+    assert captured["knowledge"] is created[0][1]
 
 
 def test_run_ask_routes_retrieval_to_other_collection_storage(
@@ -188,21 +196,23 @@ def test_run_ask_routes_retrieval_to_other_collection_storage(
     assert default_result.citations[0].document_id == "default-doc"
 
 
-def test_ask_surface_explicit_collection_id_routes_to_scoped_storage(
+def test_legacy_ask_mcp_helper_explicit_collection_id_routes_to_scoped_storage(
     test_settings: Settings,
 ) -> None:
+    from wenmai.mcp.ask import ask_wenmai
+
     other_id = "other-collection"
     other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     _commit(other_knowledge, "surface-other-doc", "SURFACE_MARKER_qwe 表面路由")
 
-    result = ask_surface(
+    result = ask_wenmai(
         "SURFACE_MARKER_qwe 在哪里",
         register_collection(test_settings, other_id),
         collection_id=other_id,
     )
 
-    assert result.result.citations
-    assert result.result.citations[0].document_id == "surface-other-doc"
+    assert result["citations"]
+    assert result["citations"][0]["document_id"] == "surface-other-doc"
 
 
 def test_ask_answer_unknown_collection_still_raises(test_settings: Settings) -> None:
