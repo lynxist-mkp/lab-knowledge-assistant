@@ -72,9 +72,17 @@ def create_workbench_router() -> APIRouter:
         return detail
 
     @router.get("/api/documents/{document_id}")
-    def api_document_card(request: Request, document_id: str) -> dict[str, object]:
+    @_translate_unknown_collection
+    def api_document_card(
+        request: Request,
+        document_id: str,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
         try:
-            return request.app.state.document_management.get_document(document_id).as_dict()
+            return request.app.state.document_management.get_document(
+                document_id,
+                collection_id=collection_id,
+            ).as_dict()
         except DocumentNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 

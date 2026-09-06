@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.conftest import register_collection
 
 from wenmai.app import create_app
 from wenmai.config import Settings
@@ -30,6 +32,16 @@ title: 湄洲妈祖祖庙简介
         encoding="utf-8",
     )
     return path
+
+
+def _other_collection_settings(
+    test_settings: Settings, other_id: str = "other-collection"
+) -> Settings:
+    registered = register_collection(test_settings, other_id)
+    return replace(
+        registered,
+        product=replace(test_settings.product, collection=other_id),
+    )
 
 
 def test_documents_get_returns_enveloped_card(
@@ -96,3 +108,36 @@ def test_api_document_card_returns_404_for_unknown(test_settings: Settings) -> N
     response = client.get("/api/documents/no-such-document")
     assert response.status_code == 404
     assert "document not found" in response.json()["detail"]
+
+
+def test_api_document_card_routes_by_collection_query_param(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    other_id = "other-collection"
+    settings = register_collection(test_settings, other_id)
+    client = TestClient(create_app(settings))
+    other_settings = _other_collection_settings(test_settings, other_id)
+    other_client = TestClient(create_app(other_settings))
+    source = _write_minpai_markdown(tmp_path / "other-matsu.md")
+
+    ingest = other_client.post("/ingest", json={"source_path": str(source)})
+    assert ingest.status_code == 200
+    document_id = ingest.json()["document_id"]
+
+    default_response = client.get(f"/api/documents/{document_id}")
+    assert default_response.status_code == 404
+
+    scoped_response = client.get(
+        f"/api/documents/{document_id}",
+        params={"collection_id": other_id},
+    )
+    assert scoped_response.status_code == 200
+    assert scoped_response.json()["document_id"] == document_id
+    assert scoped_response.json()["title"] == "湄洲妈祖祖庙简介"
+
+    unknown = client.get(
+        f"/api/documents/{document_id}",
+        params={"collection_id": "missing-collection"},
+    )
+    assert unknown.status_code == 404
+    assert unknown.json()["detail"] == "collection not found"

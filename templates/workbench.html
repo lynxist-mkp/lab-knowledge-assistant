@@ -1336,6 +1336,21 @@
       .replace(/'/g, '&#039;');
   }
 
+  function getCollectionIdFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const collectionId = params.get('collection_id');
+    return collectionId ? collectionId : null;
+  }
+
+  function buildWorkbenchApiUrl(path) {
+    const collectionId = getCollectionIdFromUrl();
+    if (!collectionId) {
+      return path;
+    }
+    const separator = path.indexOf('?') >= 0 ? '&' : '?';
+    return path + separator + 'collection_id=' + encodeURIComponent(collectionId);
+  }
+
   function fallbackCopyText(text) {
     const ta = document.createElement('textarea');
     ta.value = text;
@@ -1439,7 +1454,9 @@
     }
 
     try {
-      const res = await fetch('/api/chunks/' + encodeURIComponent(chunkId));
+      const res = await fetch(
+        buildWorkbenchApiUrl('/api/chunks/' + encodeURIComponent(chunkId))
+      );
       if (res.status === 404) {
         drawerErrorMsg.textContent = '未找到出处片段 (' + chunkId + ')，该材料可能已被更新或重构。';
         setDrawerState('error');

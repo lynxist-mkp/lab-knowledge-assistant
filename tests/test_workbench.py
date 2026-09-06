@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from tests.conftest import register_collection
 
 from wenmai.app import create_app
 from wenmai.config import Settings
@@ -24,6 +26,16 @@ title: {title}
         encoding="utf-8",
     )
     return path
+
+
+def _other_collection_settings(
+    test_settings: Settings, other_id: str = "other-collection"
+) -> Settings:
+    registered = register_collection(test_settings, other_id)
+    return replace(
+        registered,
+        product=replace(test_settings.product, collection=other_id),
+    )
 
 
 def _workbench_html(client: TestClient) -> str:
@@ -156,12 +168,13 @@ def test_workbench_citation_drawer_js_wiring(test_settings: Settings) -> None:
     assert "async function openCitationDrawer" in html or "function openCitationDrawer" in html
     assert "function closeCitationDrawer" in html
 
-    # Drawer fetch path: /api/chunks/ + encodeURIComponent (not ops or browse)
+    # Drawer fetch path inherits page collection scope via helper.
+    assert "function getCollectionIdFromUrl" in html
+    assert "function buildWorkbenchApiUrl" in html
     assert "/api/chunks/" in html
     assert "encodeURIComponent" in html
-    assert "fetch('/api/chunks/' + encodeURIComponent" in html or (
-        "fetch('/api/chunks/'" in html and "encodeURIComponent(chunkId)" in html
-    )
+    assert "fetch(" in html
+    assert "buildWorkbenchApiUrl('/api/chunks/' + encodeURIComponent(chunkId))" in html
     assert "fetch('/ops" not in html
     assert 'fetch("/ops' not in html
     assert "fetch('/api/browse" not in html
@@ -227,3 +240,82 @@ def test_workbench_chunk_api_returns_fragment_text(
 
     missing = client.get("/api/chunks/nonexistent-chunk-id")
     assert missing.status_code == 404
+
+
+def test_workbench_page_collection_scope_url_wiring(test_settings: Settings) -> None:
+    client = TestClient(create_app(test_settings))
+    html = _workbench_html(client)
+
+    assert "params.get('collection_id')" in html
+    assert "function buildWorkbenchApiUrl" in html
+    assert "buildWorkbenchApiUrl('/api/chunks/' + encodeURIComponent(chunkId))" in html
+
+
+def test_workbench_chunk_api_routes_by_collection_query_param(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    other_id = "other-collection"
+    settings = register_collection(test_settings, other_id)
+    client = TestClient(create_app(settings))
+    other_settings = _other_collection_settings(test_settings, other_id)
+    other_client = TestClient(create_app(other_settings))
+
+    source = _write_markdown(
+        tmp_path / "other-collection.md",
+        culture_domain="妈祖",
+        title="其他集合文档",
+        body="其他集合里的出处片段正文。",
+    )
+    ingest = other_client.post("/ingest", json={"source_path": str(source)})
+    assert ingest.status_code == 200
+
+    browse = other_client.get("/api/browse")
+    assert browse.status_code == 200
+    chunk_id = browse.json()[0]["documents"][0]["chunks"][0]["chunk_id"]
+
+    default_detail = client.get(f"/api/chunks/{chunk_id}")
+    assert default_detail.status_code == 404
+
+    scoped_detail = client.get(
+        f"/api/chunks/{chunk_id}",
+        params={"collection_id": other_id},
+    )
+    assert scoped_detail.status_code == 200
+    assert "其他集合里的出处片段正文" in scoped_detail.json()["text"]
+
+
+def test_api_document_card_routes_by_collection_query_param(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    other_id = "other-collection"
+    settings = register_collection(test_settings, other_id)
+    client = TestClient(create_app(settings))
+    other_settings = _other_collection_settings(test_settings, other_id)
+    other_client = TestClient(create_app(other_settings))
+
+    source = _write_markdown(
+        tmp_path / "other-document.md",
+        culture_domain="海丝",
+        title="其他集合文档卡片",
+        body="其他集合里的文档详情正文。",
+    )
+    ingest = other_client.post("/ingest", json={"source_path": str(source)})
+    assert ingest.status_code == 200
+    document_id = ingest.json()["document_id"]
+
+    default_detail = client.get(f"/api/documents/{document_id}")
+    assert default_detail.status_code == 404
+
+    scoped_detail = client.get(
+        f"/api/documents/{document_id}",
+        params={"collection_id": other_id},
+    )
+    assert scoped_detail.status_code == 200
+    assert scoped_detail.json()["title"] == "其他集合文档卡片"
+
+    unknown = client.get(
+        f"/api/documents/{document_id}",
+        params={"collection_id": "missing-collection"},
+    )
+    assert unknown.status_code == 404
+    assert unknown.json()["detail"] == "collection not found"
