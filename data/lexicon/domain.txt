@@ -1,9 +1,23 @@
-船政学堂
-马尾学堂
-湄洲祖庙
-妈祖信仰
-妈祖庙
-天妃庙
-朱子文化
-海丝
-海上丝绸之路
+Transformer
+BERT
+大语言模型
+注意力机制
+Word2vec
+CLIP
+Vision Transformer
+扩散模型
+光学字符识别
+图像描述
+检索增强生成
+词嵌入
+向量数据库
+密集检索
+混合搜索
+强化学习
+Q-learning
+近端策略优化
+马尔可夫决策过程
+策略梯度
+深度学习
+PyTorch
+Hugging Face

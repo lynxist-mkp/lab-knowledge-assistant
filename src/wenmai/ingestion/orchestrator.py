@@ -13,6 +13,13 @@ from wenmai.ingestion.admission import AdmissionGate
 from wenmai.ingestion.loaders import LoadedDocument, SourceLoadError, load_source
 from wenmai.ingestion.prepare import prepare_chunks
 from wenmai.ingestion.quality import peek_source
+from wenmai.ingestion.source_metadata import (
+    SOURCE_KIND_GROUP,
+    LiteratureMetadataOverrides,
+    ResolvedSourceMetadata,
+    SourceKind,
+    resolve_source_metadata,
+)
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.knowledge.domain import REVIEW_PENDING, REVIEW_STATUS_FIELD, stamp_review_status
 from wenmai.models import Chunk, IngestResult
@@ -40,6 +47,7 @@ class PrepareBody:
     status: str
     gray_review: bool
     pdf_load_mode: str | None
+    source_metadata: ResolvedSourceMetadata
     chunks: list[Chunk]
     previous_document_id: str | None
 
@@ -79,6 +87,7 @@ class PreparedIngest:
                 status=body.status,
                 chunk_count=len(body.chunks),
                 chunks_with_images=count_chunks_with_images(body.chunks),
+                source_metadata=body.source_metadata,
             )
             recorder.record_embed(
                 provider=upserted.embed_provider,
@@ -197,15 +206,24 @@ def _finish_rejected_ingest(
     *,
     document_source_path: str,
     pdf_load_mode: str | None,
+    source_kind: SourceKind = SOURCE_KIND_GROUP,
+    literature: LiteratureMetadataOverrides | None = None,
 ) -> IngestResult:
     document_id = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    source_metadata = resolve_source_metadata(
+        path=source_path,
+        loaded_title=source_path.stem,
+        source_kind=source_kind,
+        overrides=literature,
+    )
     recorder.set_summary(
         source_path=document_source_path,
         document_id=document_id,
-        title=source_path.stem,
+        title=source_metadata.title,
         status="rejected",
         chunk_count=0,
         chunks_with_images=0,
+        source_metadata=source_metadata,
     )
     recorder.close_and_save(settings)
     persist_ingestion_outcome(settings, lifecycle, recorder, document_id=document_id)
@@ -223,14 +241,16 @@ def _chunk_metadata(
     document: LoadedDocument,
     index: int,
     gray_review: bool,
+    source_metadata: ResolvedSourceMetadata,
 ) -> dict[str, object]:
     metadata: dict[str, object] = {
         "chunk_index": index,
         "document_id": document.document_id,
-        "title": document.title,
+        "title": source_metadata.title,
         "url": document.url,
         "page": document.page,
         "source_path": document.source_path,
+        **source_metadata.chunk_fields(),
         **{
             key: value
             for key, value in document.extra.items()
@@ -249,6 +269,8 @@ def prepare_ingest(
     settings: Settings,
     *,
     pdf_load_mode: str | None = None,
+    source_kind: SourceKind = SOURCE_KIND_GROUP,
+    literature: LiteratureMetadataOverrides | None = None,
     on_stage: Callable[[StageRecord], None] | None = None,
     knowledge: Knowledge | None = None,
     recorder: PrepareTraceRecorder | None = None,
@@ -302,6 +324,8 @@ def prepare_ingest(
                 settings,
                 document_source_path=document_source_path,
                 pdf_load_mode=pdf_load_mode,
+                source_kind=source_kind,
+                literature=literature,
             )
 
         if admission.gray_outcome is not None:
@@ -339,7 +363,16 @@ def prepare_ingest(
             document_id = document.document_id
             document_title = document.title
             document_source_path = document.source_path
-            load_info["output_summary"] = document.title
+            source_metadata = resolve_source_metadata(
+                path=source_path,
+                loaded_title=document.title,
+                front_matter=document.front_matter,
+                embedded=document.embedded_literature,
+                source_kind=source_kind,
+                overrides=literature,
+            )
+            document_title = source_metadata.title
+            load_info["output_summary"] = document_title
             load_info["candidate_count"] = 1
             load_info["method"] = document.load_method or (
                 source_path.suffix.lower().lstrip(".") or "unknown"
@@ -381,6 +414,7 @@ def prepare_ingest(
                 status=status,
                 chunk_count=0,
                 chunks_with_images=0,
+                source_metadata=source_metadata,
             )
             trace_recorder.close_and_save(settings)
             persist_ingestion_outcome(
@@ -417,6 +451,7 @@ def prepare_ingest(
                     document=document,
                     index=index,
                     gray_review=stamp_pending_chunks,
+                    source_metadata=source_metadata,
                 ),
             )
             for index, text in enumerate(texts)
@@ -432,6 +467,7 @@ def prepare_ingest(
             status=status,
             gray_review=stamp_pending_chunks,
             pdf_load_mode=pdf_load_mode,
+            source_metadata=source_metadata,
             chunks=chunks,
             previous_document_id=previous_document_id,
         )

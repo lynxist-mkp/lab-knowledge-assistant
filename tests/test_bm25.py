@@ -20,10 +20,10 @@ def test_index_and_query_use_same_tokenizer(test_settings: Settings) -> None:
     text = "船政学堂与湄洲祖庙都是福建文化地标"
     index_tokens = tokenizer.tokenize(text)
     query_tokens = tokenizer.tokenize("湄洲祖庙 船政学堂")
-    assert "船政学堂" in index_tokens
-    assert "湄洲祖庙" in index_tokens
-    assert "船政学堂" in query_tokens
-    assert "湄洲祖庙" in query_tokens
+    assert {"船政", "学堂"}.issubset(index_tokens)
+    assert {"湄洲", "祖庙"}.issubset(index_tokens)
+    assert {"船政", "学堂"}.issubset(query_tokens)
+    assert {"湄洲", "祖庙"}.issubset(query_tokens)
     assert "的" not in query_tokens
 
 
@@ -35,7 +35,9 @@ def test_domain_dict_keeps_compound_terms(test_settings: Settings) -> None:
         if not term:
             continue
         tokens = tokenizer.tokenize(f"介绍{term}的历史")
-        assert term in tokens
+        parts = [part for part in term.split() if part]
+        assert parts
+        assert set(parts).issubset(tokens)
 
 
 def test_stopwords_are_removed(test_settings: Settings) -> None:
@@ -44,7 +46,7 @@ def test_stopwords_are_removed(test_settings: Settings) -> None:
     assert "的" not in tokens
     assert "是" not in tokens
     assert "一个" not in tokens
-    assert "妈祖信仰" in tokens
+    assert {"妈祖", "信仰"}.issubset(tokens)
 
 
 def test_sparse_only_ask_returns_citations(

@@ -5,9 +5,17 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class LiteratureMetadataOverrides(BaseModel):
+    title: str | None = None
+    authors: str | None = None
+    year: int | None = Field(default=None, ge=1900, le=2100)
+
+
 class IngestRequest(BaseModel):
     source_path: str
     pdf_load_mode: str | None = None
+    source_kind: Literal["group_doc", "personal_literature"] = "group_doc"
+    literature: LiteratureMetadataOverrides | None = None
 
 
 class AskRequest(BaseModel):

@@ -18,8 +18,8 @@ def _write_minpai_markdown(path: Path) -> Path:
 source_url: https://www.mzmz.org.cn/introduction.html
 source_org: 湄洲妈祖祖庙
 license_note: 政府网站公开信息，引用时保留 URL
-culture_domain: 妈祖
-space: minpai_culture
+culture_domain: 检索增强
+space: lab_knowledge
 title: 湄洲妈祖祖庙简介
 ---
 
@@ -130,7 +130,7 @@ def test_enricher_writes_culture_domain_to_chunk_metadata(
     body = response.json()
 
     chunks = create_knowledge(test_settings).get_by_document_id(body["document_id"])
-    assert chunks[0].metadata["culture_domain"] == "妈祖"
+    assert chunks[0].metadata["culture_domain"] == "检索增强"
     assert chunks[0].metadata["chunk_title"] == "妈祖祖庙"
     assert chunks[0].metadata["summary"] == "湄洲岛妈祖信仰中心"
     assert chunks[0].metadata["tags"] == ["妈祖"]
@@ -148,6 +148,72 @@ def test_ingest_stamps_review_status_approved(
     chunks = create_knowledge(test_settings).get_by_document_id(body["document_id"])
     assert chunks
     assert all(chunk.metadata.get("审阅状态") == "已通过" for chunk in chunks)
+
+
+def test_default_ingest_stamps_group_doc_source_metadata(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    source = _write_minpai_markdown(tmp_path / "matsu.md")
+    client = TestClient(create_app(test_settings))
+    response = client.post("/ingest", json={"source_path": str(source)})
+    assert response.status_code == 200
+    body = response.json()
+
+    chunks = create_knowledge(test_settings).get_by_document_id(body["document_id"])
+    assert chunks[0].metadata["source_kind"] == "group_doc"
+    assert chunks[0].metadata["source_label"] == "组内资料"
+    assert "authors" not in chunks[0].metadata
+
+    card = create_knowledge(test_settings).document_card(body["document_id"])
+    assert card.source_kind == "group_doc"
+    assert card.source_label == "组内资料"
+
+
+def test_personal_literature_ingest_persists_metadata_and_trace_fields(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    source = tmp_path / "Vaswani et al - Attention Is All You Need (2017).md"
+    source.write_text(
+        """---
+source_kind: personal_literature
+culture_domain: 检索增强
+author: Vaswani et al.
+year: 2017
+title: Attention Is All You Need
+---
+
+Transformer 架构通过自注意力机制建模序列依赖。
+""",
+        encoding="utf-8",
+    )
+    client = TestClient(create_app(test_settings))
+    response = client.post(
+        "/ingest",
+        json={
+            "source_path": str(source),
+            "source_kind": "personal_literature",
+            "literature": {
+                "title": "Attention Is All You Need",
+                "authors": "Ashish Vaswani",
+                "year": 2017,
+            },
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+
+    chunks = create_knowledge(test_settings).get_by_document_id(body["document_id"])
+    first = chunks[0]
+    assert first.metadata["source_kind"] == "personal_literature"
+    assert first.metadata["source_label"] == "个人文献库"
+    assert first.metadata["authors"] == "Ashish Vaswani"
+    assert first.metadata["publication_year"] == 2017
+    assert first.metadata["title"] == "Attention Is All You Need"
+
+    card = create_knowledge(test_settings).document_card(body["document_id"])
+    assert card.source_kind == "personal_literature"
+    assert card.authors == "Ashish Vaswani"
+    assert card.publication_year == 2017
 
 
 def test_unsupported_source_type_returns_400(

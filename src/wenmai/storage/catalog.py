@@ -10,10 +10,14 @@ from wenmai.config import Settings
 from wenmai.knowledge.browse import ChunkSummary, CultureDomainGroup, DocumentSummary
 from wenmai.knowledge.domain import (
     REVIEW_PENDING,
+    authors,
     chunk_title,
     culture_domain,
     preview,
+    publication_year,
     review_status,
+    source_kind,
+    source_label,
     summary,
     tags,
     title,
@@ -30,6 +34,10 @@ class CatalogDocument:
     chunk_count: int
     summary: str
     tags: list[str]
+    source_kind: str
+    source_label: str
+    authors: str
+    publication_year: int | None
     chunks: list[ChunkSummary]
 
 
@@ -74,6 +82,10 @@ class DocumentCatalog:
             "title": title(sorted_chunks[0]),
             "summary": _document_summary(sorted_chunks),
             "tags": document_tags,
+            "source_kind": source_kind(sorted_chunks[0]),
+            "source_label": source_label(sorted_chunks[0]),
+            "authors": authors(sorted_chunks[0]),
+            "publication_year": publication_year(sorted_chunks[0]),
             "chunks": [
                 {
                     "chunk_id": chunk.chunk_id,
@@ -126,6 +138,10 @@ class DocumentCatalog:
             chunk_count=len(chunks),
             summary=str(raw.get("summary") or ""),
             tags=_coerce_tags(raw.get("tags")),
+            source_kind=str(raw.get("source_kind") or "group_doc"),
+            source_label=str(raw.get("source_label") or "组内资料"),
+            authors=str(raw.get("authors") or ""),
+            publication_year=_coerce_publication_year(raw.get("publication_year")),
             chunks=chunks,
         )
 
@@ -157,6 +173,10 @@ class DocumentCatalog:
                             summary=doc.summary,
                             tags=doc.tags,
                             chunks=doc.chunks,
+                            source_kind=doc.source_kind,
+                            source_label=doc.source_label,
+                            authors=doc.authors,
+                            publication_year=doc.publication_year,
                         )
                         for doc in documents
                     ],
@@ -202,3 +222,11 @@ def _coerce_tags(raw: object) -> list[str]:
         if tag and tag not in cleaned:
             cleaned.append(tag)
     return cleaned
+
+
+def _coerce_publication_year(raw: object) -> int | None:
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, str) and raw.strip().isdigit():
+        return int(raw.strip())
+    return None

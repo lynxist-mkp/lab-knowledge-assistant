@@ -54,7 +54,7 @@ def test_prepare_chunks_delegates_to_registry(test_settings: Settings) -> None:
         )
     ]
     result = prepare_chunks(chunks, test_settings, recorder)
-    assert result[0].metadata.get("culture_domain") == "妈祖"
+    assert result[0].metadata.get("culture_domain") in test_settings.transform.domains
     assert any(stage.get("name") == "enricher" for stage in recorder.stages)
 
 

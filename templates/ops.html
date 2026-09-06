@@ -1,9 +1,9 @@
 {% extends "_shell.html" %}
-{% block title %}运维看板 · 福云·文脉助手{% endblock %}
+{% block title %}运维看板 · 课题组知识助手{% endblock %}
 {% block surface_label %}运维看板{% endblock %}
 
 {% block surface_switch %}
-<a href="/" class="surface-switch" title="返回融媒编辑提问界面">返回提问</a>
+<a href="/" class="surface-switch" title="返回检索工作台提问界面">返回提问</a>
 {% endblock %}
 
 {% block header_extra %}
@@ -613,6 +613,38 @@
     align-items: flex-start;
     gap: 0.25rem;
     min-width: 0;
+  }
+  .doc-source-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .source-kind-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.3;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .source-kind-badge--group {
+    background: #eef4ff;
+    color: #1a4f9c;
+    border-color: rgba(26, 79, 156, 0.18);
+  }
+  .source-kind-badge--personal {
+    background: #f3f0ff;
+    color: #5b3ea6;
+    border-color: rgba(91, 62, 166, 0.18);
+  }
+  .doc-literature-meta {
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    margin: 0;
   }
   .chunks-grid {
     padding: 0.75rem 0.95rem;
@@ -1545,10 +1577,10 @@
   <!-- Intro Banner -->
   <section class="ops-intro-panel" aria-label="运维看板说明">
     <p class="ops-intro-text">
-      <strong>福云·文脉助手 · 运维看板</strong>：知识库管理与运维观测界面。负责知识库概览监控、按文化域库览材料切片、材料入库处理、统一追踪观测以及量化评测管理。
+      <strong>课题组知识助手 · 运维看板</strong>：知识库管理与运维观测界面。负责知识库概览监控、按研究主题库览材料切片、材料入库处理、统一追踪观测以及量化评测管理。
     </p>
     <p class="ops-intro-subtext">
-      知识库全局统计 · 文化域材料库览 · 入库幂等写入 · 入库与查询链路追踪 · 检索与拒答量化评测
+      知识库全局统计 · 研究主题材料库览 · 入库幂等写入 · 入库与查询链路追踪 · 检索与拒答量化评测
     </p>
   </section>
 
@@ -1663,9 +1695,9 @@
           知识库架构与运维规范
         </span>
         <ul class="info-block-list">
-          <li><strong>文化域组织</strong>：材料按闽派文化域（如海丝、朱子、妈祖、船政）切片管理，稠密与稀疏检索同时可查。</li>
+          <li><strong>研究主题组织</strong>：材料按课题组研究主题（如自然语言处理、多模态、检索增强、强化学习）切片管理，稠密与稀疏检索同时可查。</li>
           <li><strong>入库幂等机制</strong>：基于文档 sha256 校验，内容未变自动跳过 (skipped)，内容更新则整份重构替换 (rebuilt)。</li>
-          <li><strong>出处强制约束</strong>：融媒编辑提问必须带出处证据支撑，无充分事实依据则明确拒答。</li>
+          <li><strong>出处强制约束</strong>：课题组成员提问必须带出处证据支撑，无充分事实依据则明确拒答。</li>
         </ul>
       </div>
 
@@ -1680,7 +1712,7 @@
           <button type="button" class="quick-jump-card" data-jump="browse">
             <div>
               <div class="quick-jump-title">进入「库览」</div>
-              <div class="quick-jump-desc">按文化域浏览所有文档与切片预览</div>
+              <div class="quick-jump-desc">按研究主题浏览所有文档与切片预览</div>
             </div>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </button>
@@ -1717,8 +1749,8 @@
     <div class="ops-card">
       <div class="ops-card-header">
         <div class="ops-card-title-wrap">
-          <h2 class="ops-card-title">文化域库览</h2>
-          <p class="ops-card-desc">按文化域查看知识库中已录入的文档与片段预览（仅在运维看板提供完整库览视图）。</p>
+          <h2 class="ops-card-title">研究主题库览</h2>
+          <p class="ops-card-desc">按研究主题查看知识库中已录入的文档与片段预览（仅在运维看板提供完整库览视图）。</p>
         </div>
         <button type="button" id="btn-refresh-browse" class="btn-secondary" title="刷新库览数据">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -1740,11 +1772,11 @@
             type="search"
             id="browse-search-input"
             class="browse-search-input"
-            placeholder="按文化域、文档标题或片段筛选..."
+            placeholder="按研究主题、文档标题或片段筛选..."
             aria-label="筛选库览内容"
           >
         </div>
-        <span id="browse-summary-count" class="badge-metric">共 0 个文化域</span>
+        <span id="browse-summary-count" class="badge-metric">共 0 个研究主题</span>
       </div>
 
       <!-- Loading State -->
@@ -1857,12 +1889,54 @@
 
         <div class="form-options-row">
           <div class="form-group">
+            <label for="ingest-source-kind" class="form-label">资料来源</label>
+            <select id="ingest-source-kind" name="source_kind" class="ingest-select" aria-label="选择资料来源">
+              <option value="group_doc">组内资料</option>
+              <option value="personal_literature">个人文献库</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label for="ingest-pdf-mode" class="form-label">PDF 解析模式 (可选)</label>
             <select id="ingest-pdf-mode" name="pdf_load_mode" class="ingest-select" aria-label="选择 PDF 解析模式">
               <option value="">自动判定（文字密度阈值路由）</option>
               <option value="markitdown">数字版 PDF (MarkItDown 纯文本抽取)</option>
               <option value="paddleocr">扫描件 (PaddleOCR 版面解析)</option>
             </select>
+          </div>
+        </div>
+
+        <div class="form-options-row">
+          <div class="form-group">
+            <label for="ingest-literature-title" class="form-label">文献题目覆盖 (可选)</label>
+            <input
+              type="text"
+              id="ingest-literature-title"
+              name="literature_title"
+              class="ingest-input"
+              placeholder="仅个人文献库常用；留空则优先取文件内元数据"
+            >
+          </div>
+          <div class="form-group">
+            <label for="ingest-literature-authors" class="form-label">作者覆盖 (可选)</label>
+            <input
+              type="text"
+              id="ingest-literature-authors"
+              name="literature_authors"
+              class="ingest-input"
+              placeholder="例如：Ashish Vaswani, Noam Shazeer"
+            >
+          </div>
+          <div class="form-group">
+            <label for="ingest-literature-year" class="form-label">年份覆盖 (可选)</label>
+            <input
+              type="number"
+              id="ingest-literature-year"
+              name="literature_year"
+              class="ingest-input"
+              min="1900"
+              max="2100"
+              placeholder="2017"
+            >
           </div>
         </div>
 
@@ -1910,11 +1984,11 @@
         </div>
         <div class="result-grid">
           <div class="result-item">
-            <span class="result-key">文档标识 (document_id)</span>
+            <span class="result-key">对象标识</span>
             <span id="result-doc-id" class="result-val">-</span>
           </div>
           <div class="result-item">
-            <span class="result-key">切片数量 (chunk_count)</span>
+            <span class="result-key">处理摘要</span>
             <span id="result-chunk-count" class="result-val">-</span>
           </div>
           <div class="result-item">
@@ -2042,7 +2116,7 @@
 
         <div id="trace-query-empty" class="empty-state" style="display: none;" hidden>
           <h3 class="empty-title">暂无查询 Trace 记录</h3>
-          <p class="empty-desc">融媒编辑在工作台提问后将生成查询 Trace 记录。</p>
+          <p class="empty-desc">课题组成员在检索工作台提问后将生成查询 Trace 记录。</p>
         </div>
 
         <div class="ops-table-wrap" id="trace-query-table-wrap">
@@ -2051,7 +2125,7 @@
               <tr>
                 <th>Trace ID</th>
                 <th>提问内容</th>
-                <th>文化域</th>
+                <th>研究主题</th>
                 <th>状态</th>
                 <th>拒答</th>
                 <th>总耗时</th>
@@ -2277,7 +2351,11 @@
   // Ingest Elements
   const ingestForm = document.getElementById('ingest-form');
   const ingestSourcePath = document.getElementById('ingest-source-path');
+  const ingestSourceKind = document.getElementById('ingest-source-kind');
   const ingestPdfMode = document.getElementById('ingest-pdf-mode');
+  const ingestLiteratureTitle = document.getElementById('ingest-literature-title');
+  const ingestLiteratureAuthors = document.getElementById('ingest-literature-authors');
+  const ingestLiteratureYear = document.getElementById('ingest-literature-year');
   const ingestSubmitBtn = document.getElementById('ingest-submit-btn');
   const ingestErrorBanner = document.getElementById('ingest-error-banner');
   const ingestErrorMessage = document.getElementById('ingest-error-message');
@@ -2376,6 +2454,27 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function formatLiteratureMeta(item) {
+    if (!item) return '';
+    const parts = [];
+    if (item.authors) parts.push(String(item.authors));
+    if (item.publication_year != null && item.publication_year !== '') {
+      parts.push(String(item.publication_year));
+    }
+    return parts.join(' · ');
+  }
+
+  function renderSourceKindBadge(item) {
+    const kind = item && item.source_kind ? item.source_kind : 'group_doc';
+    const label = item && item.source_label
+      ? item.source_label
+      : (kind === 'personal_literature' ? '个人文献库' : '组内资料');
+    const badgeClass = kind === 'personal_literature'
+      ? 'source-kind-badge source-kind-badge--personal'
+      : 'source-kind-badge source-kind-badge--group';
+    return '<span class="' + badgeClass + '" title="资料来源">' + escapeHtml(label) + '</span>';
   }
 
   function truncateId(value, head, tail) {
@@ -2489,9 +2588,11 @@
       const detail = await response.json();
       chunkDrawerTitle.textContent = detail.title || '片段全文';
       chunkDrawerMeta.textContent = [
+        detail.source_label ? '资料来源: ' + detail.source_label : '',
+        formatLiteratureMeta(detail) ? '文献: ' + formatLiteratureMeta(detail) : '',
         detail.chunk_id || chunkId,
         detail.chunk_title ? '片段标题: ' + detail.chunk_title : '',
-        detail.culture_domain ? '文化域: ' + detail.culture_domain : '',
+        detail.culture_domain ? '研究主题: ' + detail.culture_domain : '',
         detail['审阅状态'] ? '状态: ' + detail['审阅状态'] : ''
       ].filter(Boolean).join(' · ');
       const detailText = detail.text || '（该片段正文内容为空）';
@@ -2708,6 +2809,8 @@
           const titleMatches = (doc.title || '').toLowerCase().includes(query);
           const idMatches = (doc.document_id || '').toLowerCase().includes(query);
           const summaryMatches = (doc.summary || '').toLowerCase().includes(query);
+          const sourceMatches = (doc.source_label || '').toLowerCase().includes(query)
+            || (doc.authors || '').toLowerCase().includes(query);
           const tagMatches = Array.isArray(doc.tags) && doc.tags.some(function(tag) {
             return String(tag || '').toLowerCase().includes(query);
           });
@@ -2721,7 +2824,7 @@
             });
             return previewMatches || chunkIdMatches || chunkTitleMatches || chunkSummaryMatches || chunkTagMatches;
           });
-          return domainMatches || titleMatches || idMatches || summaryMatches || tagMatches || chunkMatches;
+          return domainMatches || titleMatches || idMatches || summaryMatches || sourceMatches || tagMatches || chunkMatches;
         });
 
         if (domainMatches || filteredDocs.length > 0) {
@@ -2736,9 +2839,9 @@
         browseEmpty.style.display = 'block';
         browseEmpty.removeAttribute('hidden');
       } else {
-        opsBrowseList.innerHTML = '<div class="empty-state"><p class="empty-desc">未找到匹配「' + escapeHtml(query) + '」的文化域或文档</p></div>';
+        opsBrowseList.innerHTML = '<div class="empty-state"><p class="empty-desc">未找到匹配「' + escapeHtml(query) + '」的研究主题或文档</p></div>';
       }
-      browseSummaryCount.textContent = '共 0 个文化域';
+      browseSummaryCount.textContent = '共 0 个研究主题';
       return;
     }
 
@@ -2762,13 +2865,21 @@
             ? `<p class="doc-summary-text">${escapeHtml(doc.summary)}</p>`
             : '';
           const docTags = renderSemanticTags(doc.tags);
+          const literatureMeta = formatLiteratureMeta(doc);
+          const literatureHtml = literatureMeta
+            ? `<p class="doc-literature-meta">${escapeHtml(literatureMeta)}</p>`
+            : '';
           return `
             <details class="doc-item-card"${shouldOpenDoc ? ' open' : ''}>
               <summary>
                 <div class="doc-item-header">
                   <div class="doc-title-box">
                     <div class="doc-title-inner">
-                      <h4 class="doc-title">${escapeHtml(doc.title || '未命名文档')}</h4>
+                      <div class="doc-source-row">
+                        ${renderSourceKindBadge(doc)}
+                        <h4 class="doc-title">${escapeHtml(doc.title || '未命名文档')}</h4>
+                      </div>
+                      ${literatureHtml}
                       ${docSummary}
                       ${docTags}
                       <code class="doc-id-code" title="文档标识">${escapeHtml(truncateId(doc.document_id, 12, 8))}</code>
@@ -2782,7 +2893,7 @@
           `;
         }).join('');
       } else {
-        docsHtml = '<p class="empty-desc" style="margin: 0.5rem 0;">该文化域暂无文档</p>';
+        docsHtml = '<p class="empty-desc" style="margin: 0.5rem 0;">该研究主题暂无文档</p>';
       }
 
       const groupEl = document.createElement('details');
@@ -2795,7 +2906,7 @@
           <div class="domain-group-header">
             <div class="domain-title-wrap">
               <span class="domain-badge">${escapeHtml(group.culture_domain)}</span>
-              <h3 class="domain-name">文化域</h3>
+              <h3 class="domain-name">研究主题</h3>
             </div>
             <div class="domain-stats-badges">
               <span class="badge-metric">${group.document_count || 0} 篇文档</span>
@@ -2811,7 +2922,7 @@
       opsBrowseList.appendChild(groupEl);
     });
 
-    browseSummaryCount.textContent = '共 ' + filteredGroups.length + ' 个文化域 (' + totalDocs + ' 篇文档, ' + totalChunks + ' 个切片)';
+    browseSummaryCount.textContent = '共 ' + filteredGroups.length + ' 个研究主题 (' + totalDocs + ' 篇文档, ' + totalChunks + ' 个切片)';
   }
 
   async function loadBrowse() {
@@ -3011,6 +3122,57 @@
     return itemEl;
   }
 
+  function renderDirectoryFileEvent(item, index, total) {
+    const status = item && item.status ? String(item.status) : '处理中';
+    let badgeClass = 'status-badge running';
+    if (status === 'ingested' || status === 'rebuilt') {
+      badgeClass = 'status-badge success';
+    } else if (status === 'skipped') {
+      badgeClass = 'status-badge';
+    } else if (status === 'failed') {
+      badgeClass = 'status-badge failed';
+    }
+    const itemEl = document.createElement('div');
+    itemEl.className = 'stage-item';
+    itemEl.innerHTML = `
+      <div class="stage-item-top">
+        <div class="stage-name-wrap">
+          <span class="stage-name">文件 ${index}/${total}</span>
+          <code class="stage-provider-badge">${escapeHtml(status)}</code>
+        </div>
+        <span class="${badgeClass}">${escapeHtml(item && item.source_path ? item.source_path : '-')}</span>
+      </div>
+      ${item && item.error ? `<div class="stage-detail-row"><div class="stage-detail-item"><span class="stage-detail-k" style="color:var(--color-danger)">异常:</span><span class="stage-detail-v" style="color:var(--color-danger)">${escapeHtml(item.error)}</span></div></div>` : ''}
+    `;
+    return itemEl;
+  }
+
+  function renderIngestResult(res) {
+    ingestStatusBadge.className = 'status-badge success';
+    ingestStatusBadge.textContent = '入库成功';
+
+    if (Array.isArray(res.files)) {
+      resultStatusTag.textContent = '目录批量导入';
+      resultDocId.textContent = res.source_path || '-';
+      resultChunkCount.textContent = `共 ${res.total || 0} 个文件，新增 ${res.ingested || 0}，重构 ${res.rebuilt || 0}，跳过 ${res.skipped || 0}，失败 ${res.failed || 0}`;
+      resultElapsed.textContent = res.source_kind === 'personal_literature' ? '个人文献库' : '组内资料';
+      resultTraceId.textContent = '-';
+      return;
+    }
+
+    let statusText = '全新入库';
+    if (res.status === 'rebuilt') {
+      statusText = '内容更新重构';
+    } else if (res.status === 'skipped') {
+      statusText = '内容未变跳过';
+    }
+    resultStatusTag.textContent = statusText;
+    resultDocId.textContent = res.document_id || '-';
+    resultChunkCount.textContent = (res.chunk_count != null ? res.chunk_count : '-') + ' 个切片';
+    resultElapsed.textContent = (typeof res.elapsed_ms === 'number' ? res.elapsed_ms.toFixed(1) : '-') + ' ms';
+    resultTraceId.textContent = res.trace_id || '-';
+  }
+
   async function handleIngest() {
     const pathVal = ingestSourcePath.value.trim();
     if (!pathVal) {
@@ -3018,7 +3180,11 @@
       return;
     }
 
+    const sourceKindVal = ingestSourceKind ? ingestSourceKind.value : 'group_doc';
     const pdfModeVal = ingestPdfMode.value || null;
+    const literatureTitleVal = ingestLiteratureTitle ? ingestLiteratureTitle.value.trim() : '';
+    const literatureAuthorsVal = ingestLiteratureAuthors ? ingestLiteratureAuthors.value.trim() : '';
+    const literatureYearRaw = ingestLiteratureYear ? ingestLiteratureYear.value.trim() : '';
 
     ingestErrorBanner.classList.remove('visible');
     ingestErrorMessage.textContent = '';
@@ -3036,10 +3202,17 @@
     ingestSubmitBtn.querySelector('.btn-text').textContent = '入库中...';
 
     const payload = {
-      source_path: pathVal
+      source_path: pathVal,
+      source_kind: sourceKindVal
     };
     if (pdfModeVal) {
       payload.pdf_load_mode = pdfModeVal;
+    }
+    if (literatureTitleVal || literatureAuthorsVal || literatureYearRaw) {
+      payload.literature = {};
+      if (literatureTitleVal) payload.literature.title = literatureTitleVal;
+      if (literatureAuthorsVal) payload.literature.authors = literatureAuthorsVal;
+      if (literatureYearRaw) payload.literature.year = Number(literatureYearRaw);
     }
 
     try {
@@ -3085,23 +3258,24 @@
             if (eventData.event === 'stage' && eventData.stage) {
               const stageCard = renderStageItem(eventData.stage);
               ingestStagesList.appendChild(stageCard);
+            } else if (eventData.event === 'file_start') {
+              ingestStagesList.appendChild(
+                renderDirectoryFileEvent(
+                  { source_path: eventData.source_path, status: '处理中' },
+                  eventData.index || 0,
+                  eventData.total || 0
+                )
+              );
+            } else if (eventData.event === 'file_done' && eventData.outcome) {
+              ingestStagesList.appendChild(
+                renderDirectoryFileEvent(
+                  eventData.outcome,
+                  ingestStagesList.querySelectorAll('.stage-item').length + 1,
+                  eventData.total || (Array.isArray(eventData.outcome.files) ? eventData.outcome.files.length : 0)
+                )
+              );
             } else if (eventData.event === 'done' && eventData.result) {
-              const res = eventData.result;
-              ingestStatusBadge.className = 'status-badge success';
-              ingestStatusBadge.textContent = '入库成功';
-
-              let statusText = '全新入库';
-              if (res.status === 'rebuilt') {
-                statusText = '内容更新重构';
-              } else if (res.status === 'skipped') {
-                statusText = '内容未变跳过';
-              }
-              resultStatusTag.textContent = statusText;
-              resultDocId.textContent = res.document_id || '-';
-              resultChunkCount.textContent = (res.chunk_count != null ? res.chunk_count : '-') + ' 个切片';
-              resultElapsed.textContent = (typeof res.elapsed_ms === 'number' ? res.elapsed_ms.toFixed(1) : '-') + ' ms';
-              resultTraceId.textContent = res.trace_id || '-';
-
+              renderIngestResult(eventData.result);
               ingestResultCard.style.display = 'flex';
               ingestResultCard.removeAttribute('hidden');
             } else if (eventData.event === 'error') {
@@ -3423,7 +3597,7 @@
             </div>
           ` : `
             <div class="result-item">
-              <span class="result-key">文化域</span>
+              <span class="result-key">研究主题</span>
               <span class="result-val">${detail.culture_domain ? escapeHtml(detail.culture_domain) : '未指定'}</span>
             </div>
             <div class="result-item">

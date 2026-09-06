@@ -18,6 +18,10 @@ class DocumentCard:
     summary: str
     chunk_count: int
     tags: list[str]
+    source_kind: str = "group_doc"
+    source_label: str = "组内资料"
+    authors: str = ""
+    publication_year: int | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)

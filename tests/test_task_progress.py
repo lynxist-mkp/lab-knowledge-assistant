@@ -48,7 +48,7 @@ def _write_markdown(path: Path, title: str = "测试文档", body: str = "闽派
         f"""---
 title: {title}
 culture_domain: 妈祖
-space: minpai_culture
+space: lab_knowledge
 source_url: https://example.com/{path.stem}
 ---
 

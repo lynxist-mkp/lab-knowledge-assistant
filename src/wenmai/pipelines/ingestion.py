@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -11,9 +12,29 @@ from wenmai.ingestion.orchestrator import (
     PreparedIngest,
     prepare_ingest,
 )
+from wenmai.ingestion.source_metadata import (
+    SOURCE_KIND_GROUP,
+    LiteratureMetadataOverrides,
+    SourceKind,
+)
 from wenmai.knowledge import Knowledge, create_knowledge
-from wenmai.models import IngestResult
+from wenmai.models import BulkIngestItemResult, BulkIngestResult, IngestResult
 from wenmai.tracing import StageRecord
+
+_INGESTABLE_SUFFIXES = {".md", ".pdf"}
+
+
+@dataclass
+class DirectoryPrepareCommitJob:
+    source_path: Path
+    settings: Settings
+    pdf_load_mode: str | None
+    source_kind: SourceKind
+    literature: LiteratureMetadataOverrides | None
+    on_stage: Callable[[StageRecord], None] | None
+    knowledge: Knowledge | None
+    result: IngestResult | None = None
+    error: BaseException | None = None
 
 
 def prepare_ingest_source(
@@ -21,6 +42,8 @@ def prepare_ingest_source(
     settings: Settings,
     *,
     pdf_load_mode: str | None = None,
+    source_kind: SourceKind = SOURCE_KIND_GROUP,
+    literature: LiteratureMetadataOverrides | None = None,
     on_stage: Callable[[StageRecord], None] | None = None,
     knowledge: Knowledge | None = None,
 ) -> PreparedIngest | IngestResult:
@@ -29,6 +52,8 @@ def prepare_ingest_source(
         source_path,
         settings,
         pdf_load_mode=pdf_load_mode,
+        source_kind=source_kind,
+        literature=literature,
         on_stage=on_stage,
         knowledge=knowledge,
     )
@@ -50,6 +75,8 @@ def run_prepare_commit(
     settings: Settings,
     *,
     pdf_load_mode: str | None = None,
+    source_kind: SourceKind = SOURCE_KIND_GROUP,
+    literature: LiteratureMetadataOverrides | None = None,
     on_stage: Callable[[StageRecord], None] | None = None,
     knowledge: Knowledge | None = None,
     phase_batch: bool = True,
@@ -62,6 +89,8 @@ def run_prepare_commit(
             source_path,
             settings,
             pdf_load_mode=pdf_load_mode,
+            source_kind=source_kind,
+            literature=literature,
             on_stage=on_stage,
             knowledge=knowledge,
         )
@@ -77,6 +106,8 @@ class PrepareCommitJob(Protocol):
     source_path: Path
     settings: Settings
     pdf_load_mode: str | None
+    source_kind: SourceKind
+    literature: LiteratureMetadataOverrides | None
     on_stage: Callable[[StageRecord], None] | None
     knowledge: Knowledge | None
     result: IngestResult | None
@@ -99,6 +130,8 @@ def run_prepare_commit_batch(
                     job.source_path,
                     job.settings,
                     pdf_load_mode=job.pdf_load_mode,
+                    source_kind=getattr(job, "source_kind", SOURCE_KIND_GROUP),
+                    literature=getattr(job, "literature", None),
                     on_stage=job.on_stage,
                     knowledge=knowledge,
                 )
@@ -138,6 +171,8 @@ def ingest_source(
     settings: Settings,
     *,
     pdf_load_mode: str | None = None,
+    source_kind: SourceKind = SOURCE_KIND_GROUP,
+    literature: LiteratureMetadataOverrides | None = None,
     on_stage: Callable[[StageRecord], None] | None = None,
     knowledge: Knowledge | None = None,
 ) -> IngestResult:
@@ -152,6 +187,8 @@ def ingest_source(
             source_path,
             settings,
             pdf_load_mode=pdf_load_mode,
+            source_kind=source_kind,
+            literature=literature,
             on_stage=on_stage,
             knowledge=knowledge,
         )
@@ -160,16 +197,106 @@ def ingest_source(
         source_path,
         settings,
         pdf_load_mode=pdf_load_mode,
+        source_kind=source_kind,
+        literature=literature,
         on_stage=on_stage,
         knowledge=knowledge,
         phase_batch=True,
     )
 
 
+def ingest_directory(
+    source_root: Path,
+    settings: Settings,
+    *,
+    pdf_load_mode: str | None = None,
+    source_kind: SourceKind = SOURCE_KIND_GROUP,
+    knowledge: Knowledge | None = None,
+) -> BulkIngestResult:
+    """Directory ingest for bulk document sync using the shared prepare/commit seam."""
+    files = _discover_ingestable_files(source_root)
+    if not files:
+        raise ValueError(f"no ingestable files found in directory: {source_root}")
+
+    shared_knowledge = knowledge or create_knowledge(settings)
+    jobs = [
+        DirectoryPrepareCommitJob(
+            source_path=path,
+            settings=settings,
+            pdf_load_mode=pdf_load_mode,
+            source_kind=source_kind,
+            literature=None,
+            on_stage=None,
+            knowledge=shared_knowledge,
+        )
+        for path in files
+    ]
+    run_prepare_commit_batch(
+        jobs,
+        batch_id=f"dir:{source_root.name}:{len(files)}",
+        phase_batch=True,
+    )
+
+    results: list[BulkIngestItemResult] = []
+    ingested_count = 0
+    rebuilt_count = 0
+    skipped_count = 0
+    failed_count = 0
+    for job in jobs:
+        if job.error is not None:
+            failed_count += 1
+            results.append(
+                BulkIngestItemResult(
+                    source_path=str(job.source_path),
+                    status="failed",
+                    error=f"{type(job.error).__name__}: {job.error}",
+                )
+            )
+            continue
+        assert job.result is not None
+        status = job.result.status
+        if status == "ingested":
+            ingested_count += 1
+        elif status == "rebuilt":
+            rebuilt_count += 1
+        elif status == "skipped":
+            skipped_count += 1
+        results.append(
+            BulkIngestItemResult(
+                source_path=str(job.source_path),
+                status=status,
+                document_id=job.result.document_id,
+                chunk_count=job.result.chunk_count,
+                trace_id=job.result.trace_id,
+            )
+        )
+    return BulkIngestResult(
+        source_root=str(source_root),
+        source_kind=source_kind,
+        total_files=len(files),
+        ingested_count=ingested_count,
+        rebuilt_count=rebuilt_count,
+        skipped_count=skipped_count,
+        failed_count=failed_count,
+        results=results,
+    )
+
+
+def _discover_ingestable_files(source_root: Path) -> list[Path]:
+    return sorted(
+        path
+        for path in source_root.rglob("*")
+        if path.is_file() and path.suffix.lower() in _INGESTABLE_SUFFIXES
+    )
+
+
 __all__ = [
+    "BulkIngestResult",
+    "DirectoryPrepareCommitJob",
     "PreparedIngest",
     "PrepareCommitJob",
     "commit_prepared_ingest",
+    "ingest_directory",
     "ingest_source",
     "prepare_ingest_source",
     "run_prepare_commit",

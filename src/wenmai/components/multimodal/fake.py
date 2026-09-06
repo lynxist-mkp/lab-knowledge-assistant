@@ -7,7 +7,7 @@ from wenmai.components.multimodal.base import BaseMultimodal
 from wenmai.factories.multimodal import registry
 
 _ENRICHER_MARKER = "入库助手"
-_QA_MARKER = "文脉助手"
+_QA_MARKER = "课题组知识助手"
 _MULTI_QUERY_MARKER = "多路改写"
 _GRAY_REVIEW_MARKER = "灰区复判"
 _GRAY_REJECT_HINT = "不值得入库"
@@ -74,7 +74,7 @@ class FakeMultimodal(BaseMultimodal):
         if _ENRICHER_MARKER in prompt:
             return (
                 '{"title": "妈祖祖庙", "summary": "湄洲岛妈祖信仰中心", '
-                '"tags": ["妈祖"], "culture_domain": "妈祖"}'
+                '"tags": ["妈祖"], "culture_domain": "检索增强"}'
             )
         return "占位回答[1]。"
 

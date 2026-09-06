@@ -118,6 +118,10 @@ class ReadPath:
             summary=_document_summary_from_chunks(chunks),
             chunk_count=entry.chunk_count,
             tags=_document_tags_from_chunks(chunks),
+            source_kind=entry.source_kind,
+            source_label=entry.source_label,
+            authors=entry.authors,
+            publication_year=entry.publication_year,
         )
 
     def _require_embedder(self) -> Any:
@@ -150,7 +154,11 @@ def _take_searchable(hits: list[ScoredChunk], top_k: int) -> list[ScoredChunk]:
 def _document_summary_from_chunks(chunks: list[Chunk]) -> str:
     if not chunks:
         return ""
-    summaries = [summary(chunk) for chunk in sorted(chunks, key=lambda item: item.chunk_id) if summary(chunk)]
+    summaries = [
+        summary(chunk)
+        for chunk in sorted(chunks, key=lambda item: item.chunk_id)
+        if summary(chunk)
+    ]
     if not summaries:
         return ""
     return max(summaries, key=len)

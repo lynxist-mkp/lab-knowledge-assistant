@@ -1,8 +1,8 @@
-# 公开闽派文化语料（本机）
+# 课题组公开语料（本机）
 
-本目录存放**福云·文脉助手**知识库的公开语料来源与抓取产物。仓库里只提交：
+本目录存放**课题组知识助手**知识库的公开语料来源与抓取产物。仓库里只提交：
 
-- `manifest.yaml`：人工精选的 URL 清单（30–50 篇，覆盖海丝、朱子、妈祖、船政四域）
+- `manifest.yaml`：人工精选的 URL 清单（约 40 篇，覆盖自然语言处理、多模态、检索增强、强化学习等研究主题）
 - `README.md`（本文件）
 - `../scripts/fetch_corpus.py`：可重复执行的抓取脚本
 
@@ -28,21 +28,23 @@
 
 | 来源类型 | 许可说明 | 本项目用法 |
 |---|---|---|
-| 政府网站公开信息（省文旅厅、市县文旅局、湄洲祖庙官网等） | 以页脚版权栏为准；一般可引用，须保留原文 URL 与获取日期 | YAML 头 `license_note` 写「政府网站公开信息，引用时保留 URL」；`retrieved_at` 与 `snapshot_sha256` 记录快照 |
+| arXiv 摘要页 / PDF | arXiv 许可（各论文以页脚为准）；摘要页可引用，须保留原文 URL 与获取日期 | YAML 头 `license_note` 写「arXiv 公开论文，引用时保留 URL」；`retrieved_at` 与 `snapshot_sha256` 记录快照 |
 | 中文维基百科条目 | 正文默认 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.zh)（兼 GFDL）；**必须署名，修改后须以相同条款再许可** | 脚本经 [MediaWiki API](https://www.mediawiki.org/wiki/API:Main_page) 拉取纯文本（不爬 `/wiki/` HTML），`source_url` 仍指向条目页 |
-| UNESCO 世界遗产说明 | 说明文本 CC BY-SA IGO 3.0 | 保留 URL 与获取日期 |
+| 开源项目文档（GitHub 等） | 以仓库 LICENSE 为准 | 保留 URL 与获取日期 |
 
 每条抓取结果的 YAML 头字段（勿改字段名）：
 
 ```yaml
 source_url: https://...
-source_org: 福建省文化和旅游厅
-license_note: 政府网站公开信息，引用时保留 URL
-culture_domain: 妈祖
-space: minpai_culture
-retrieved_at: 2026-08-25
+source_org: arXiv / 维基媒体基金会 / …
+license_note: arXiv 公开论文，引用时保留 URL
+culture_domain: 检索增强
+space: lab_knowledge
+retrieved_at: 2026-09-06
 snapshot_sha256: <正文 SHA256>
 ```
+
+> **说明：** 元数据字段名仍为 `culture_domain`（与入库管线一致），产品文案与界面中称「研究主题」。
 
 ## robots.txt 策略
 
@@ -50,17 +52,27 @@ snapshot_sha256: <正文 SHA256>
 
 - 仅当响应为 HTTP 200 且内容含 `User-agent` 行时，视为**可核验**，再判断路径是否允许本脚本 User-Agent 访问。
 - **未能核验**的主机（返回 404 HTML、超时、或非 robots 内容）**不自动抓取**，脚本会跳过并在日志列出主机。
-- `manifest.yaml` 中 `robots_blocked_hosts` 列出的主机（含 `fjtv.net` / `www.fjtv.net`）一律不抓：调研记录其 robots 为客户端下载中间页，规则未知。
+- `manifest.yaml` 中 `robots_blocked_hosts` 列出的主机一律不抓。
 
-一手政府网页仍在清单中供编辑核对与手工保存；自动抓取以维基、UNESCO 等 robots 可核验站点为主。
+自动抓取以 arXiv、维基等 robots 可核验站点为主；课题组内部实验记录、组会纪要等本地材料不入此清单，由运维页手工入库。
+
+## 与私有文献的边界
+
+`data/corpus/` 只承担**公开 demo 语料**的复现职责，不承担个人 Zotero 文献或组内私有资料的版本管理。
+
+- 公开语料：通过 `manifest.yaml` + 抓取脚本复现，适合给别人演示和跑共享评测。
+- 私有资料：通过 `/ingest` 单文件或目录导入进入本地知识库，推荐对 Zotero 自动导入形成的附件目录使用 `source_kind=personal_literature`。
+
+这样仓库可以同时支持“公开可复现 demo”和“私有科研资料沉淀”两条路径，而不需要把个人 PDF 或组内文档纳入 Git。
 
 ## 不收录
 
-- 节目成片、完整字幕、海博 TV APK / 直播流
-- 登录墙、素材交易后台、内网福云内容库
-- `音频清洗` 工作音频与本仓库 `data/audio/`
-- 集团自报经营数字（不作本项目指标）
+- 课题组内网实验原始数据、未脱敏工作笔记
+- 登录墙后的期刊全文、付费数据库
+- 实时 GPU 监控、训练日志流、Slack/微信聊天记录
+- 合作方保密协议下的未公开结果
+- 本仓库 `data/audio/` 等工作音频
 
-## 文化域
+## 研究主题
 
-`culture_domain` 取值：`海丝` / `朱子` / `妈祖` / `船政` / `其他`（见 `settings.yaml` 与入库 Enricher 枚举）。
+`culture_domain`（界面称「研究主题」）取值：`自然语言处理` / `多模态` / `检索增强` / `强化学习` / `其他`（见 `settings.yaml` 与入库 Enricher 枚举）。

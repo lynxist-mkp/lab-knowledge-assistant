@@ -17,6 +17,7 @@ from wenmai.components.paddleocr import (
 )
 from wenmai.config import Settings
 from wenmai.ingestion.pdf_route import choose_pdf_route, validate_pdf_load_mode
+from wenmai.ingestion.source_metadata import extract_pdf_embedded_metadata
 from wenmai.storage.document_images import DocumentImages
 
 
@@ -40,6 +41,8 @@ class LoadedDocument:
     extra: dict[str, Any]
     load_method: str = ""
     load_provider: str = ""
+    front_matter: dict[str, Any] | None = None
+    embedded_literature: dict[str, object] | None = None
 
 
 def load_source(
@@ -87,6 +90,7 @@ def load_markdown(path: Path) -> LoadedDocument:
         page=page,
         source_path=str(path),
         extra=extra,
+        front_matter=front_matter,
         load_method="markdown",
         load_provider="file",
     )
@@ -141,6 +145,7 @@ def _load_pdf_markitdown(
         page=1,
         source_path=source_path,
         extra={"doc_type": "pdf", "load_route": "markitdown"},
+        embedded_literature=extract_pdf_embedded_metadata(path),
         load_method="markitdown",
         load_provider="markitdown",
     )
@@ -173,6 +178,7 @@ def _load_pdf_paddleocr(
         page=1,
         source_path=source_path,
         extra={"doc_type": "pdf", "load_route": "paddleocr-vl"},
+        embedded_literature=extract_pdf_embedded_metadata(path),
         load_method="paddleocr-vl",
         load_provider="mlx-vlm-server",
     )

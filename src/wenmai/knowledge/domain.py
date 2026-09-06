@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 
+from wenmai.ingestion.source_metadata import SOURCE_KIND_GROUP, SOURCE_KIND_LABELS
 from wenmai.models import Chunk
 
 REVIEW_STATUS_FIELD = "审阅状态"
@@ -58,6 +59,38 @@ def tags(chunk: Chunk) -> list[str]:
         if text and text not in cleaned:
             cleaned.append(text)
     return cleaned
+
+
+def source_kind(chunk: Chunk) -> str:
+    value = chunk.metadata.get("source_kind")
+    if value in SOURCE_KIND_LABELS:
+        return str(value)
+    return SOURCE_KIND_GROUP
+
+
+def source_label(chunk: Chunk) -> str:
+    value = chunk.metadata.get("source_label")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return SOURCE_KIND_LABELS[SOURCE_KIND_GROUP]
+
+
+def authors(chunk: Chunk) -> str:
+    value = chunk.metadata.get("authors")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return ""
+
+
+def publication_year(chunk: Chunk) -> int | None:
+    value = chunk.metadata.get("publication_year")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.isdigit():
+            return int(stripped)
+    return None
 
 
 def preview(text: str) -> str:

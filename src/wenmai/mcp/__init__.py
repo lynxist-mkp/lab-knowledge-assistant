@@ -1,1 +1,1 @@
-"""MCP integration for 福云·文脉助手."""
+"""MCP integration for 课题组知识助手."""

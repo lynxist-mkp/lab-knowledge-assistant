@@ -37,7 +37,7 @@ def _write_minpai_markdown(path: Path, title: str, body: str, domain: str = "妈
         f"""---
 source_url: https://example.com/{path.stem}
 culture_domain: {domain}
-space: minpai_culture
+space: lab_knowledge
 title: {title}
 ---
 

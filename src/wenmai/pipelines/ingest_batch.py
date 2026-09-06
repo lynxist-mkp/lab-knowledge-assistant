@@ -10,6 +10,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from wenmai.config import Settings
+from wenmai.ingestion.source_metadata import (
+    SOURCE_KIND_GROUP,
+    LiteratureMetadataOverrides,
+    SourceKind,
+)
 from wenmai.models import IngestResult
 from wenmai.pipelines.ingestion import run_prepare_commit_batch
 from wenmai.pipelines.window_batch import WindowBatchCoordinator
@@ -27,6 +32,8 @@ class _IngestJob:
     source_path: Path
     settings: Settings
     pdf_load_mode: str | None
+    source_kind: SourceKind
+    literature: LiteratureMetadataOverrides | None
     on_stage: Callable[[StageRecord], None] | None
     knowledge: Knowledge | None
     enqueued_at: float = field(default_factory=time.monotonic)
@@ -58,6 +65,8 @@ class IngestBatchCoordinator:
         settings: Settings,
         *,
         pdf_load_mode: str | None = None,
+        source_kind: SourceKind = SOURCE_KIND_GROUP,
+        literature: LiteratureMetadataOverrides | None = None,
         on_stage: Callable[[StageRecord], None] | None = None,
         knowledge: Knowledge | None = None,
     ) -> IngestResult:
@@ -65,6 +74,8 @@ class IngestBatchCoordinator:
             source_path=source_path,
             settings=settings,
             pdf_load_mode=pdf_load_mode,
+            source_kind=source_kind,
+            literature=literature,
             on_stage=on_stage,
             knowledge=knowledge,
         )

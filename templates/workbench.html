@@ -1,22 +1,23 @@
 {% extends "_shell.html" %}
-{% block title %}编辑工作台 · 福云·文脉助手{% endblock %}
-{% block surface_label %}编辑工作台{% endblock %}
+{% block title %}检索工作台 · 课题组知识助手{% endblock %}
+{% block surface_label %}检索工作台{% endblock %}
 
 {% block surface_switch %}
 <a href="/ops" class="surface-switch" title="知识库维护、入库与追踪">知识库维护</a>
 {% endblock %}
 
 {% block header_extra %}
-<div class="topbar-domain-control" role="region" aria-label="文化域筛选">
+<div class="topbar-domain-control" role="region" aria-label="研究主题筛选">
   <label for="culture-domain-select" class="topbar-label">
-    <span class="label-text">文化域</span>
+    <span class="label-text">研究主题</span>
   </label>
-  <select id="culture-domain-select" name="culture_domain" class="domain-select" aria-label="选择文化域">
+  <select id="culture-domain-select" name="culture_domain" class="domain-select" aria-label="选择研究主题">
     <option value="">全部 / 不限</option>
-    <option value="海丝">海丝</option>
-    <option value="朱子">朱子</option>
-    <option value="妈祖">妈祖</option>
-    <option value="船政">船政</option>
+    <option value="自然语言处理">自然语言处理</option>
+    <option value="多模态">多模态</option>
+    <option value="检索增强">检索增强</option>
+    <option value="强化学习">强化学习</option>
+    <option value="其他">其他</option>
   </select>
 </div>
 {% endblock %}
@@ -498,6 +499,35 @@
     gap: 0.4rem;
     font-size: 0.86rem;
     font-weight: 600;
+    flex-wrap: wrap;
+  }
+  .source-kind-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.3;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .source-kind-badge--group {
+    background: #eef4ff;
+    color: #1a4f9c;
+    border-color: rgba(26, 79, 156, 0.18);
+  }
+  .source-kind-badge--personal {
+    background: #f3f0ff;
+    color: #5b3ea6;
+    border-color: rgba(91, 62, 166, 0.18);
+  }
+  .citation-literature-meta,
+  .drawer-literature-meta {
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    font-weight: 400;
+    margin-top: 0.2rem;
   }
   .citation-num {
     color: var(--color-primary);
@@ -1048,10 +1078,10 @@
   <!-- Top Intro -->
   <section class="intro-panel" aria-label="工作台说明">
     <p class="intro-text">
-      <strong>福云·文脉助手</strong>：面向融媒编辑的知识检索助手。材料按文化域组织，回答必须带出处；库里没有的事实就拒答。
+      <strong>课题组知识助手</strong>：面向课题组成员的知识检索助手。材料按研究主题组织，回答必须带出处；库里没有的事实就拒答。
     </p>
     <p class="intro-subtext">
-      企业知识层检索支撑 · 单次提问带权威证据 · 不可直接作为播出终审依据
+      课题组知识沉淀 · 单次提问带权威证据 · 不可直接作为实验资料核对或正式报告终稿依据
     </p>
   </section>
 
@@ -1065,14 +1095,14 @@
           name="question"
           class="ask-textarea"
           rows="3"
-          placeholder="请输入您的问题（例如：妈祖信仰的发源地在哪里？），按 Enter 提交…"
+          placeholder="请输入您的问题（例如：RAG 中多路召回融合有哪些常见策略？），按 Enter 提交…"
           required
           aria-required="true"
         ></textarea>
       </div>
       <div class="ask-actions-bar">
         <div class="ask-domain-indicator">
-          <span>当前限定文化域：</span>
+          <span>当前限定研究主题：</span>
           <span id="active-domain-badge" class="domain-badge-active">全部 / 不限</span>
         </div>
         <div class="ask-button-group">
@@ -1111,19 +1141,19 @@
         </svg>
       </div>
       <h3 class="empty-title">暂无提问记录</h3>
-      <p class="empty-desc">在上方输入框提出问题，文脉助手将检索权威材料并给出带出处回答；若无依据将明确拒答。</p>
+      <p class="empty-desc">在上方输入框提出问题，知识助手将检索组内材料并给出带出处回答；若无依据将明确拒答。</p>
       <div class="example-prompts">
-        <button type="button" class="prompt-chip" data-question="妈祖信仰的发源地在哪里？" data-domain="妈祖">
-          妈祖信仰的发源地在哪里？ <span class="chip-tag">[妈祖]</span>
+        <button type="button" class="prompt-chip" data-question="RAG 中多路召回融合有哪些常见策略？" data-domain="检索增强">
+          RAG 多路召回融合策略？ <span class="chip-tag">[检索增强]</span>
         </button>
-        <button type="button" class="prompt-chip" data-question="朱子理学的主要主张是什么？" data-domain="朱子">
-          朱子理学的主要主张是什么？ <span class="chip-tag">[朱子]</span>
+        <button type="button" class="prompt-chip" data-question="多模态大模型如何将图像特征与文本对齐？" data-domain="多模态">
+          多模态图文对齐方法？ <span class="chip-tag">[多模态]</span>
         </button>
-        <button type="button" class="prompt-chip" data-question="海丝文化的核心内涵是什么？" data-domain="海丝">
-          海丝文化的核心内涵是什么？ <span class="chip-tag">[海丝]</span>
+        <button type="button" class="prompt-chip" data-question="Transformer 自注意力机制的计算复杂度是多少？" data-domain="自然语言处理">
+          Transformer 注意力复杂度？ <span class="chip-tag">[自然语言处理]</span>
         </button>
-        <button type="button" class="prompt-chip" data-question="船政学堂的历史贡献有哪些？" data-domain="船政">
-          船政学堂的历史贡献有哪些？ <span class="chip-tag">[船政]</span>
+        <button type="button" class="prompt-chip" data-question="PPO 算法与 TRPO 的主要区别是什么？" data-domain="强化学习">
+          PPO 与 TRPO 的区别？ <span class="chip-tag">[强化学习]</span>
         </button>
       </div>
     </div>
@@ -1172,7 +1202,15 @@
 
   <div class="drawer-meta-bar">
     <div class="drawer-meta-item">
-      <span class="meta-label">文化域</span>
+      <span class="meta-label">资料来源</span>
+      <span id="citation-drawer-source-label" class="meta-value-source">-</span>
+    </div>
+    <div class="drawer-meta-item drawer-meta-item--wide">
+      <span class="meta-label">文献信息</span>
+      <span id="citation-drawer-literature" class="drawer-literature-meta">-</span>
+    </div>
+    <div class="drawer-meta-item">
+      <span class="meta-label">研究主题</span>
       <span id="citation-drawer-domain" class="meta-value-domain">-</span>
     </div>
     <div class="drawer-meta-item">
@@ -1220,7 +1258,7 @@
   </div>
 
   <div class="drawer-footer">
-    <span class="drawer-footer-tip">融媒采编只读视图 · 不支持在此修改知识库</span>
+    <span class="drawer-footer-tip">课题组只读视图 · 不支持在此修改知识库</span>
   </div>
 </aside>
 {% endblock %}
@@ -1247,6 +1285,8 @@
   const drawer = document.getElementById('citation-drawer');
   const drawerCloseBtn = document.getElementById('citation-drawer-close');
   const drawerDomain = document.getElementById('citation-drawer-domain');
+  const drawerSourceLabel = document.getElementById('citation-drawer-source-label');
+  const drawerLiterature = document.getElementById('citation-drawer-literature');
   const drawerDocTitle = document.getElementById('citation-drawer-doc-title');
   const drawerChunkId = document.getElementById('citation-drawer-chunk-id');
   const drawerLoading = document.getElementById('citation-drawer-loading');
@@ -1351,6 +1391,27 @@
     return path + separator + 'collection_id=' + encodeURIComponent(collectionId);
   }
 
+  function formatLiteratureMeta(item) {
+    if (!item) return '';
+    const parts = [];
+    if (item.authors) parts.push(String(item.authors));
+    if (item.publication_year != null && item.publication_year !== '') {
+      parts.push(String(item.publication_year));
+    }
+    return parts.join(' · ');
+  }
+
+  function renderSourceKindBadge(item) {
+    const kind = item && item.source_kind ? item.source_kind : 'group_doc';
+    const label = item && item.source_label
+      ? item.source_label
+      : (kind === 'personal_literature' ? '个人文献库' : '组内资料');
+    const badgeClass = kind === 'personal_literature'
+      ? 'source-kind-badge source-kind-badge--personal'
+      : 'source-kind-badge source-kind-badge--group';
+    return '<span class="' + badgeClass + '" title="资料来源">' + escapeHtml(label) + '</span>';
+  }
+
   function fallbackCopyText(text) {
     const ta = document.createElement('textarea');
     ta.value = text;
@@ -1400,7 +1461,7 @@
     domainSelect.addEventListener('change', updateDomainBadge);
   }
 
-  // Culture-domain options stay static on the editor surface.
+  // Research-topic options stay static on the workbench surface.
 
   function showError(msg, traceId) {
     errorMessage.textContent = msg;
@@ -1434,6 +1495,13 @@
     drawerChunkId.textContent = chunkId;
     drawerDomain.textContent = (fallbackInfo && fallbackInfo.culture_domain) || '-';
     drawerDocTitle.textContent = (fallbackInfo && fallbackInfo.title) || '出处文档';
+    if (drawerSourceLabel) {
+      drawerSourceLabel.innerHTML = renderSourceKindBadge(fallbackInfo || {});
+    }
+    if (drawerLiterature) {
+      const literature = formatLiteratureMeta(fallbackInfo || {});
+      drawerLiterature.textContent = literature || '-';
+    }
 
     // Show drawer UI & lock scroll
     drawer.setAttribute('data-open', 'true');
@@ -1471,12 +1539,31 @@
       drawerChunkId.textContent = detail.chunk_id || chunkId;
       drawerDomain.textContent = detail.culture_domain || (fallbackInfo && fallbackInfo.culture_domain) || '未标记';
       drawerDocTitle.textContent = detail.title || (fallbackInfo && fallbackInfo.title) || '出处文档';
+      if (drawerSourceLabel) {
+        drawerSourceLabel.innerHTML = renderSourceKindBadge(detail);
+      }
+      if (drawerLiterature) {
+        const literature = formatLiteratureMeta(detail);
+        drawerLiterature.textContent = literature || '-';
+      }
       drawerText.textContent = detail.text || '（该片段正文内容为空）';
 
-      // Additional metadata if present
+      // Additional metadata if present (skip fields shown in meta bar)
+      const skipMetaKeys = new Set([
+        'source_kind',
+        'source_label',
+        'authors',
+        'publication_year',
+        'title',
+        'culture_domain',
+        'document_id',
+        'chunk_id',
+        '审阅状态',
+      ]);
       if (detail.metadata && typeof detail.metadata === 'object' && Object.keys(detail.metadata).length > 0) {
         let metaHtml = '';
         for (const [key, val] of Object.entries(detail.metadata)) {
+          if (skipMetaKeys.has(key)) continue;
           if (val != null && val !== '') {
             metaHtml += `
               <div class="meta-row">
@@ -1659,7 +1746,7 @@
       <div class="trace-summary-row">
         <span>链路耗时: <strong>${totalMs} ms</strong></span>
         <span>链路状态: <strong>${escapeHtml(statusLabel)}</strong></span>
-        <span>文化域: <strong>${escapeHtml(domain)}</strong></span>
+        <span>研究主题: <strong>${escapeHtml(domain)}</strong></span>
       </div>
       ${stagesHtml}
       ${fallbackHtml}
@@ -1721,7 +1808,7 @@
       statusText = '已拒答';
     }
 
-    const domainDisplay = item.culture_domain ? '文化域: ' + escapeHtml(item.culture_domain) : '全部文化域';
+    const domainDisplay = item.culture_domain ? '研究主题: ' + escapeHtml(item.culture_domain) : '全部研究主题';
 
     // Citations HTML
     let citationsHtml = '';
@@ -1742,6 +1829,7 @@
                 <div class="citation-top-row">
                   <div class="citation-source-info">
                     <span class="citation-num">[${c.index}]</span>
+                    ${renderSourceKindBadge(c)}
                     ${c.url ? `
                       <a href="${escapeHtml(c.url)}" class="citation-title-link" target="_blank" rel="noopener noreferrer" title="查看原始链接">${escapeHtml(c.title || '出处文档')}</a>
                     ` : `
@@ -1756,12 +1844,17 @@
                       data-chunk-id="${escapeHtml(c.chunk_id || '')}"
                       data-title="${escapeHtml(c.title || '')}"
                       data-domain="${escapeHtml(item.culture_domain || '')}"
+                      data-source-kind="${escapeHtml(c.source_kind || '')}"
+                      data-source-label="${escapeHtml(c.source_label || '')}"
+                      data-authors="${escapeHtml(c.authors || '')}"
+                      data-publication-year="${escapeHtml(c.publication_year != null ? c.publication_year : '')}"
                       aria-label="查看出处片段 ${escapeHtml(c.chunk_id || '')}"
                     >
                       查看片段
                     </button>
                   </div>
                 </div>
+                ${formatLiteratureMeta(c) ? `<p class="citation-literature-meta">${escapeHtml(formatLiteratureMeta(c))}</p>` : ''}
                 ${c.excerpt ? `<blockquote class="citation-excerpt">${escapeHtml(c.excerpt)}</blockquote>` : ''}
               </li>
             `).join('')}
@@ -1998,6 +2091,18 @@
   });
 
   // Delegated click handler for citation interactions (#5)
+  function citationFallbackFromEl(el) {
+    if (!el) return {};
+    return {
+      title: el.getAttribute('data-title') || '',
+      culture_domain: el.getAttribute('data-domain') || '',
+      source_kind: el.getAttribute('data-source-kind') || '',
+      source_label: el.getAttribute('data-source-label') || '',
+      authors: el.getAttribute('data-authors') || '',
+      publication_year: el.getAttribute('data-publication-year') || '',
+    };
+  }
+
   qaList.addEventListener('click', function(e) {
     // 1. Click on citation marker in answer text
     const refEl = e.target.closest('.citation-ref');
@@ -2014,11 +2119,9 @@
     const btnEl = e.target.closest('.btn-view-chunk');
     if (btnEl) {
       const chunkId = btnEl.getAttribute('data-chunk-id');
-      const title = btnEl.getAttribute('data-title');
-      const domain = btnEl.getAttribute('data-domain');
       if (chunkId) {
         e.preventDefault();
-        openCitationDrawer(chunkId, { title: title, culture_domain: domain });
+        openCitationDrawer(chunkId, citationFallbackFromEl(btnEl));
         return;
       }
     }
@@ -2028,9 +2131,7 @@
     if (itemEl && !e.target.closest('a') && !e.target.closest('button')) {
       const chunkId = itemEl.getAttribute('data-chunk-id');
       if (chunkId) {
-        const title = itemEl.getAttribute('data-title');
-        const domain = itemEl.getAttribute('data-domain');
-        openCitationDrawer(chunkId, { title: title, culture_domain: domain });
+        openCitationDrawer(chunkId, citationFallbackFromEl(itemEl));
       }
     }
   });

@@ -9,7 +9,7 @@ from wenmai.components.vision.base import BaseVisionLLM
 from wenmai.factories.llm import registry, vision_registry
 
 _ENRICHER_MARKER = "入库助手"
-_QA_MARKER = "文脉助手"
+_QA_MARKER = "课题组知识助手"
 _MULTI_QUERY_MARKER = "多路改写"
 _REFUSAL_PREFIX = "拒答："
 _QUESTION_STOP_TERMS = frozenset(
@@ -64,7 +64,7 @@ class FakeLLM(BaseLLM):
         if _ENRICHER_MARKER in prompt:
             return (
                 '{"title": "妈祖祖庙", "summary": "湄洲岛妈祖信仰中心", '
-                '"tags": ["妈祖"], "culture_domain": "妈祖"}'
+                '"tags": ["妈祖"], "culture_domain": "检索增强"}'
             )
         return "占位回答[1]。"
 

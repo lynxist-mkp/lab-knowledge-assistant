@@ -6,6 +6,7 @@ from typing import Literal
 
 from wenmai.config import Settings
 from wenmai.factories import multimodal as multimodal_factory
+from wenmai.knowledge.domain import authors, publication_year, source_kind, source_label
 from wenmai.models import Citation, ScoredChunk
 
 _CITATION_PATTERN = re.compile(r"\[(\d+)\]")
@@ -87,6 +88,10 @@ def _citation_for_index(index: int, scored_chunks: list[ScoredChunk]) -> Citatio
         title=str(chunk.metadata.get("title") or chunk.metadata.get("chunk_title") or ""),
         excerpt=_excerpt(chunk.text),
         url=str(chunk.metadata.get("url") or ""),
+        source_kind=source_kind(chunk),
+        source_label=source_label(chunk),
+        authors=authors(chunk),
+        publication_year=publication_year(chunk),
     )
 
 

@@ -26,11 +26,12 @@ def _other_collection_settings(
 
 
 def _write_markdown(path: Path, *, culture_domain: str, title: str, body: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         f"""---
 source_url: https://example.com/{path.stem}
 culture_domain: {culture_domain}
-space: minpai_culture
+space: lab_knowledge
 title: {title}
 ---
 
@@ -53,7 +54,7 @@ def test_ops_landmarks_and_overview_panel(test_settings: Settings) -> None:
     html = _ops_html(client)
 
     # Brand and Surface
-    assert "福云·文脉助手" in html
+    assert "课题组知识助手" in html
     assert "运维看板" in html
     assert "#037AFF" in html
 
@@ -85,7 +86,7 @@ def test_ops_landmarks_and_overview_panel(test_settings: Settings) -> None:
 
     # Compliance footer inherited from shell
     assert "人工智能生成合成" in html
-    assert "播出终审" in html
+    assert "实验资料核对" in html
 
 
 def test_ops_browse_panel_wiring(test_settings: Settings) -> None:
@@ -95,7 +96,7 @@ def test_ops_browse_panel_wiring(test_settings: Settings) -> None:
 
     # Browse panel landmarks
     assert "库览" in html
-    assert "文化域" in html
+    assert "研究主题" in html
     assert 'id="ops-browse-list"' in html or 'id="browse-list"' in html
     assert 'id="btn-refresh-browse"' in html
 
@@ -116,6 +117,11 @@ def test_ops_ingestion_panel_wiring(test_settings: Settings) -> None:
     assert 'id="ingest-form"' in html
     assert 'id="ingest-source-path"' in html
     assert 'name="source_path"' in html
+    assert 'id="ingest-source-kind"' in html
+    assert 'name="source_kind"' in html
+    assert 'id="ingest-literature-title"' in html
+    assert 'id="ingest-literature-authors"' in html
+    assert 'id="ingest-literature-year"' in html
     assert 'id="ingest-submit-btn"' in html
     assert 'id="ingest-stages-list"' in html
     assert 'id="ingest-result-card"' in html
@@ -123,6 +129,10 @@ def test_ops_ingestion_panel_wiring(test_settings: Settings) -> None:
     # Ingestion SSE fetch wiring
     assert "/api/ingestion/run" in html
     assert "fetch(buildOpsApiUrl('/api/ingestion/run')" in html
+    assert "source_kind: sourceKindVal" in html
+    assert "payload.literature = {}" in html
+    assert "eventData.event === 'file_start'" in html
+    assert "eventData.event === 'file_done'" in html
 
 
 def test_ops_nav_isolation_from_editor(test_settings: Settings) -> None:
@@ -146,17 +156,17 @@ def test_ops_nav_isolation_from_editor(test_settings: Settings) -> None:
 
 
 def test_ops_dual_shell_isolation(test_settings: Settings) -> None:
-    """Dual shell isolation: /ops has 运维看板 not 编辑工作台; / has 编辑工作台 not 运维看板."""
+    """Dual shell isolation: /ops has 运维看板 not 检索工作台; / has 检索工作台 not 运维看板."""
     client = TestClient(create_app(test_settings))
 
     ops = client.get("/ops")
     assert ops.status_code == 200
     assert "运维看板" in ops.text
-    assert "编辑工作台" not in ops.text
+    assert '<p class="surface">检索工作台</p>' not in ops.text
 
     workbench = client.get("/")
     assert workbench.status_code == 200
-    assert "编辑工作台" in workbench.text
+    assert '<p class="surface">检索工作台</p>' in workbench.text
     assert "运维看板" not in workbench.text
     assert "库览" not in workbench.text
     assert 'class="ops-nav-tab"' not in workbench.text
@@ -262,6 +272,9 @@ def test_ops_browse_api_contract(test_settings: Settings) -> None:
         assert "title" in doc
         assert "summary" in doc
         assert "tags" in doc
+        assert "source_kind" in doc
+        assert "source_label" in doc
+        assert "authors" in doc
         assert len(doc["chunks"]) >= 1
         chunk = doc["chunks"][0]
         assert "chunk_id" in chunk
@@ -435,6 +448,51 @@ def test_ops_ingestion_run_sse_stream_contract(
     assert result["status"] in ("ingested", "rebuilt", "skipped")
     assert result["chunk_count"] >= 1
     assert "trace_id" in result
+
+
+def test_ops_ingestion_run_sse_stream_supports_directory_summary(
+    test_settings: Settings, tmp_path: Path
+) -> None:
+    root = tmp_path / "papers"
+    _write_markdown(
+        root / "paper-a.md",
+        culture_domain="检索增强",
+        title="Attention Is All You Need",
+        body="Transformer 架构通过自注意力机制建模序列依赖。",
+    )
+    _write_markdown(
+        root / "nested" / "paper-b.md",
+        culture_domain="多模态",
+        title="CLIP",
+        body="CLIP 通过图文对比学习对齐多模态表示。",
+    )
+
+    client = TestClient(create_app(test_settings))
+    response = client.post(
+        "/api/ingestion/run",
+        json={"source_path": str(root), "source_kind": "personal_literature"},
+    )
+    assert response.status_code == 200
+
+    events: list[dict[str, object]] = []
+    for line in response.iter_lines():
+        if line.startswith("data: "):
+            events.append(json.loads(line[len("data: ") :]))
+
+    event_types = [e.get("event") for e in events]
+    assert "file_start" in event_types
+    assert "file_done" in event_types
+    assert "done" in event_types
+
+    done_event = next(e for e in events if e.get("event") == "done")
+    result = done_event["result"]
+    assert result["source_kind"] == "personal_literature"
+    assert result["total"] == 2
+    assert result["attempted"] == 2
+    assert result["ingested"] == 2
+    assert result["rebuilt"] == 0
+    assert result["skipped"] == 0
+    assert result["failed"] == 0
 
 
 def test_ops_trace_panel_wiring(test_settings: Settings) -> None:
@@ -628,7 +686,7 @@ def test_ops_review_panel_wiring(test_settings: Settings) -> None:
 
 
 def test_workbench_has_no_review_actions(test_settings: Settings) -> None:
-    """编辑工作台 must not expose review APIs or buttons."""
+    """检索工作台 must not expose review APIs or buttons."""
     client = TestClient(create_app(test_settings))
     workbench = client.get("/")
     assert workbench.status_code == 200

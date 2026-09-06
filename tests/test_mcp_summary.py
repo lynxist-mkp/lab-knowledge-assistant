@@ -21,8 +21,8 @@ def _write_minpai_markdown(path: Path) -> Path:
 source_url: https://www.mzmz.org.cn/introduction.html
 source_org: 湄洲妈祖祖庙
 license_note: 政府网站公开信息，引用时保留 URL
-culture_domain: 妈祖
-space: minpai_culture
+culture_domain: 检索增强
+space: lab_knowledge
 title: 湄洲妈祖祖庙简介
 ---
 
@@ -63,7 +63,7 @@ def test_documents_get_returns_enveloped_card(
 
     assert result["data"]["document_id"] == document_id
     assert result["data"]["title"] == "湄洲妈祖祖庙简介"
-    assert result["data"]["culture_domain"] == "妈祖"
+    assert result["data"]["culture_domain"] == "检索增强"
     assert result["data"]["chunk_count"] >= 1
     assert result["scope"]["collection_id"] == test_settings.product.collection
     assert "data" in result and "refs" in result

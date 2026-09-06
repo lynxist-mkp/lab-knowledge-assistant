@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start the 福云·文脉助手 MCP server on stdio transport."""
+"""Start the 课题组知识助手 MCP server on stdio transport."""
 
 from __future__ import annotations
 

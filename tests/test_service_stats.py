@@ -22,7 +22,7 @@ def _write_markdown(path: Path, *, culture_domain: str, title: str, body: str) -
         f"""---
 source_url: https://example.com/{path.stem}
 culture_domain: {culture_domain}
-space: minpai_culture
+space: lab_knowledge
 title: {title}
 ---
 

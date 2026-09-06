@@ -100,7 +100,11 @@ class LlmEnricher(BaseTransform):
                 parsed = _parse_response(raw, self._domains)
                 if parsed:
                     for chunk in chunks:
-                        chunk.metadata.update(parsed)
+                        update = dict(parsed)
+                        # Respect source-provided research topics when already present.
+                        if chunk.metadata.get("culture_domain") and "culture_domain" in update:
+                            del update["culture_domain"]
+                        chunk.metadata.update(update)
                     enriched_count = len(chunks)
                 stage_info["output_summary"] = (
                     f"enriched document ({enriched_count}/{len(chunks)} chunks)"

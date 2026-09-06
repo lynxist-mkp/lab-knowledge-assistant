@@ -3,7 +3,18 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from wenmai.knowledge.domain import chunk_title, culture_domain, review_status, summary, tags, title
+from wenmai.knowledge.domain import (
+    authors,
+    chunk_title,
+    culture_domain,
+    publication_year,
+    review_status,
+    source_kind,
+    source_label,
+    summary,
+    tags,
+    title,
+)
 from wenmai.models import Chunk
 
 
@@ -19,9 +30,13 @@ class ChunkDetail:
     metadata: dict[str, Any]
     summary: str = ""
     tags: list[str] = field(default_factory=list)
+    source_kind: str = "group_doc"
+    source_label: str = "组内资料"
+    authors: str = ""
+    publication_year: int | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "chunk_id": self.chunk_id,
             "document_id": self.document_id,
             "title": self.title,
@@ -31,8 +46,14 @@ class ChunkDetail:
             "text": self.text,
             "summary": self.summary,
             "tags": list(self.tags),
+            "source_kind": self.source_kind,
+            "source_label": self.source_label,
+            "authors": self.authors,
             "metadata": self.metadata,
         }
+        if self.publication_year is not None:
+            payload["publication_year"] = self.publication_year
+        return payload
 
 
 @dataclass(frozen=True)
@@ -65,16 +86,26 @@ class DocumentSummary:
     summary: str = ""
     tags: list[str] = field(default_factory=list)
     chunks: list[ChunkSummary] = field(default_factory=list)
+    source_kind: str = "group_doc"
+    source_label: str = "组内资料"
+    authors: str = ""
+    publication_year: int | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "document_id": self.document_id,
             "title": self.title,
             "chunk_count": self.chunk_count,
             "summary": self.summary,
             "tags": list(self.tags),
+            "source_kind": self.source_kind,
+            "source_label": self.source_label,
+            "authors": self.authors,
             "chunks": [chunk.as_dict() for chunk in self.chunks],
         }
+        if self.publication_year is not None:
+            payload["publication_year"] = self.publication_year
+        return payload
 
 
 @dataclass(frozen=True)
@@ -118,4 +149,8 @@ def chunk_detail_from_chunk(chunk: Chunk) -> ChunkDetail:
         summary=summary(chunk),
         tags=tags(chunk),
         metadata=chunk.metadata,
+        source_kind=source_kind(chunk),
+        source_label=source_label(chunk),
+        authors=authors(chunk),
+        publication_year=publication_year(chunk),
     )

@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from wenmai.config import Settings
+from wenmai.ingestion.source_metadata import ResolvedSourceMetadata
 from wenmai.tracing.context import StageRecord, TraceContext
 from wenmai.tracing.stages.ingestion import IngestionStage
 from wenmai.tracing.store import save_trace
@@ -50,17 +51,19 @@ class PrepareTraceRecorder:
         status: str,
         chunk_count: int,
         chunks_with_images: int,
+        source_metadata: ResolvedSourceMetadata | None = None,
     ) -> None:
-        self._context.metadata.update(
-            {
-                "source_path": source_path,
-                "document_id": document_id,
-                "title": title,
-                "status": status,
-                "chunk_count": chunk_count,
-                "chunks_with_images": chunks_with_images,
-            }
-        )
+        summary = {
+            "source_path": source_path,
+            "document_id": document_id,
+            "title": title,
+            "status": status,
+            "chunk_count": chunk_count,
+            "chunks_with_images": chunks_with_images,
+        }
+        if source_metadata is not None:
+            summary.update(source_metadata.trace_fields())
+        self._context.metadata.update(summary)
 
     def record_embed(
         self,

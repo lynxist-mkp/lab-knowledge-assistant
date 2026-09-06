@@ -140,7 +140,7 @@ def yaml_front_matter(item: dict[str, Any], retrieved_at: str, snapshot_sha256: 
         "source_org": item["source_org"],
         "license_note": item["license_note"],
         "culture_domain": item["culture_domain"],
-        "space": item.get("space", "minpai_culture"),
+        "space": item.get("space", "lab_knowledge"),
         "retrieved_at": retrieved_at,
         "snapshot_sha256": snapshot_sha256,
     }
@@ -374,7 +374,7 @@ def run(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="抓取 manifest.yaml 中的公开闽派文化语料")
+    parser = argparse.ArgumentParser(description="抓取 manifest.yaml 中的课题组公开语料")
     parser.add_argument(
         "--manifest",
         type=Path,

@@ -23,8 +23,8 @@ def test_workbench_and_ops_shells_render(test_settings: Settings) -> None:
 
     workbench = client.get("/")
     assert workbench.status_code == 200
-    assert "福云·文脉助手" in workbench.text
-    assert "编辑工作台" in workbench.text
+    assert "课题组知识助手" in workbench.text
+    assert "检索工作台" in workbench.text
     assert "--color-primary" in workbench.text
     assert "#037AFF" in workbench.text
     assert "Ingestion 管理" not in workbench.text
@@ -33,7 +33,7 @@ def test_workbench_and_ops_shells_render(test_settings: Settings) -> None:
 
     ops = client.get("/ops")
     assert ops.status_code == 200
-    assert "福云·文脉助手" in ops.text
+    assert "课题组知识助手" in ops.text
     assert "运维看板" in ops.text
     assert "--color-primary" in ops.text
     assert "#037AFF" in ops.text

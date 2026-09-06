@@ -72,7 +72,6 @@ def test_legacy_ask_wenmai_returns_plain_contract(
     result = ask_wenmai(
         "妈祖信仰的发源地在哪里？",
         test_settings,
-        culture_domain="妈祖",
     )
 
     assert result["answer"]

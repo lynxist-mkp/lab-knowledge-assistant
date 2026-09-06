@@ -1,4 +1,4 @@
-# 福云·文脉助手架构地图
+# 课题组知识助手架构地图
 
 这份地图面向第一次进入仓库的人，也面向要讲项目的人。目标不是罗列全部文件，而是先回答三件事：
 
@@ -113,7 +113,7 @@
 
 ## 当前最重要的 ADR
 
-- `docs/adr/0003-dual-surface-ui-editor-and-ops.md`: 编辑工作台 / 运维看板双面隔离
+- `docs/adr/0003-dual-surface-ui-editor-and-ops.md`: 检索工作台 / 运维看板双面隔离
 - `docs/adr/0006-deep-module-consolidation.md`: 第二轮深 module 收口
 - `docs/adr/0007-deep-module-round3.md`: 第三轮深 module 收口
 - `docs/adr/0010-document-management-facade.md`: 文档管理 facade

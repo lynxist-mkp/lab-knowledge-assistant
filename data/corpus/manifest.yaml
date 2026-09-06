@@ -1,450 +1,374 @@
-# 福云·文脉助手公开语料清单（32 号票）
+# 课题组知识助手公开语料清单
 # 正文由 scripts/fetch_corpus.py 抓取到本目录，默认不进 Git。
 # robots.txt 未能核验的站点不会自动抓取（见 README 与脚本日志）。
 
 version: 1
-space_default: minpai_culture
+space_default: lab_knowledge
 
-# 明确排除：调研已记录 robots 无法核验，不写爬虫硬抓
-robots_blocked_hosts:
-  - host: www.fjtv.net
-    reason: robots.txt 返回客户端下载中间页，未能核验真实规则
-  - host: fjtv.net
-    reason: robots.txt 返回客户端下载中间页，未能核验真实规则
+robots_blocked_hosts: []
 
 items:
-  # ── 海丝（10）────────────────────────────────────────────
-  - id: haishi-unesco-quanzhou
-    title: 泉州：宋元中国的世界海洋商贸中心（UNESCO）
-    source_url: https://whc.unesco.org/en/list/1561/
-    source_org: UNESCO World Heritage Centre
-    license_note: 说明文本 CC BY-SA IGO 3.0，引用保留 URL 与获取日期
-    culture_domain: 海丝
-    space: minpai_culture
+  # ── 自然语言处理（8）────────────────────────────────────
+  - id: nlp-wiki-nlp
+    title: 自然语言处理（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E8%87%AA%E7%84%B6%E8%AF%AD%E8%A8%80%E5%A4%84%E7%90%86
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 自然语言处理
+    space: lab_knowledge
+    has_images: false
+
+  - id: nlp-wiki-transformer
+    title: Transformer（机器学习，维基百科）
+    source_url: https://zh.wikipedia.org/wiki/Transformer_(%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0)
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 自然语言处理
+    space: lab_knowledge
     has_images: true
 
-  - id: haishi-wiki-citong
-    title: 刺桐（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E5%88%BA%E6%A1%90
+  - id: nlp-wiki-bert
+    title: BERT（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/BERT
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 海丝
-    space: minpai_culture
+    culture_domain: 自然语言处理
+    space: lab_knowledge
+    has_images: false
+
+  - id: nlp-wiki-llm
+    title: 大型语言模型（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%A4%A7%E5%9E%8B%E8%AF%AD%E8%A8%80%E6%A8%A1%E5%9E%8B
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 自然语言处理
+    space: lab_knowledge
+    has_images: false
+
+  - id: nlp-wiki-attention
+    title: 注意力机制（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%B3%A8%E6%84%8F%E5%8A%9B%E6%9C%BA%E5%88%B6
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 自然语言处理
+    space: lab_knowledge
     has_images: true
 
-  - id: haishi-wiki-maritime-silk-road
-    title: 海上丝绸之路（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E6%B5%B7%E4%B8%8A%E4%B8%9D%E7%BB%B8%E4%B9%8B%E8%B7%AF
-    source_org: 维基媒体基金会
-    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 海丝
-    space: minpai_culture
-    has_images: false
-
-  - id: haishi-wiki-quanzhou
-    title: 泉州市（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E6%B3%89%E5%B7%9E%E5%B8%82
-    source_org: 维基媒体基金会
-    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 海丝
-    space: minpai_culture
-    has_images: false
-
-  - id: haishi-wiki-qingjing-mosque
-    title: 灵山伊斯兰教圣墓（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E7%81%B5%E5%B1%B1%E4%BC%8A%E6%96%AF%E5%85%B0%E6%95%99%E5%9C%A3%E5%A2%93
-    source_org: 维基媒体基金会
-    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 海丝
-    space: minpai_culture
+  - id: nlp-arxiv-attention
+    title: Attention Is All You Need（arXiv）
+    source_url: https://arxiv.org/abs/1706.03762
+    source_org: arXiv
+    license_note: arXiv 公开论文，引用时保留 URL
+    culture_domain: 自然语言处理
+    space: lab_knowledge
     has_images: true
 
-  - id: haishi-wiki-shibosi
-    title: 泉州市舶司（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E6%B3%89%E5%B7%9E%E5%B8%82%E8%88%B6%E6%8F%90%E4%B8%BE%E5%8F%B8
+  - id: nlp-wiki-word2vec
+    title: Word2vec（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/Word2vec
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 海丝
-    space: minpai_culture
+    culture_domain: 自然语言处理
+    space: lab_knowledge
     has_images: false
 
-  - id: haishi-wiki-dehua-porcelain
-    title: 德化瓷（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E5%BE%B7%E5%8C%96%E7%99%BD%E7%93%B7
+  - id: nlp-wiki-gpt
+    title: 生成式预训练变换模型（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E7%94%9F%E6%88%90%E5%BC%8F%E9%A2%84%E8%AE%AD%E7%BB%83%E5%8F%98%E6%8D%A2%E6%A8%A1%E5%9E%8B
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 海丝
-    space: minpai_culture
+    culture_domain: 自然语言处理
+    space: lab_knowledge
+    has_images: false
+
+  # ── 多模态（8）────────────────────────────────────────
+  - id: mm-wiki-multimodal
+    title: 多模态学习（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%A4%9A%E6%A8%A1%E5%BC%8F%E5%AD%A6%E4%B9%A0
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 多模态
+    space: lab_knowledge
+    has_images: false
+
+  - id: mm-wiki-clip
+    title: CLIP（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/CLIP
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 多模态
+    space: lab_knowledge
+    has_images: false
+
+  - id: mm-wiki-vit
+    title: Vision Transformer（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/Vision_Transformer
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 多模态
+    space: lab_knowledge
     has_images: true
 
-  - id: haishi-wlt-library-llm
-    title: 省图书馆海丝文化大语言模型上线（省文旅厅转载）
-    source_url: https://wlt.fujian.gov.cn/wldt/btdt/202504/t20250425_6904832.htm
-    source_org: 福建省文化和旅游厅
-    license_note: 政府网站公开信息，引用时保留 URL
-    culture_domain: 海丝
-    space: minpai_culture
-    has_images: false
-
-  - id: haishi-mzd-shenyi-reply
-    title: 湄洲岛管委会提案协办意见（妈祖/海丝申遗）
-    source_url: https://mzd.putian.gov.cn/zfxxgkzl/zfxxgkml/202405/t20240528_1922640.htm
-    source_org: 湄洲岛国家旅游度假区管委会
-    license_note: 政府网站公开信息，引用时保留 URL
-    culture_domain: 海丝
-    space: minpai_culture
-    has_images: false
-
-  - id: haishi-wlt-badawenhua
-    title: 省文旅厅政协提案答复（福建八大文化标识总述）
-    source_url: https://wlt.fujian.gov.cn/zfxxgkzl/zfxxgkml/30qtyzdgkdzfxx/12zxtadf/202305/t20230504_6162831.htm
-    source_org: 福建省文化和旅游厅
-    license_note: 政府网站公开信息，引用时保留 URL
-    culture_domain: 海丝
-    space: minpai_culture
-    has_images: false
-
-  - id: haishi-unesco-quanzhou-maps
-    title: 泉州宋元海洋商贸中心世界遗产区位图
-    source_url: https://whc.unesco.org/document/188999
-    source_org: UNESCO World Heritage Centre
-    license_note: 说明文本 CC BY-SA IGO 3.0，引用保留 URL 与获取日期
-    culture_domain: 海丝
-    space: minpai_culture
-    has_images: true
-    # OCR 图册曾灰区待审且 caption 缺中英对齐；图内题用核对后的 md 摘录
-    prefer_pdf: false
-
-  - id: haishi-unesco-quanzhou-annex
-    title: 泉州世界遗产申遗文本附录
-    source_url: https://whc.unesco.org/document/180501
-    source_org: UNESCO World Heritage Centre
-    license_note: 说明文本 CC BY-SA IGO 3.0，引用保留 URL 与获取日期
-    culture_domain: 海丝
-    space: minpai_culture
-    has_images: true
-    prefer_pdf: true
-
-  # ── 朱子（10）────────────────────────────────────────────
-  - id: zhuzi-wlt-zhuzi-plan
-    title: 福建省朱子文化旅游发展规划（2018–2022年）通知
-    source_url: https://wlt.fujian.gov.cn/zwgk/ghjh/202003/t20200306_5210317.htm
-    source_org: 福建省文化和旅游厅
-    license_note: 政府网站公开信息，引用时保留 URL；历史规划注意时效
-    culture_domain: 朱子
-    space: minpai_culture
+  - id: mm-arxiv-clip
+    title: Learning Transferable Visual Models From Natural Language Supervision（arXiv）
+    source_url: https://arxiv.org/abs/2103.00020
+    source_org: arXiv
+    license_note: arXiv 公开论文，引用时保留 URL
+    culture_domain: 多模态
+    space: lab_knowledge
     has_images: true
 
-  - id: zhuzi-wiki-zhuxi
-    title: 朱熹（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E6%9C%B1%E7%86%B9
+  - id: mm-wiki-diffusion
+    title: 扩散模型（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%89%A9%E6%95%A3%E6%A8%A1%E5%9E%8B
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 朱子
-    space: minpai_culture
+    culture_domain: 多模态
+    space: lab_knowledge
     has_images: true
 
-  - id: zhuzi-wiki-lixue
-    title: 理学（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E7%90%86%E5%AD%A6
+  - id: mm-wiki-ocr
+    title: 光学字符识别（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%85%89%E5%AD%A6%E5%AD%97%E7%AC%A6%E8%AF%86%E5%88%AB
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 朱子
-    space: minpai_culture
+    culture_domain: 多模态
+    space: lab_knowledge
     has_images: false
 
-  - id: zhuzi-wiki-wuyishan
-    title: 武夷山（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E6%AD%A6%E5%A4%B7%E5%B1%B1
+  - id: mm-wiki-caption
+    title: 图像描述（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%9B%BE%E5%83%8F%E6%8F%8F%E8%BF%B0
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 朱子
-    space: minpai_culture
+    culture_domain: 多模态
+    space: lab_knowledge
+    has_images: false
+
+  - id: mm-wiki-vlm
+    title: 视觉语言模型（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E8%A7%86%E8%A7%89%E8%AF%AD%E8%A8%80%E6%A8%A1%E5%9E%8B
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 多模态
+    space: lab_knowledge
+    has_images: false
+
+  # ── 检索增强（8）────────────────────────────────────────
+  - id: rag-wiki-rag
+    title: 检索增强生成（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%A3%80%E7%B4%A2%E5%A2%9E%E5%BC%BA%E7%94%9F%E6%88%90
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 检索增强
+    space: lab_knowledge
+    has_images: false
+
+  - id: rag-arxiv-rag
+    title: Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks（arXiv）
+    source_url: https://arxiv.org/abs/2005.11401
+    source_org: arXiv
+    license_note: arXiv 公开论文，引用时保留 URL
+    culture_domain: 检索增强
+    space: lab_knowledge
     has_images: true
 
-  - id: zhuzi-wiki-kaoting
-    title: 考亭书院（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E5%BB%BA%E9%98%B3%E5%8C%BA
+  - id: rag-wiki-ir
+    title: 信息检索（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E4%BF%A1%E6%81%AF%E6%A3%80%E7%B4%A2
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 朱子
-    space: minpai_culture
+    culture_domain: 检索增强
+    space: lab_knowledge
     has_images: false
 
-  - id: zhuzi-wiki-zhuzixue
-    title: 朱子学（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E6%9C%B1%E5%AD%90%E5%AD%A6
+  - id: rag-wiki-embedding
+    title: 词嵌入（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E8%AF%8D%E5%B5%8C%E5%85%A5
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 朱子
-    space: minpai_culture
+    culture_domain: 检索增强
+    space: lab_knowledge
     has_images: false
 
-  - id: zhuzi-wiki-sishu
-    title: 四书（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E5%9B%9B%E4%B9%A6%E4%BA%94%E7%BB%8F
+  - id: rag-wiki-vector-db
+    title: 向量数据库（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 朱子
-    space: minpai_culture
+    culture_domain: 检索增强
+    space: lab_knowledge
     has_images: false
 
-  - id: zhuzi-wiki-jianyang
-    title: 建阳区（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E5%BB%BA%E9%98%B3%E5%8C%BA
+  - id: rag-wiki-dense-retrieval
+    title: 密集段落检索（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%AF%86%E9%9B%86%E6%AE%B5%E8%90%BD%E6%A3%80%E7%B4%A2
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 朱子
-    space: minpai_culture
+    culture_domain: 检索增强
+    space: lab_knowledge
     has_images: false
 
-  - id: zhuzi-wiki-nanping
-    title: 南平市（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E5%8D%97%E5%B9%B3%E5%B8%82
+  - id: rag-wiki-hybrid-search
+    title: 混合搜索（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%B7%B7%E5%90%88%E6%90%9C%E7%B4%A2
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 朱子
-    space: minpai_culture
+    culture_domain: 检索增强
+    space: lab_knowledge
     has_images: false
 
-  - id: zhuzi-wiki-bailudong
-    title: 白鹿洞书院（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E7%99%BD%E9%B9%BF%E6%B4%9E%E4%B9%A6%E9%99%A2
+  - id: rag-wiki-chunking
+    title: 文本分块（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%96%87%E6%9C%AC%E5%88%86%E5%9D%97
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 朱子
-    space: minpai_culture
+    culture_domain: 检索增强
+    space: lab_knowledge
     has_images: false
 
-  - id: zhuzi-wuyi-trail-plan
-    title: 武夷山国家森林步道（福建段）旅游专项规划
-    source_url: http://wlt.fujian.gov.cn/zfxxgkzl/zfxxgkml/30qtyzdgkdzfxx/06zykf/202112/P020260319649239187987.pdf
-    source_org: 福建省文化和旅游厅
-    license_note: 政府网站公开信息，引用时保留 URL
-    culture_domain: 朱子
-    space: minpai_culture
-    has_images: true
-    # markitdown 全文在 .md；prefer_pdf 只会吃到封面图件，图内题用正文图件章节
-    prefer_pdf: false
-
-  - id: zhuzi-feiyi-handdrawn-map
-    title: 「跟着非遗游福建」手绘地图
-    source_url: https://wlt.fujian.gov.cn/wldt/tsdt/202601/t20260123_7084618.htm
-    source_org: 福建省文化和旅游厅
-    license_note: 政府网站公开信息，引用时保留 URL
-    culture_domain: 朱子
-    space: minpai_culture
-    has_images: true
-
-  # ── 妈祖（10）────────────────────────────────────────────
-  - id: mazu-mzmz-intro
-    title: 湄洲妈祖祖庙简介
-    source_url: https://www.mzmz.org.cn/introduction.html
-    source_org: 湄洲妈祖祖庙董事会
-    license_note: 祖庙官网公开信息，引用时保留 URL
-    culture_domain: 妈祖
-    space: minpai_culture
-    has_images: true
-
-  - id: mazu-wiki-mazu
-    title: 妈祖（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E5%A6%88%E7%A5%96
+  # ── 强化学习（8）────────────────────────────────────────
+  - id: rl-wiki-rl
+    title: 强化学习（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 妈祖
-    space: minpai_culture
+    culture_domain: 强化学习
+    space: lab_knowledge
+    has_images: false
+
+  - id: rl-wiki-qlearning
+    title: Q-learning（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/Q-learning
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 强化学习
+    space: lab_knowledge
+    has_images: false
+
+  - id: rl-wiki-ppo
+    title: 近端策略优化（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E8%BF%91%E7%AB%AF%E7%AD%96%E7%95%A5%E4%BC%98%E5%8C%96
+    source_org: 维基媒体基金会
+    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
+    culture_domain: 强化学习
+    space: lab_knowledge
+    has_images: false
+
+  - id: rl-arxiv-dqn
+    title: Playing Atari with Deep Reinforcement Learning（arXiv）
+    source_url: https://arxiv.org/abs/1312.5602
+    source_org: arXiv
+    license_note: arXiv 公开论文，引用时保留 URL
+    culture_domain: 强化学习
+    space: lab_knowledge
     has_images: true
 
-  - id: mazu-wiki-quanzhou-tianhou
-    title: 泉州天后宫（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E6%B3%89%E5%B7%9E%E5%A4%A9%E5%90%8E%E5%AE%AB
+  - id: rl-wiki-mdp
+    title: 马尔可夫决策过程（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E9%A9%AC%E5%B0%94%E5%8F%AF%E5%A4%AB%E5%86%B3%E7%AD%96%E8%BF%87%E7%A8%8B
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 妈祖
-    space: minpai_culture
+    culture_domain: 强化学习
+    space: lab_knowledge
     has_images: true
 
-  - id: mazu-wiki-tianhou
-    title: 天后（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E5%A4%A9%E5%90%8E
+  - id: rl-wiki-policy-gradient
+    title: 策略梯度（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E7%AD%96%E7%95%A5%E6%A2%AF%E5%BA%A6
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 妈祖
-    space: minpai_culture
+    culture_domain: 强化学习
+    space: lab_knowledge
     has_images: false
 
-  - id: mazu-wiki-meizhou-island
-    title: 湄洲岛（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E6%B9%84%E6%B4%B2%E5%B2%9B
+  - id: rl-wiki-deep-rl
+    title: 深度强化学习（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%B7%B1%E5%BA%A6%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 妈祖
-    space: minpai_culture
+    culture_domain: 强化学习
+    space: lab_knowledge
     has_images: false
 
-  - id: mazu-wiki-mazu-belief
-    title: 妈祖信俗（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E5%A6%88%E7%A5%96
+  - id: rl-wiki-reward
+    title: 奖励函数（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%A5%96%E5%8A%B1%E5%87%BD%E6%95%B0
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 妈祖
-    space: minpai_culture
+    culture_domain: 强化学习
+    space: lab_knowledge
     has_images: false
 
-  - id: mazu-wiki-putian
-    title: 莆田市（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E8%8E%86%E7%94%B0%E5%B8%82
+  # ── 其他（8）────────────────────────────────────────────
+  - id: other-wiki-ml
+    title: 机器学习（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 妈祖
-    space: minpai_culture
+    culture_domain: 其他
+    space: lab_knowledge
     has_images: false
 
-  - id: mazu-wiki-lin-moniang
-    title: 林默娘（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E6%9E%97%E9%BB%98%E5%A8%98
+  - id: other-wiki-dl
+    title: 深度学习（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 妈祖
-    space: minpai_culture
+    culture_domain: 其他
+    space: lab_knowledge
     has_images: false
 
-  - id: mazu-wiki-lugang-tianhou
-    title: 鹿港天后宫（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E9%B9%BF%E6%B8%AF%E5%A4%A9%E5%90%8E%E5%AE%AB
+  - id: other-wiki-pytorch
+    title: PyTorch（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/PyTorch
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 妈祖
-    space: minpai_culture
+    culture_domain: 其他
+    space: lab_knowledge
     has_images: false
 
-  - id: mazu-wiki-beigang-chaotian
-    title: 北港朝天宫（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E5%8C%97%E6%B8%AF%E6%9C%9D%E5%A4%A9%E5%AE%AE
+  - id: other-wiki-huggingface
+    title: Hugging Face（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/Hugging_Face
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 妈祖
-    space: minpai_culture
+    culture_domain: 其他
+    space: lab_knowledge
     has_images: false
 
-  - id: mazu-unesco-nomination-00227
-    title: 妈祖信俗申遗表
-    source_url: https://ich.unesco.org/doc/src/00227-English.pdf
-    source_org: UNESCO Intangible Cultural Heritage
-    license_note: UNESCO 公开申遗材料，引用保留 URL 与获取日期
-    culture_domain: 妈祖
-    space: minpai_culture
-    has_images: true
-    # 本地为 25638-EN.doc 转写的 .md（正文含 Mazu lanterns）；无图册 PDF
-    prefer_pdf: false
-
-  - id: mazu-unesco-consent-00227
-    title: 妈祖信俗社区同意书
-    source_url: https://ich.unesco.org/doc/download.php?versionID=29037
-    source_org: UNESCO Intangible Cultural Heritage
-    license_note: UNESCO 公开申遗材料，引用保留 URL 与获取日期
-    culture_domain: 妈祖
-    space: minpai_culture
-    has_images: true
-    # 59 页扫描件已落盘；为控负载用抽检 markdown 入库（全量 OCR 可另开）
-    prefer_pdf: false
-
-  # ── 船政（10）────────────────────────────────────────────
-  - id: chuanzheng-wlj-industrial-tourism
-    title: 船政文化景区入选国家工业旅游示范基地（福州市文旅局）
-    source_url: https://wlj.fuzhou.gov.cn/zwgk/lyzx/202310/t20231016_4698930.htm
-    source_org: 福州市文化和旅游局
-    license_note: 政府网站公开信息，引用时保留 URL
-    culture_domain: 船政
-    space: minpai_culture
-    has_images: true
-
-  - id: chuanzheng-mawei-museum-news
-    title: 中国船政文化博物馆「上新」（马尾区政府）
-    source_url: https://www.mawei.gov.cn/xjwz/zwgk/zfxxgkzdgz/ggtywh/whycbh/202301/t20230104_4516214.htm
-    source_org: 福州市马尾区人民政府
-    license_note: 政府网站公开信息，引用时保留 URL
-    culture_domain: 船政
-    space: minpai_culture
-    has_images: true
-
-  - id: chuanzheng-wiki-chuanzheng-xuetang
-    title: 船政学堂（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E8%88%B9%E6%94%BF%E5%AD%A6%E5%A0%82
+  - id: other-wiki-paper
+    title: 学术论文（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%AD%A6%E6%9C%AF%E8%AE%BA%E6%96%87
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 船政
-    space: minpai_culture
-    has_images: true
-
-  - id: chuanzheng-wiki-mawei-shipyard
-    title: 马尾船政（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E9%A6%AC%E5%B0%BE%E8%88%B9%E6%94%BF%E5%B1%80
-    source_org: 维基媒体基金会
-    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 船政
-    space: minpai_culture
+    culture_domain: 其他
+    space: lab_knowledge
     has_images: false
 
-  - id: chuanzheng-wiki-fuzhou-shipyard
-    title: 福州船政局（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E7%A6%8F%E5%B7%9E%E8%88%B9%E6%94%BF%E5%B1%80
+  - id: other-wiki-reproducibility
+    title: 可重复性（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%8F%AF%E9%87%8D%E5%A4%8D%E6%80%A7
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 船政
-    space: minpai_culture
+    culture_domain: 其他
+    space: lab_knowledge
     has_images: false
 
-  - id: chuanzheng-wiki-zuo-zongtang
-    title: 左宗棠（维基百科，船政创办背景）
-    source_url: https://zh.wikipedia.org/wiki/%E5%B7%A6%E5%AE%97%E6%A3%A0
+  - id: other-wiki-experiment
+    title: 实验设计（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E5%AE%9E%E9%AA%8C%E8%AE%BE%E8%AE%A1
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 船政
-    space: minpai_culture
+    culture_domain: 其他
+    space: lab_knowledge
     has_images: false
 
-  - id: chuanzheng-wiki-shen-baozhen
-    title: 沈葆桢（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E6%B2%88%E8%91%86%E6%A5%A8
+  - id: other-wiki-dataset
+    title: 数据集（维基百科）
+    source_url: https://zh.wikipedia.org/wiki/%E6%95%B0%E6%8D%AE%E9%9B%86
     source_org: 维基媒体基金会
     license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 船政
-    space: minpai_culture
+    culture_domain: 其他
+    space: lab_knowledge
     has_images: false
-
-  - id: chuanzheng-wiki-mawei
-    title: 马尾区（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E9%A9%AC%E5%B0%BE%E5%8C%BA
-    source_org: 维基媒体基金会
-    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 船政
-    space: minpai_culture
-    has_images: false
-
-  - id: chuanzheng-wiki-yangwu
-    title: 洋务运动（维基百科）
-    source_url: https://zh.wikipedia.org/wiki/%E6%B4%8B%E5%8A%A1%E8%BF%90%E5%8A%A8
-    source_org: 维基媒体基金会
-    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 船政
-    space: minpai_culture
-    has_images: false
-
-  - id: chuanzheng-wiki-yan-fu
-    title: 严复（维基百科，船政学堂出身）
-    source_url: https://zh.wikipedia.org/wiki/%E4%B8%A5%E5%A4%8D
-    source_org: 维基媒体基金会
-    license_note: 正文 CC BY-SA 4.0，需署名并 ShareAlike
-    culture_domain: 船政
-    space: minpai_culture
-    has_images: false
-
-  - id: chuanzheng-fuzhou-museum-opening
-    title: 中国船政文化博物馆新馆开馆
-    source_url: https://www.fuzhou.gov.cn/gzdt/rcyw/202201/t20220104_4283697.htm
-    source_org: 福州市人民政府
-    license_note: 政府网站公开信息，引用时保留 URL
-    culture_domain: 船政
-    space: minpai_culture
-    has_images: true

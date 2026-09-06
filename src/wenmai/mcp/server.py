@@ -38,7 +38,7 @@ def create_mcp_server(settings: Settings | None = None) -> MCPServer:
     server = MCPServer(
         "wenmai",
         instructions=(
-            "Query and manage the 福云·文脉助手 knowledge base. "
+            "Query and manage the 课题组知识助手 knowledge base. "
             "Use ask.answer or ask_wenmai for questions; documents.* and reviews.* for admin."
         ),
     )

@@ -24,8 +24,8 @@ def _write_minpai_markdown(path: Path) -> Path:
 source_url: https://www.mzmz.org.cn/introduction.html
 source_org: 湄洲妈祖祖庙
 license_note: 政府网站公开信息，引用时保留 URL
-culture_domain: 妈祖
-space: minpai_culture
+culture_domain: 检索增强
+space: lab_knowledge
 title: 湄洲妈祖祖庙简介
 ---
 
@@ -102,7 +102,7 @@ def test_query_compat_retains_public_contract_and_can_skip_trace(
     result = query_compat.ask_question(
         "妈祖信仰的发源地在哪里？",
         test_settings,
-        culture_domain="妈祖",
+        culture_domain="检索增强",
         retrieval_mode="dense_only",
         rerank_enabled=False,
         record_trace=False,

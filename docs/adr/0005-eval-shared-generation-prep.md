@@ -7,9 +7,9 @@
 
 ## Context
 
-编辑工作台 `/ask` 在生成前会通过 `expand_for_generation` 将检索命中的 chunk 与同一文档的相邻 chunk 合并，再送入 LLM。黄金集评测（`eval/pipeline.py`）原先在 `run_eval_group_batched` 中跳过该扩展，直接用精排后的 chunks 调用 `generate()`。
+检索工作台 `/ask` 在生成前会通过 `expand_for_generation` 将检索命中的 chunk 与同一文档的相邻 chunk 合并，再送入 LLM。黄金集评测（`eval/pipeline.py`）原先在 `run_eval_group_batched` 中跳过该扩展，直接用精排后的 chunks 调用 `generate()`。
 
-这导致评测与生产的生成输入不一致：评测可能低估出处覆盖率、高估拒答准确率，且无法在 artifact 中复现编辑提问时 LLM 实际看到的上下文。
+这导致评测与生产的生成输入不一致：评测可能低估出处覆盖率、高估拒答准确率，且无法在 artifact 中复现检索工作台提问时 LLM 实际看到的上下文。
 
 ## Decision
 
