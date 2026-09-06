@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from wenmai.knowledge.browse import ChunkDetail, CultureDomainGroup, chunk_detail_from_chunk
 from wenmai.knowledge.document_card import DocumentCard, DocumentNotFoundError
-from wenmai.knowledge.domain import is_searchable
+from wenmai.knowledge.domain import is_searchable, summary, tags
 from wenmai.models import Chunk, ScoredChunk
 
 if TYPE_CHECKING:
@@ -151,11 +150,7 @@ def _take_searchable(hits: list[ScoredChunk], top_k: int) -> list[ScoredChunk]:
 def _document_summary_from_chunks(chunks: list[Chunk]) -> str:
     if not chunks:
         return ""
-    summaries: list[str] = []
-    for chunk in sorted(chunks, key=lambda item: item.chunk_id):
-        value = chunk.metadata.get("summary")
-        if isinstance(value, str) and value.strip():
-            summaries.append(value.strip())
+    summaries = [summary(chunk) for chunk in sorted(chunks, key=lambda item: item.chunk_id) if summary(chunk)]
     if not summaries:
         return ""
     return max(summaries, key=len)
@@ -164,11 +159,7 @@ def _document_summary_from_chunks(chunks: list[Chunk]) -> str:
 def _document_tags_from_chunks(chunks: list[Chunk]) -> list[str]:
     seen: list[str] = []
     for chunk in sorted(chunks, key=lambda item: item.chunk_id):
-        raw_tags = chunk.metadata.get("tags")
-        if not isinstance(raw_tags, Iterable) or isinstance(raw_tags, (str, bytes, dict)):
-            continue
-        for item in raw_tags:
-            tag = str(item).strip()
+        for tag in tags(chunk):
             if tag and tag not in seen:
                 seen.append(tag)
     return seen

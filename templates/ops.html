@@ -2707,10 +2707,21 @@
         const filteredDocs = group.documents.filter(function(doc) {
           const titleMatches = (doc.title || '').toLowerCase().includes(query);
           const idMatches = (doc.document_id || '').toLowerCase().includes(query);
-          const chunkMatches = doc.chunks && doc.chunks.some(function(c) {
-            return (c.preview || '').toLowerCase().includes(query) || (c.chunk_id || '').toLowerCase().includes(query);
+          const summaryMatches = (doc.summary || '').toLowerCase().includes(query);
+          const tagMatches = Array.isArray(doc.tags) && doc.tags.some(function(tag) {
+            return String(tag || '').toLowerCase().includes(query);
           });
-          return domainMatches || titleMatches || idMatches || chunkMatches;
+          const chunkMatches = doc.chunks && doc.chunks.some(function(c) {
+            const previewMatches = (c.preview || '').toLowerCase().includes(query);
+            const chunkIdMatches = (c.chunk_id || '').toLowerCase().includes(query);
+            const chunkTitleMatches = (c.chunk_title || '').toLowerCase().includes(query);
+            const chunkSummaryMatches = (c.summary || '').toLowerCase().includes(query);
+            const chunkTagMatches = Array.isArray(c.tags) && c.tags.some(function(tag) {
+              return String(tag || '').toLowerCase().includes(query);
+            });
+            return previewMatches || chunkIdMatches || chunkTitleMatches || chunkSummaryMatches || chunkTagMatches;
+          });
+          return domainMatches || titleMatches || idMatches || summaryMatches || tagMatches || chunkMatches;
         });
 
         if (domainMatches || filteredDocs.length > 0) {

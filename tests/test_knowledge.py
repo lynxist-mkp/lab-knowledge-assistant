@@ -495,6 +495,37 @@ def test_chroma_round_trip_preserves_structured_enrichment_metadata(
     assert card.tags == ["妈祖", "往返"]
 
 
+def test_document_card_normalizes_json_string_tags_after_round_trip(
+    test_settings: Settings,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    knowledge.commit_document(
+        source_path="/tmp/doc-json-tags.md",
+        sha256="doc-json-tags",
+        document_id="doc-json-tags",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="doc-json-tags:0000",
+                document_id="doc-json-tags",
+                text="标签往返正文。",
+                metadata={
+                    "document_id": "doc-json-tags",
+                    "title": "json-tags",
+                    "culture_domain": "妈祖",
+                    "summary": "JSON 标签摘要",
+                    "tags": ["妈祖", "JSON"],
+                },
+            )
+        ],
+    )
+
+    reopened = create_knowledge(test_settings)
+    card = reopened.document_card("doc-json-tags")
+    assert card.summary == "JSON 标签摘要"
+    assert card.tags == ["妈祖", "JSON"]
+
+
 def test_browse_delegates_to_read_path(test_settings: Settings) -> None:
     knowledge = create_knowledge(test_settings)
     _commit(knowledge, "doc-browse", "浏览委托测试", culture_domain="船政")

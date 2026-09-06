@@ -347,6 +347,16 @@ def test_ops_browse_surfaces_semantic_enrichment_fields(test_settings: Settings)
     assert chunk["tags"] == ["妈祖", "祖庙"]
 
 
+def test_ops_browse_search_matches_semantic_enrichment_fields(test_settings: Settings) -> None:
+    client = TestClient(create_app(test_settings))
+    html = _ops_html(client)
+
+    assert "const summaryMatches = (doc.summary || '').toLowerCase().includes(query);" in html
+    assert "const chunkTitleMatches = (c.chunk_title || '').toLowerCase().includes(query);" in html
+    assert "const chunkSummaryMatches = (c.summary || '').toLowerCase().includes(query);" in html
+    assert "const chunkTagMatches = Array.isArray(c.tags) && c.tags.some(function(tag) {" in html
+
+
 def test_ops_collection_query_params_route_overview_and_browse(
     test_settings: Settings,
 ) -> None:
