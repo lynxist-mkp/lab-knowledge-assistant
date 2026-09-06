@@ -12,9 +12,8 @@ from tests.conftest import register_collection
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.eval import run_eval
-from wenmai.models import IngestResult
 from wenmai.ops.observation import get_task_progress_detail, list_task_progress_summaries
-from wenmai.pipelines.ingestion import commit_prepared_ingest, prepare_ingest_source
+from wenmai.pipelines.ingestion import run_prepare_commit
 from wenmai.task_progress import (
     ChildEvidence,
     EvaluationTaskProgressConfig,
@@ -380,19 +379,6 @@ def test_failed_commit_keeps_document_link_in_task_progress(
     monkeypatch,
 ) -> None:
     source = _write_markdown(tmp_path / "doc.md")
-    prepared = prepare_ingest_source(source, test_settings)
-    assert not isinstance(prepared, IngestResult)
-    assert not hasattr(prepared, "body")
-    assert not hasattr(prepared, "lifecycle")
-    assert not hasattr(prepared, "_recorder")
-    assert not hasattr(prepared, "trace_id")
-    assert not hasattr(prepared, "elapsed_ms")
-    assert not hasattr(prepared, "set_summary")
-    assert not hasattr(prepared, "record_embed")
-    assert not hasattr(prepared, "record_upsert")
-    assert not hasattr(prepared, "close_and_save")
-    assert not hasattr(prepared, "save_on_error")
-    assert not hasattr(prepared, "persist_outcome")
 
     def boom(*_args: object, **_kwargs: object) -> object:
         raise RuntimeError("upsert failed")
@@ -400,7 +386,7 @@ def test_failed_commit_keeps_document_link_in_task_progress(
     monkeypatch.setattr("wenmai.knowledge.store.Knowledge.commit_document", boom)
 
     with pytest.raises(RuntimeError, match="upsert failed"):
-        commit_prepared_ingest(prepared, test_settings)
+        run_prepare_commit(source, test_settings)
 
     summaries = list_task_progress_summaries(test_settings, task_type="ingestion")
     assert len(summaries) == 1
