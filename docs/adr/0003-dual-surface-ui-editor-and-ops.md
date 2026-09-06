@@ -2,7 +2,7 @@
 
 **Status:** accepted  
 **Date:** 2026-08-27  
-**Parent:** [双面 UI 规格 #1](https://github.com/lynxist-mkp/wenmai-assistant/issues/1)
+**Parent:** [双面 UI 规格 #1](https://github.com/lynxist-mkp/lab-knowledge-assistant/issues/1)
 
 ## Context
 
