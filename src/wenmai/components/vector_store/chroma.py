@@ -23,6 +23,23 @@ def _flatten(metadata: dict[str, Any]) -> dict[str, str | int | float | bool]:
     return flat
 
 
+def _inflate(metadata: dict[str, Any]) -> dict[str, Any]:
+    inflated: dict[str, Any] = {}
+    for key, value in metadata.items():
+        if not isinstance(value, str):
+            inflated[key] = value
+            continue
+        stripped = value.strip()
+        if not stripped or stripped[0] not in "[{":
+            inflated[key] = value
+            continue
+        try:
+            inflated[key] = json.loads(stripped)
+        except json.JSONDecodeError:
+            inflated[key] = value
+    return inflated
+
+
 @registry.register("chroma")
 class ChromaVectorStore(BaseVectorStore):
     def __init__(self, persist_path: str, collection: str, **kwargs: object) -> None:
@@ -61,7 +78,7 @@ class ChromaVectorStore(BaseVectorStore):
         documents = result.get("documents") or []
         metadatas = result.get("metadatas") or []
         for chunk_id, text, metadata in zip(ids, documents, metadatas, strict=True):
-            meta = dict(metadata or {})
+            meta = _inflate(dict(metadata or {}))
             chunks.append(
                 Chunk(
                     chunk_id=chunk_id,
@@ -91,7 +108,7 @@ class ChromaVectorStore(BaseVectorStore):
         documents = result.get("documents") or []
         metadatas = result.get("metadatas") or []
         for chunk_id, text, metadata in zip(ids, documents, metadatas, strict=True):
-            meta = dict(metadata or {})
+            meta = _inflate(dict(metadata or {}))
             chunks.append(
                 Chunk(
                     chunk_id=chunk_id,
@@ -128,7 +145,7 @@ class ChromaVectorStore(BaseVectorStore):
         for chunk_id, text, metadata, distance in zip(
             ids, documents, metadatas, distances, strict=True
         ):
-            meta = dict(metadata or {})
+            meta = _inflate(dict(metadata or {}))
             scored.append(
                 ScoredChunk(
                     chunk=Chunk(
@@ -149,7 +166,7 @@ class ChromaVectorStore(BaseVectorStore):
         documents = result.get("documents") or []
         metadatas = result.get("metadatas") or []
         for chunk_id, text, metadata in zip(ids, documents, metadatas, strict=True):
-            meta = dict(metadata or {})
+            meta = _inflate(dict(metadata or {}))
             chunks.append(
                 Chunk(
                     chunk_id=chunk_id,
@@ -169,7 +186,7 @@ class ChromaVectorStore(BaseVectorStore):
         documents = result.get("documents") or []
         metadatas = result.get("metadatas") or []
         text = documents[0] if documents else ""
-        meta = dict(metadatas[0] or {}) if metadatas else {}
+        meta = _inflate(dict(metadatas[0] or {})) if metadatas else {}
         return Chunk(
             chunk_id=chunk_id,
             document_id=str(meta.get("document_id") or ""),

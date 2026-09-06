@@ -4,6 +4,8 @@
 
 技术对齐 `fjgdAgent/RAG系统.md` 的模块边界（五块存储、Factory、Trace），语料与中文检索自写。
 
+快速讲清仓库结构时，先看 `docs/architecture-legibility.md`；正式术语以 `CONTEXT.md` 为准，架构决策看 `docs/adr/`。
+
 ## 本周范围
 
 - 文本 + 图转文 + 本地 `bge-m3` Dense + jieba BM25 + **RRF（已默认）** + Cross-Encoder 精排 + 文化域过滤（#16、#19 ✅）

@@ -433,7 +433,12 @@ def test_ops_service_uses_collection_bound_document_management(test_settings: Se
 
 def test_document_management_get_document_returns_domain_card(test_settings: Settings) -> None:
     knowledge = create_knowledge(test_settings)
-    _commit(knowledge, "doc-summary", "摘要正文")
+    _commit(
+        knowledge,
+        "doc-summary",
+        "摘要正文",
+        extra_metadata={"summary": "文档摘要", "tags": ["妈祖", "祖庙"]},
+    )
     mgmt = create_document_management(test_settings, knowledge=knowledge)
 
     card = mgmt.get_document(
@@ -443,6 +448,8 @@ def test_document_management_get_document_returns_domain_card(test_settings: Set
 
     assert card.document_id == "doc-summary"
     assert card.chunk_count == 1
+    assert card.summary == "文档摘要"
+    assert card.tags == ["妈祖", "祖庙"]
 
 
 def test_document_management_get_document_unknown_collection_raises(
@@ -460,7 +467,12 @@ def test_document_management_get_chunk_detail_returns_domain_read_model(
     test_settings: Settings,
 ) -> None:
     knowledge = create_knowledge(test_settings)
-    _commit(knowledge, "doc-chunk-detail", "片段详情正文")
+    _commit(
+        knowledge,
+        "doc-chunk-detail",
+        "片段详情正文",
+        extra_metadata={"summary": "片段摘要", "tags": ["片段标签"], "chunk_title": "详情片段"},
+    )
     mgmt = create_document_management(test_settings, knowledge=knowledge)
 
     detail = mgmt.get_chunk_detail(
@@ -472,6 +484,9 @@ def test_document_management_get_chunk_detail_returns_domain_read_model(
     assert detail.document_id == "doc-chunk-detail"
     assert detail.text == "片段详情正文"
     assert detail.as_dict()["审阅状态"] == "已通过"
+    assert detail.as_dict()["chunk_title"] == "详情片段"
+    assert detail.as_dict()["summary"] == "片段摘要"
+    assert detail.as_dict()["tags"] == ["片段标签"]
 
 
 def test_mcp_get_document_summary_uses_document_management(
@@ -558,7 +573,12 @@ def test_mcp_get_document_summary_unknown_collection_raises(test_settings: Setti
 
 def test_mcp_documents_get_envelope(test_settings: Settings) -> None:
     knowledge = create_knowledge(test_settings)
-    _commit(knowledge, "doc-card", "卡片内容")
+    _commit(
+        knowledge,
+        "doc-card",
+        "卡片内容",
+        extra_metadata={"summary": "卡片摘要", "tags": ["妈祖"], "chunk_title": "卡片片段"},
+    )
     mgmt = create_document_management(test_settings, knowledge=knowledge)
 
     result = documents_get(
@@ -568,6 +588,8 @@ def test_mcp_documents_get_envelope(test_settings: Settings) -> None:
     )
     assert set(result) == _envelope_keys()
     assert result["data"]["document_id"] == "doc-card"
+    assert result["data"]["summary"] == "卡片摘要"
+    assert result["data"]["tags"] == ["妈祖"]
     assert result["refs"]["document_ids"] == ["doc-card"]
 
 

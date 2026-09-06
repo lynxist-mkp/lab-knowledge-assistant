@@ -634,6 +634,27 @@
     font-weight: 700;
     color: var(--color-text);
   }
+  .doc-summary-text {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--color-muted);
+    line-height: 1.5;
+  }
+  .semantic-tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .semantic-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    font-size: 0.72rem;
+    color: var(--color-text);
+  }
   .doc-id-code {
     font-size: 0.76rem;
     font-family: ui-monospace, SFMono-Regular, monospace;
@@ -721,6 +742,18 @@
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+  .chunk-semantic-title {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+  .chunk-semantic-summary {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--color-muted);
+    line-height: 1.45;
   }
   .chunk-preview-text--expanded {
     display: block;
@@ -2366,6 +2399,24 @@
     return cleaned;
   }
 
+  function hasNonEmptyText(value) {
+    return typeof value === 'string' && value.trim() !== '';
+  }
+
+  function renderSemanticTags(tags) {
+    if (!Array.isArray(tags) || tags.length === 0) {
+      return '';
+    }
+    const chips = tags
+      .map(function(tag) {
+        const text = String(tag || '').trim();
+        return text ? `<span class="semantic-tag">${escapeHtml(text)}</span>` : '';
+      })
+      .filter(Boolean)
+      .join('');
+    return chips ? `<div class="semantic-tag-row">${chips}</div>` : '';
+  }
+
   function formatRefusalReason(reason) {
     if (!reason) return '-';
     if (reason === 'insufficient_evidence') return '证据不足';
@@ -2439,10 +2490,16 @@
       chunkDrawerTitle.textContent = detail.title || '片段全文';
       chunkDrawerMeta.textContent = [
         detail.chunk_id || chunkId,
+        detail.chunk_title ? '片段标题: ' + detail.chunk_title : '',
         detail.culture_domain ? '文化域: ' + detail.culture_domain : '',
         detail['审阅状态'] ? '状态: ' + detail['审阅状态'] : ''
       ].filter(Boolean).join(' · ');
-      chunkDrawerText.textContent = detail.text || '（该片段正文内容为空）';
+      const detailText = detail.text || '（该片段正文内容为空）';
+      const detailSummary = hasNonEmptyText(detail.summary) ? '摘要: ' + detail.summary + '\n\n' : '';
+      const detailTags = Array.isArray(detail.tags) && detail.tags.length > 0
+        ? '标签: ' + detail.tags.join(' / ') + '\n\n'
+        : '';
+      chunkDrawerText.textContent = detailSummary + detailTags + detailText;
     } catch (err) {
       chunkDrawerErrorMsg.textContent = err.message;
       chunkDrawerError.style.display = 'block';
@@ -2461,6 +2518,13 @@
     const viewFullBtn = chunk.chunk_id
       ? `<button type="button" class="btn-chunk-view-full" data-view-chunk-full="${escapeHtml(chunk.chunk_id)}">查看全文</button>`
       : '';
+    const semanticTitle = hasNonEmptyText(chunk.chunk_title)
+      ? `<p class="chunk-semantic-title">${escapeHtml(chunk.chunk_title)}</p>`
+      : '';
+    const semanticSummary = hasNonEmptyText(chunk.summary)
+      ? `<p class="chunk-semantic-summary">${escapeHtml(chunk.summary)}</p>`
+      : '';
+    const semanticTags = renderSemanticTags(chunk.tags);
     return `
       <div class="${rowClass}">
         <div class="chunk-row-header">
@@ -2470,6 +2534,9 @@
             ${viewFullBtn}
           </div>
         </div>
+        ${semanticTitle}
+        ${semanticSummary}
+        ${semanticTags}
         <p class="chunk-preview-text">${escapeHtml(formatChunkPreview(chunk.preview))}</p>
       </div>
     `;
@@ -2680,6 +2747,10 @@
         docsHtml = group.documents.map(function(doc, docIdx) {
           const chunkCount = doc.chunk_count || (doc.chunks ? doc.chunks.length : 0);
           const shouldOpenDoc = Boolean(query) || (shouldOpenGroup && docIdx === 0);
+          const docSummary = hasNonEmptyText(doc.summary)
+            ? `<p class="doc-summary-text">${escapeHtml(doc.summary)}</p>`
+            : '';
+          const docTags = renderSemanticTags(doc.tags);
           return `
             <details class="doc-item-card"${shouldOpenDoc ? ' open' : ''}>
               <summary>
@@ -2687,6 +2758,8 @@
                   <div class="doc-title-box">
                     <div class="doc-title-inner">
                       <h4 class="doc-title">${escapeHtml(doc.title || '未命名文档')}</h4>
+                      ${docSummary}
+                      ${docTags}
                       <code class="doc-id-code" title="文档标识">${escapeHtml(truncateId(doc.document_id, 12, 8))}</code>
                     </div>
                   </div>

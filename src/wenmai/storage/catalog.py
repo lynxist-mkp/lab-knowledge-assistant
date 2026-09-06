@@ -1,13 +1,23 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from wenmai.config import Settings
 from wenmai.knowledge.browse import ChunkSummary, CultureDomainGroup, DocumentSummary
-from wenmai.knowledge.domain import REVIEW_PENDING, culture_domain, preview, review_status, title
+from wenmai.knowledge.domain import (
+    REVIEW_PENDING,
+    chunk_title,
+    culture_domain,
+    preview,
+    review_status,
+    summary,
+    tags,
+    title,
+)
 from wenmai.models import Chunk
 from wenmai.storage.paths import collection_storage_bindings
 
@@ -18,6 +28,8 @@ class CatalogDocument:
     culture_domain: str
     title: str
     chunk_count: int
+    summary: str
+    tags: list[str]
     chunks: list[ChunkSummary]
 
 
@@ -56,15 +68,21 @@ class DocumentCatalog:
             raise ValueError("cannot catalog empty chunk list")
         document_id = chunks[0].document_id
         sorted_chunks = sorted(chunks, key=lambda item: item.chunk_id)
+        document_tags = _document_tags(sorted_chunks)
         self._documents[document_id] = {
             "culture_domain": culture_domain(sorted_chunks[0]),
             "title": title(sorted_chunks[0]),
+            "summary": _document_summary(sorted_chunks),
+            "tags": document_tags,
             "chunks": [
                 {
                     "chunk_id": chunk.chunk_id,
                     "document_id": chunk.document_id,
                     "preview": preview(chunk.text),
                     "审阅状态": review_status(chunk),
+                    "chunk_title": chunk_title(chunk),
+                    "summary": summary(chunk),
+                    "tags": tags(chunk),
                 }
                 for chunk in sorted_chunks
             ],
@@ -94,6 +112,9 @@ class DocumentCatalog:
                 document_id=str(item.get("document_id") or document_id),
                 preview=str(item.get("preview") or ""),
                 review_status=str(item.get("审阅状态") or "已通过"),
+                chunk_title=str(item.get("chunk_title") or ""),
+                summary=str(item.get("summary") or ""),
+                tags=_coerce_tags(item.get("tags")),
             )
             for item in chunks_raw
             if isinstance(item, dict) and item.get("chunk_id")
@@ -103,6 +124,8 @@ class DocumentCatalog:
             culture_domain=culture_domain,
             title=str(raw.get("title") or document_id),
             chunk_count=len(chunks),
+            summary=str(raw.get("summary") or ""),
+            tags=_coerce_tags(raw.get("tags")),
             chunks=chunks,
         )
 
@@ -131,6 +154,8 @@ class DocumentCatalog:
                             document_id=doc.document_id,
                             title=doc.title,
                             chunk_count=doc.chunk_count,
+                            summary=doc.summary,
+                            tags=doc.tags,
                             chunks=doc.chunks,
                         )
                         for doc in documents
@@ -150,3 +175,30 @@ class DocumentCatalog:
 
 
 __all__ = ["CatalogDocument", "DocumentCatalog"]
+
+
+def _document_summary(chunks: list[Chunk]) -> str:
+    summaries = [summary(chunk) for chunk in chunks if summary(chunk)]
+    if not summaries:
+        return ""
+    return max(summaries, key=len)
+
+
+def _document_tags(chunks: list[Chunk]) -> list[str]:
+    merged: list[str] = []
+    for chunk in chunks:
+        for tag in tags(chunk):
+            if tag not in merged:
+                merged.append(tag)
+    return merged
+
+
+def _coerce_tags(raw: object) -> list[str]:
+    if not isinstance(raw, Iterable) or isinstance(raw, (str, bytes, dict)):
+        return []
+    cleaned: list[str] = []
+    for item in raw:
+        tag = str(item).strip()
+        if tag and tag not in cleaned:
+            cleaned.append(tag)
+    return cleaned

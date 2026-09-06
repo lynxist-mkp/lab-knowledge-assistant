@@ -443,6 +443,7 @@ def test_document_card_delegates_to_read_path(test_settings: Settings) -> None:
                     "title": "doc-card",
                     "culture_domain": "妈祖",
                     "summary": "文档摘要",
+                    "tags": ["妈祖", "祖庙"],
                 },
             )
         ],
@@ -453,6 +454,45 @@ def test_document_card_delegates_to_read_path(test_settings: Settings) -> None:
     assert card.document_id == "doc-card"
     assert card.culture_domain == "妈祖"
     assert card.summary == "文档摘要"
+    assert card.tags == ["妈祖", "祖庙"]
+
+
+def test_chroma_round_trip_preserves_structured_enrichment_metadata(
+    test_settings: Settings,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    knowledge.commit_document(
+        source_path="/tmp/doc-roundtrip.md",
+        sha256="doc-roundtrip",
+        document_id="doc-roundtrip",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="doc-roundtrip:0000",
+                document_id="doc-roundtrip",
+                text="带结构化语义元数据的正文。",
+                metadata={
+                    "document_id": "doc-roundtrip",
+                    "title": "roundtrip",
+                    "culture_domain": "妈祖",
+                    "chunk_title": "往返片段",
+                    "summary": "往返摘要",
+                    "tags": ["妈祖", "往返"],
+                },
+            )
+        ],
+    )
+
+    reopened = create_knowledge(test_settings)
+    chunk = reopened.get_by_chunk_id("doc-roundtrip:0000")
+    assert chunk is not None
+    assert chunk.metadata["chunk_title"] == "往返片段"
+    assert chunk.metadata["summary"] == "往返摘要"
+    assert chunk.metadata["tags"] == ["妈祖", "往返"]
+
+    card = reopened.document_card("doc-roundtrip")
+    assert card.summary == "往返摘要"
+    assert card.tags == ["妈祖", "往返"]
 
 
 def test_browse_delegates_to_read_path(test_settings: Settings) -> None:

@@ -132,6 +132,8 @@ def test_enricher_writes_culture_domain_to_chunk_metadata(
     chunks = create_knowledge(test_settings).get_by_document_id(body["document_id"])
     assert chunks[0].metadata["culture_domain"] == "妈祖"
     assert chunks[0].metadata["chunk_title"] == "妈祖祖庙"
+    assert chunks[0].metadata["summary"] == "湄洲岛妈祖信仰中心"
+    assert chunks[0].metadata["tags"] == ["妈祖"]
 
 
 def test_ingest_stamps_review_status_approved(

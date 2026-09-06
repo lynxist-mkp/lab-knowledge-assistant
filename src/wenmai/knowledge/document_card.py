@@ -17,6 +17,7 @@ class DocumentCard:
     culture_domain: str
     summary: str
     chunk_count: int
+    tags: list[str]
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)

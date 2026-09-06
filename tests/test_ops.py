@@ -101,6 +101,9 @@ def test_ops_browse_panel_wiring(test_settings: Settings) -> None:
 
     # Fetch wiring
     assert "fetch(buildOpsApiUrl('/api/browse'))" in html
+    assert "chunk-semantic-title" in html
+    assert "doc-summary-text" in html
+    assert "renderSemanticTags" in html
 
 
 def test_ops_ingestion_panel_wiring(test_settings: Settings) -> None:
@@ -214,6 +217,9 @@ def test_ops_browse_api_contract(test_settings: Settings) -> None:
                     "document_id": "doc-haisi",
                     "title": "海上丝绸之路",
                     "culture_domain": "海丝",
+                    "summary": "泉州是海上丝绸之路重要节点。",
+                    "tags": ["泉州", "海丝"],
+                    "chunk_title": "海丝起点",
                 },
             ),
         ],
@@ -254,12 +260,17 @@ def test_ops_browse_api_contract(test_settings: Settings) -> None:
         doc = group["documents"][0]
         assert "document_id" in doc
         assert "title" in doc
+        assert "summary" in doc
+        assert "tags" in doc
         assert len(doc["chunks"]) >= 1
         chunk = doc["chunks"][0]
         assert "chunk_id" in chunk
         assert "document_id" in chunk
         assert "preview" in chunk
         assert "审阅状态" in chunk
+        assert "chunk_title" in chunk
+        assert "summary" in chunk
+        assert "tags" in chunk
 
 
 def test_ops_browse_shows_pending_review_status(test_settings: Settings) -> None:
@@ -293,6 +304,47 @@ def test_ops_browse_shows_pending_review_status(test_settings: Settings) -> None
     ship_group = next(g for g in groups if g["culture_domain"] == "船政")
     chunk = ship_group["documents"][0]["chunks"][0]
     assert chunk["审阅状态"] == "待审"
+
+
+def test_ops_browse_surfaces_semantic_enrichment_fields(test_settings: Settings) -> None:
+    from wenmai.models import Chunk
+
+    app = create_app(test_settings)
+    app.state.knowledge.commit_document(
+        source_path="/tmp/doc-enriched.md",
+        sha256="doc-enriched",
+        document_id="doc-enriched",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="doc-enriched:0000",
+                document_id="doc-enriched",
+                text="湄洲祖庙是妈祖信仰的重要中心。",
+                metadata={
+                    "document_id": "doc-enriched",
+                    "title": "湄洲祖庙材料",
+                    "culture_domain": "妈祖",
+                    "summary": "文档摘要：湄洲祖庙与妈祖信俗。",
+                    "tags": ["妈祖", "祖庙"],
+                    "chunk_title": "祖庙地位",
+                    "审阅状态": "已通过",
+                },
+            ),
+        ],
+    )
+
+    client = TestClient(app)
+    resp = client.get("/api/browse")
+    assert resp.status_code == 200
+
+    group = next(item for item in resp.json() if item["culture_domain"] == "妈祖")
+    doc = next(item for item in group["documents"] if item["document_id"] == "doc-enriched")
+    assert doc["summary"] == "文档摘要：湄洲祖庙与妈祖信俗。"
+    assert doc["tags"] == ["妈祖", "祖庙"]
+    chunk = doc["chunks"][0]
+    assert chunk["chunk_title"] == "祖庙地位"
+    assert chunk["summary"] == "文档摘要：湄洲祖庙与妈祖信俗。"
+    assert chunk["tags"] == ["妈祖", "祖庙"]
 
 
 def test_ops_collection_query_params_route_overview_and_browse(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from wenmai.knowledge.browse import ChunkDetail, CultureDomainGroup, chunk_detail_from_chunk
@@ -117,6 +118,7 @@ class ReadPath:
             culture_domain=entry.culture_domain,
             summary=_document_summary_from_chunks(chunks),
             chunk_count=entry.chunk_count,
+            tags=_document_tags_from_chunks(chunks),
         )
 
     def _require_embedder(self) -> Any:
@@ -157,3 +159,16 @@ def _document_summary_from_chunks(chunks: list[Chunk]) -> str:
     if not summaries:
         return ""
     return max(summaries, key=len)
+
+
+def _document_tags_from_chunks(chunks: list[Chunk]) -> list[str]:
+    seen: list[str] = []
+    for chunk in sorted(chunks, key=lambda item: item.chunk_id):
+        raw_tags = chunk.metadata.get("tags")
+        if not isinstance(raw_tags, Iterable) or isinstance(raw_tags, (str, bytes, dict)):
+            continue
+        for item in raw_tags:
+            tag = str(item).strip()
+            if tag and tag not in seen:
+                seen.append(tag)
+    return seen
