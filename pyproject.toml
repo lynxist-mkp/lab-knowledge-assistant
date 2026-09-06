@@ -2,7 +2,17 @@
 name = "lab-knowledge-assistant"
 version = "0.1.0"
 description = "课题组知识助手：课题组公开语料上的模块化 RAG 原型"
+readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.12"
+authors = [{ name = "linkslinks" }]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: FastAPI",
+    "Intended Audience :: Science/Research",
+]
 dependencies = [
     "chromadb>=1.0,<2",
     "jieba",
@@ -26,6 +36,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "reportlab"]
+
+[project.urls]
+Homepage = "https://github.com/lynxist-mkp/lab-knowledge-assistant"
+Repository = "https://github.com/lynxist-mkp/lab-knowledge-assistant"
+Issues = "https://github.com/lynxist-mkp/lab-knowledge-assistant/issues"
 
 [build-system]
 requires = ["setuptools>=68"]

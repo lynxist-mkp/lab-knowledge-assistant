@@ -2,7 +2,7 @@
 
 Use this file before exploring code that depends on repo vocabulary, ADRs, or deep-module seams.
 
-## Exploration path
+## Route
 
 1. Read `CONTEXT.md` at the workspace root.
 2. Read the ADRs for the feature area from both ADR directories.
@@ -12,7 +12,7 @@ If a file is missing, proceed. New glossary terms and ADRs can be created later 
 
 Completion check: before coding, you should know the canonical term, the governing ADRs, and the public seam you are supposed to call through.
 
-## Repo layout
+## Layout
 
 - `CONTEXT.md`: canonical glossary for agents
 - `docs/adr/`: product and infra ADRs
@@ -32,13 +32,13 @@ Search both directories by topic, not by number:
 
 Two directories reuse some ADR numbers. When citing one, name it by title as well as number.
 
-## Glossary discipline
+## Glossary
 
 When you name a domain concept in output, tests, refactors, or issue titles, use the term defined in `CONTEXT.md`, including that file's Avoid list.
 
 If the concept is missing from the glossary, treat that as a signal: either the wording is invented or the domain model needs to be extended.
 
-## Deep-module seams
+## Seams
 
 Call through the seam's public interface. Do not reach into adapters unless the task is the seam itself.
 

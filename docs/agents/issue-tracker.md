@@ -2,7 +2,7 @@
 
 Use GitHub issues on `lynxist-mkp/lab-knowledge-assistant`.
 
-## Default rules
+## Defaults
 
 1. Use `gh` for every issue or PR operation.
 2. Pass `--repo lynxist-mkp/lab-knowledge-assistant` on every command.
@@ -11,7 +11,7 @@ Use GitHub issues on `lynxist-mkp/lab-knowledge-assistant`.
 
 Completion check: the command you are about to run names the repo explicitly and targets the right object type.
 
-## Core operations
+## Operations
 
 - Create issue: `gh issue create --repo lynxist-mkp/lab-knowledge-assistant --title "..." --body "..."`
 - Read issue with comments: `gh issue view <number> --repo lynxist-mkp/lab-knowledge-assistant --comments`
@@ -22,16 +22,16 @@ Completion check: the command you are about to run names the repo explicitly and
 
 For multi-line bodies, use a heredoc instead of escaping line breaks inline.
 
-## PR or issue
+## Resolve `#123`
 
 This repo does not treat PRs as a request surface for triage.
 
-When a reference like `#42` appears, resolve it in this order:
+Resolve a bare reference in this order:
 
 1. `gh pr view 42 --repo lynxist-mkp/lab-knowledge-assistant`
 2. If that fails, `gh issue view 42 --repo lynxist-mkp/lab-knowledge-assistant`
 
-## Skill hooks
+## Language hooks
 
 - "Publish to the issue tracker" means create a GitHub issue in `lynxist-mkp/lab-knowledge-assistant`.
 - "Fetch the relevant ticket" means `gh issue view <number> --repo lynxist-mkp/lab-knowledge-assistant --comments`.

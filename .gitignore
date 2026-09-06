@@ -7,6 +7,9 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
 *.egg-info/
 data/db/
 data/images/
@@ -21,6 +24,8 @@ data/corpus/*
 # 红线：任何音频都不进公开 Git。演示音频要提交需显式 git add -f。
 data/audio/
 .env
+.env.*
+!.env.example
 *.pt
 *.bin
 .DS_Store
