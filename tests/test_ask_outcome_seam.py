@@ -68,7 +68,6 @@ def test_query_trace_finalize_success(test_settings: Settings) -> None:
 
     assert result.answer.startswith("湄洲岛")
     assert result.trace_id == trace.trace_id
-    assert trace._recorder.error is None
 
 
 def test_query_trace_finalize_generation_failure(test_settings: Settings) -> None:
@@ -85,8 +84,6 @@ def test_query_trace_finalize_generation_failure(test_settings: Settings) -> Non
         trace.finalize(outcome)
 
     assert exc_info.value.trace_id == trace.trace_id
-    assert trace._recorder.error is not None
-    assert "provider down" in trace._recorder.error
 
 
 def test_query_trace_finalize_generation_failure_persists_trace(

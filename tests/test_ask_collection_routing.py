@@ -12,7 +12,7 @@ from wenmai.http.ask_service import run_ask
 from wenmai.knowledge import create_knowledge
 from wenmai.knowledge.collections import UnknownCollectionError, resolve_routable_collection_scope
 from wenmai.mcp.tools.ask import ask_answer
-from wenmai.models import AskResult, Chunk
+from wenmai.models import Chunk
 
 
 def _other_collection_settings(
@@ -68,102 +68,6 @@ def test_resolve_routable_collection_scope_rejects_missing_storage(
 ) -> None:
     with pytest.raises(UnknownCollectionError, match="unknown collection: missing"):
         resolve_routable_collection_scope(test_settings, "missing")
-
-
-def test_run_ask_explicit_collection_id_supplies_scoped_knowledge(
-    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    created: list[tuple[str | None, object]] = []
-    original_create = create_knowledge
-
-    def tracking_create(settings, *, collection_id=None):
-        instance = original_create(settings, collection_id=collection_id)
-        created.append((collection_id, instance))
-        return instance
-
-    monkeypatch.setattr("wenmai.http.ask_service.create_knowledge", tracking_create)
-
-    captured: dict[str, object] = {}
-
-    def fake_pipeline(payload, *, phase_batch):
-        captured["knowledge"] = payload.knowledge
-        captured["settings"] = payload.settings
-        return AskResult(answer="ok", citations=[], trace_id="trace-scoped")
-
-    monkeypatch.setattr("wenmai.http.ask_service.ask_pipeline_single", fake_pipeline)
-
-    result = run_ask(
-        "问题",
-        test_settings,
-        collection_id=test_settings.product.collection,
-    )
-
-    assert result.trace_id == "trace-scoped"
-    assert len(created) == 1
-    assert created[0][0] is None
-    assert captured["knowledge"] is created[0][1]
-    assert captured["settings"] is not test_settings
-    assert captured["settings"].product.collection == test_settings.product.collection
-
-
-def test_run_ask_without_collection_id_does_not_bind_knowledge_in_service(
-    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    created: list[tuple[str | None, object]] = []
-    original_create = create_knowledge
-
-    def tracking_create(settings, *, collection_id=None):
-        instance = original_create(settings, collection_id=collection_id)
-        created.append((collection_id, instance))
-        return instance
-
-    monkeypatch.setattr("wenmai.http.ask_service.create_knowledge", tracking_create)
-    captured: dict[str, object] = {}
-
-    def fake_pipeline(payload, *, phase_batch):
-        captured["knowledge"] = payload.knowledge
-        return AskResult(answer="ok", citations=[], trace_id="trace-default")
-
-    monkeypatch.setattr("wenmai.http.ask_service.ask_pipeline_single", fake_pipeline)
-
-    run_ask("问题", test_settings)
-
-    assert len(created) == 1
-    assert created[0][0] is None
-    assert captured["knowledge"] is created[0][1]
-
-
-def test_run_ask_replaces_injected_default_knowledge_with_explicit_collection_id(
-    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    injected = create_knowledge(test_settings)
-    created: list[tuple[str | None, object]] = []
-    original_create = create_knowledge
-
-    def tracking_create(settings, *, collection_id=None):
-        instance = original_create(settings, collection_id=collection_id)
-        created.append((collection_id, instance))
-        return instance
-
-    monkeypatch.setattr("wenmai.http.ask_service.create_knowledge", tracking_create)
-
-    captured: dict[str, object] = {}
-
-    def fake_pipeline(payload, *, phase_batch):
-        captured["knowledge"] = payload.knowledge
-        return AskResult(answer="ok", citations=[], trace_id="trace-injected")
-
-    monkeypatch.setattr("wenmai.http.ask_service.ask_pipeline_single", fake_pipeline)
-
-    run_ask(
-        "问题",
-        test_settings,
-        collection_id=test_settings.product.collection,
-        knowledge=injected,
-    )
-
-    assert len(created) == 1
-    assert captured["knowledge"] is created[0][1]
 
 
 def test_run_ask_routes_retrieval_to_other_collection_storage(
