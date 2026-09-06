@@ -7,7 +7,6 @@ import argparse
 import concurrent.futures
 import json
 import statistics
-import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
