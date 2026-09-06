@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from wenmai.config import Settings
-from wenmai.knowledge import create_knowledge
-from wenmai.models import Chunk
-from wenmai.retrieval.fusion import run_fusion, validate_retrieval_mode
+from lab_knowledge.config import Settings
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.models import Chunk
+from lab_knowledge.retrieval.fusion import run_fusion, validate_retrieval_mode
 
 
 def _chunk(chunk_id: str, document_id: str, text: str) -> Chunk:

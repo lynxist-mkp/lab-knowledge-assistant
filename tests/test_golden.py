@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from wenmai.config import Settings
-from wenmai.eval.golden import (
+from lab_knowledge.config import Settings
+from lab_knowledge.eval.golden import (
     CATEGORIES,
     GoldItem,
     corpus_id_from_source_path,

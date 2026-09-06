@@ -9,13 +9,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
+from lab_knowledge.eval import list_eval_run_summaries, run_eval
+from lab_knowledge.eval.persist import persist_eval_artifact, stamp_eval_run_collection_id
+from lab_knowledge.eval.views import GroupMetricsView, parse_eval_run_summary
+from lab_knowledge.knowledge import create_knowledge
 from tests.conftest import register_collection
-from wenmai.app import create_app
-from wenmai.config import Settings
-from wenmai.eval import list_eval_run_summaries, run_eval
-from wenmai.eval.persist import persist_eval_artifact, stamp_eval_run_collection_id
-from wenmai.eval.views import GroupMetricsView, parse_eval_run_summary
-from wenmai.knowledge import create_knowledge
 
 
 def _other_collection_settings(
@@ -251,7 +251,7 @@ def test_post_eval_runs_uses_scoped_settings_and_knowledge(
         )
         return parse_eval_run_summary(artifact)
 
-    monkeypatch.setattr("wenmai.http.eval.run_eval", fake_run_eval)
+    monkeypatch.setattr("lab_knowledge.http.eval.run_eval", fake_run_eval)
 
     response = client.post("/api/eval/runs", params={"collection_id": other_id})
 
@@ -299,7 +299,7 @@ def test_run_eval_stamps_collection_id_on_persist(
         )
 
     monkeypatch.setattr(
-        "wenmai.eval.runner._run_grouped_eval",
+        "lab_knowledge.eval.runner._run_grouped_eval",
         mock_grouped,
     )
 

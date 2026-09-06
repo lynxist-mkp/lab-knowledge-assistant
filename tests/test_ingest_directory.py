@@ -6,10 +6,10 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from wenmai.app import create_app
-from wenmai.config import Settings
-from wenmai.knowledge import create_knowledge
-from wenmai.pipelines.ingest_directory import ingest_source_directory, list_ingestable_files
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.pipelines.ingest_directory import ingest_source_directory, list_ingestable_files
 
 
 def _write_literature_markdown(path: Path, *, body: str) -> Path:

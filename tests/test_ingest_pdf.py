@@ -11,10 +11,10 @@ from PIL import Image
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
-from wenmai.app import create_app
-from wenmai.config import Settings
-from wenmai.knowledge import create_knowledge
-from wenmai.storage.paths import collection_storage_bindings
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.storage.paths import collection_storage_bindings
 
 
 def _write_pdf_with_embedded_image(path: Path) -> Path:

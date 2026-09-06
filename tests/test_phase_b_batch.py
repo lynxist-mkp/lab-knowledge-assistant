@@ -8,21 +8,25 @@ from pathlib import Path
 import pytest
 import yaml
 
-from wenmai.config import Settings
-from wenmai.eval import run_eval
-from wenmai.eval.corpus_ingest import ingest_corpus_manifest, load_corpus_manifest
-from wenmai.eval.golden import GoldItem
-from wenmai.eval.phase_b import (
+from lab_knowledge.config import Settings
+from lab_knowledge.eval import run_eval
+from lab_knowledge.eval.corpus_ingest import ingest_corpus_manifest, load_corpus_manifest
+from lab_knowledge.eval.golden import GoldItem
+from lab_knowledge.eval.phase_b import (
     DEFAULT_BAD_CASES_PATH,
     _resolve_bad_cases_path,
     append_bad_case_stubs,
     format_metrics_summary,
     run_phase_b_batch,
 )
-from wenmai.eval.ragas_metrics import compute_group_ragas_metrics, should_run_ragas
-from wenmai.eval.views import find_hit_at_5_misses, parse_eval_run_detail, parse_eval_run_summary
-from wenmai.generation import GenerationResult
-from wenmai.models import Chunk, ScoredChunk
+from lab_knowledge.eval.ragas_metrics import compute_group_ragas_metrics, should_run_ragas
+from lab_knowledge.eval.views import (
+    find_hit_at_5_misses,
+    parse_eval_run_detail,
+    parse_eval_run_summary,
+)
+from lab_knowledge.generation import GenerationResult
+from lab_knowledge.models import Chunk, ScoredChunk
 
 
 def _write_minpai_markdown(path: Path, title: str, body: str, domain: str = "妈祖") -> Path:
@@ -129,7 +133,7 @@ def test_ingest_corpus_manifest_exit_semantics_all_failed(
     def boom(*_args: object, **_kwargs: object) -> object:
         raise RuntimeError("ingest failed")
 
-    monkeypatch.setattr("wenmai.pipelines.ingestion.prepare_ingest_source", boom)
+    monkeypatch.setattr("lab_knowledge.pipelines.ingestion.prepare_ingest_source", boom)
 
     result = ingest_corpus_manifest(test_settings, manifest, items_dir)
 
@@ -212,17 +216,17 @@ def test_run_eval_attaches_ragas_with_fake_evaluator(
     test_settings.fakes = dict(test_settings.fakes or {})
     test_settings.fakes["evaluator"] = "ok"
     monkeypatch.setattr(
-        "wenmai.eval.runner.should_run_ragas",
+        "lab_knowledge.eval.runner.should_run_ragas",
         lambda _settings, _ragas: True,
     )
     monkeypatch.setattr(
-        "wenmai.eval.ragas_metrics.probe_ragas_judge",
+        "lab_knowledge.eval.ragas_metrics.probe_ragas_judge",
         lambda _settings: (True, None),
     )
 
     from fastapi.testclient import TestClient
 
-    from wenmai.app import create_app
+    from lab_knowledge.app import create_app
 
     client = TestClient(create_app(test_settings))
     ingest = client.post("/ingest", json={"source_path": str(source)})
@@ -243,7 +247,7 @@ def test_run_eval_attaches_ragas_with_fake_evaluator(
 
 
 def test_find_hit_at_5_misses_and_bad_case_stub(tmp_path: Path) -> None:
-    from wenmai.eval.golden import GoldItem
+    from lab_knowledge.eval.golden import GoldItem
 
     items = [
         GoldItem(
@@ -343,7 +347,7 @@ def test_run_phase_b_batch_skip_ingest(
 
     from fastapi.testclient import TestClient
 
-    from wenmai.app import create_app
+    from lab_knowledge.app import create_app
 
     client = TestClient(create_app(test_settings))
     ingest = client.post("/ingest", json={"source_path": str(source)})

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from wenmai.components.chat_completions.client import (
+from lab_knowledge.components.chat_completions.client import (
     build_text_messages,
     build_vision_messages,
     extract_message_content,
@@ -77,7 +77,7 @@ def test_post_chat_completion_posts_json_and_returns_payload() -> None:
     mock_response.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
 
     with patch(
-        "wenmai.components.chat_completions.client.httpx.post",
+        "lab_knowledge.components.chat_completions.client.httpx.post",
         return_value=mock_response,
     ) as post:
         payload = post_chat_completion(

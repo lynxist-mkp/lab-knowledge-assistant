@@ -6,10 +6,10 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from wenmai.app import create_app
-from wenmai.config import Settings
-from wenmai.knowledge import create_knowledge
-from wenmai.pipelines.ingestion import ingest_source
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.pipelines.ingestion import ingest_source
 
 
 def _write_minpai_markdown(path: Path) -> Path:

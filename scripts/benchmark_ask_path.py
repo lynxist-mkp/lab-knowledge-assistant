@@ -14,10 +14,10 @@ from typing import Any
 
 import yaml
 
-from wenmai.config import Settings
-from wenmai.http.ask_governor import AskSaturationError, reset_ask_governor
-from wenmai.http.ask_service import run_ask
-from wenmai.knowledge import create_knowledge
+from lab_knowledge.config import Settings
+from lab_knowledge.http.ask_governor import AskSaturationError, reset_ask_governor
+from lab_knowledge.http.ask_service import run_ask
+from lab_knowledge.knowledge import create_knowledge
 
 
 @dataclass
@@ -78,7 +78,7 @@ def _seed_doc(settings: Settings, knowledge) -> None:
         "湄洲岛是妈祖信仰的发源地。祖庙坐落在湄洲岛上。\n",
         encoding="utf-8",
     )
-    from wenmai.pipelines.ingestion import run_prepare_commit
+    from lab_knowledge.pipelines.ingestion import run_prepare_commit
 
     run_prepare_commit(source, settings, knowledge=knowledge)
 

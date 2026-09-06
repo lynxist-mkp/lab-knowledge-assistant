@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from wenmai.config import Settings
-from wenmai.knowledge import create_knowledge
-from wenmai.models import AskResult
-from wenmai.pipelines.ingestion import ingest_source
-from wenmai.pipelines.query_orchestration import AskPipelineInput, ask_pipeline_single
-from wenmai.tracing.store import get_trace_record
+from lab_knowledge.config import Settings
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.models import AskResult
+from lab_knowledge.pipelines.ingestion import ingest_source
+from lab_knowledge.pipelines.query_orchestration import AskPipelineInput, ask_pipeline_single
+from lab_knowledge.tracing.store import get_trace_record
 
 
 def _write_three_paragraph_markdown(path: Path) -> Path:
@@ -98,7 +98,7 @@ def test_query_expands_neighbors_into_generation_prompt(
 
     capturer = _PromptCapturingLLM()
     monkeypatch.setattr(
-        "wenmai.factories.multimodal.create",
+        "lab_knowledge.factories.multimodal.create",
         lambda settings: capturer,
     )
 

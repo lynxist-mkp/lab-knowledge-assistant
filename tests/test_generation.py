@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from wenmai.config import Settings
-from wenmai.generation import generate
-from wenmai.models import Chunk, ScoredChunk
+from lab_knowledge.config import Settings
+from lab_knowledge.generation import generate
+from lab_knowledge.models import Chunk, ScoredChunk
 
 
 def _scored_chunk(
@@ -44,7 +44,7 @@ def test_generate_normal_answer_with_citations(
 ) -> None:
     chunks = [_scored_chunk(1, text="湄洲岛是妈祖信仰的发源地。")]
     monkeypatch.setattr(
-        "wenmai.factories.multimodal.create",
+        "lab_knowledge.factories.multimodal.create",
         lambda settings: _StubLLM("湄洲岛是妈祖信仰的发源地[1]。"),
     )
 
@@ -66,7 +66,7 @@ def test_generate_refusal_returns_all_retrieved_citations(
         _scored_chunk(2, text="祖庙是信俗活动的中心场所。"),
     ]
     monkeypatch.setattr(
-        "wenmai.factories.multimodal.create",
+        "lab_knowledge.factories.multimodal.create",
         lambda settings: _StubLLM("拒答：检索片段不足以回答该问题。"),
     )
 
@@ -89,7 +89,7 @@ def test_generate_zero_chunks_short_circuits_without_llm(
         llm_called = True
         return _StubLLM("不应调用 LLM")
 
-    monkeypatch.setattr("wenmai.factories.multimodal.create", _fail_if_called)
+    monkeypatch.setattr("lab_knowledge.factories.multimodal.create", _fail_if_called)
 
     result = generate("任意问题", [], test_settings)
 
@@ -117,7 +117,7 @@ def test_generate_low_question_overlap_short_circuits_without_llm(
         llm_called = True
         return _StubLLM("不应调用 LLM")
 
-    monkeypatch.setattr("wenmai.factories.multimodal.create", _fail_if_called)
+    monkeypatch.setattr("lab_knowledge.factories.multimodal.create", _fail_if_called)
 
     result = generate("昨晚总编室微信里怎么改海丝稿导语？", chunks, test_settings)
 
@@ -134,7 +134,7 @@ def test_generate_sufficient_overlap_still_calls_llm(
     test_settings.generation.min_question_overlap = 0.2
     chunks = [_scored_chunk(1, text="湄洲岛是妈祖信仰的发源地。")]
     monkeypatch.setattr(
-        "wenmai.factories.multimodal.create",
+        "lab_knowledge.factories.multimodal.create",
         lambda settings: _StubLLM("湄洲岛是妈祖信仰的发源地[1]。"),
     )
 
@@ -149,7 +149,7 @@ def test_generate_ignores_out_of_range_citation_indices(
 ) -> None:
     chunks = [_scored_chunk(1)]
     monkeypatch.setattr(
-        "wenmai.factories.multimodal.create",
+        "lab_knowledge.factories.multimodal.create",
         lambda settings: _StubLLM("答案引用[1]与无效[99]。"),
     )
 

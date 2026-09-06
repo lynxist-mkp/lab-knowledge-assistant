@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from wenmai.app import create_app
-from wenmai.config import Settings
-from wenmai.http import create_ops_router, create_workbench_router
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
+from lab_knowledge.http import create_ops_router, create_workbench_router
 
 
 def test_surface_routes_remain_mounted(test_settings: Settings) -> None:

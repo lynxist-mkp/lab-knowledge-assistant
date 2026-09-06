@@ -4,9 +4,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="${ROOT}/.venvs/paddleocr-env"
-PORT="${PADDLEOCR_MLX_PORT:-8111}"
-PRIMARY_MODEL="${PADDLEOCR_MLX_MODEL:-mlx-community/PaddleOCR-VL-1.6-5bit}"
-FALLBACK_MODEL="${PADDLEOCR_MLX_FALLBACK:-PaddlePaddle/PaddleOCR-VL-1.6}"
+PORT="${LAB_KNOWLEDGE_PADDLEOCR_MLX_PORT:-8111}"
+PRIMARY_MODEL="${LAB_KNOWLEDGE_PADDLEOCR_MLX_MODEL:-mlx-community/PaddleOCR-VL-1.6-5bit}"
+FALLBACK_MODEL="${LAB_KNOWLEDGE_PADDLEOCR_MLX_FALLBACK:-PaddlePaddle/PaddleOCR-VL-1.6}"
 PROBE_PDF="${PROBE_PDF:-}"
 
 if [[ ! -x "${VENV}/bin/python" ]]; then
@@ -23,7 +23,7 @@ resolve_model() {
 }
 
 if [[ -z "${PROBE_PDF}" ]]; then
-  PROBE_PDF="$(mktemp /tmp/wenmai-scan-probe.XXXXXX.pdf)"
+  PROBE_PDF="$(mktemp /tmp/lab-knowledge-scan-probe.XXXXXX.pdf)"
   python - <<'PY' "${PROBE_PDF}"
 import sys
 from pathlib import Path

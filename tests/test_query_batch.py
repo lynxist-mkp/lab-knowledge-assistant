@@ -7,10 +7,10 @@ import time
 
 import pytest
 
-from wenmai.components.model_guard import ModelResource, active_resource, end_batch
-from wenmai.models import AskResult
-from wenmai.pipelines.query_batch import QueryBatchCoordinator, reset_query_coordinator
-from wenmai.pipelines.query_orchestration import run_ask_pipeline
+from lab_knowledge.components.model_guard import ModelResource, active_resource, end_batch
+from lab_knowledge.models import AskResult
+from lab_knowledge.pipelines.query_batch import QueryBatchCoordinator, reset_query_coordinator
+from lab_knowledge.pipelines.query_orchestration import run_ask_pipeline
 
 
 @pytest.fixture(autouse=True)
@@ -43,13 +43,13 @@ def test_run_ask_pipeline_phase_batch_sets_active_resource(
         batch_size = 1
         batch_wait_ms = 0.0
 
-    from wenmai.retrieval import retrieve as retrieve_mod
+    from lab_knowledge.retrieval import retrieve as retrieve_mod
 
     def spy_retrieve(*args, **kwargs):
         seen.append(active_resource())
         return retrieve_mod(*args, **kwargs)
 
-    monkeypatch.setattr("wenmai.pipelines.query_orchestration.retrieve", spy_retrieve)
+    monkeypatch.setattr("lab_knowledge.pipelines.query_orchestration.retrieve", spy_retrieve)
     run_ask_pipeline([Job()], phase_batch=True, batch_meta=None)
     assert ModelResource.BGE_M3 in seen
 
@@ -145,7 +145,7 @@ def test_query_batch_coordinator_passes_batch_metadata(
             )
 
     monkeypatch.setattr(
-        "wenmai.pipelines.query_batch.run_ask_pipeline",
+        "lab_knowledge.pipelines.query_batch.run_ask_pipeline",
         fake_run,
     )
     coordinator = QueryBatchCoordinator(test_settings)

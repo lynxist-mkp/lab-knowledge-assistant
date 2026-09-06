@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from wenmai.components.mlx.server import MlxVlmProcessConfig, MlxVlmServerManager
-from wenmai.config import Settings
+from lab_knowledge.components.mlx.server import MlxVlmProcessConfig, MlxVlmServerManager
+from lab_knowledge.config import Settings
 
 
 def _config(**overrides: object) -> MlxVlmProcessConfig:
@@ -56,7 +56,7 @@ def test_start_server_tries_fallback_model_when_primary_resolve_fails() -> None:
 
     with (
         patch.object(manager, "_resolve_model_path", side_effect=resolve),
-        patch("wenmai.components.mlx.server.subprocess.Popen") as popen,
+        patch("lab_knowledge.components.mlx.server.subprocess.Popen") as popen,
         patch.object(manager, "_wait_until_ready"),
     ):
         popen.return_value.poll.return_value = None

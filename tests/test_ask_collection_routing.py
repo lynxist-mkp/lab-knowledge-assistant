@@ -6,13 +6,16 @@ from dataclasses import replace
 
 import pytest
 
+from lab_knowledge.config import Settings
+from lab_knowledge.http.ask_service import run_ask
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.knowledge.collections import (
+    UnknownCollectionError,
+    resolve_routable_collection_scope,
+)
+from lab_knowledge.mcp.tools.ask import ask_answer
+from lab_knowledge.models import Chunk
 from tests.conftest import register_collection
-from wenmai.config import Settings
-from wenmai.http.ask_service import run_ask
-from wenmai.knowledge import create_knowledge
-from wenmai.knowledge.collections import UnknownCollectionError, resolve_routable_collection_scope
-from wenmai.mcp.tools.ask import ask_answer
-from wenmai.models import Chunk
 
 
 def _other_collection_settings(
@@ -100,10 +103,29 @@ def test_run_ask_routes_retrieval_to_other_collection_storage(
     assert default_result.citations[0].document_id == "default-doc"
 
 
+def test_primary_ask_mcp_helper_explicit_collection_id_routes_to_scoped_storage(
+    test_settings: Settings,
+) -> None:
+    from lab_knowledge.mcp.ask import ask_lab_knowledge
+
+    other_id = "other-collection"
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
+    _commit(other_knowledge, "surface-other-doc", "SURFACE_MARKER_qwe 表面路由")
+
+    result = ask_lab_knowledge(
+        "SURFACE_MARKER_qwe 在哪里",
+        register_collection(test_settings, other_id),
+        collection_id=other_id,
+    )
+
+    assert result["citations"]
+    assert result["citations"][0]["document_id"] == "surface-other-doc"
+
+
 def test_legacy_ask_mcp_helper_explicit_collection_id_routes_to_scoped_storage(
     test_settings: Settings,
 ) -> None:
-    from wenmai.mcp.ask import ask_wenmai
+    from lab_knowledge.mcp.ask import ask_wenmai
 
     other_id = "other-collection"
     other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))

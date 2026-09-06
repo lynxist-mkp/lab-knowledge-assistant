@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from wenmai.ingestion.source_metadata import (
+from lab_knowledge.ingestion.source_metadata import (
     SOURCE_KIND_GROUP,
     SOURCE_KIND_PERSONAL,
     LiteratureMetadataOverrides,

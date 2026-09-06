@@ -8,16 +8,16 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from wenmai.app import create_app
-from wenmai.components.model_guard import ModelResource, active_resource, end_batch
-from wenmai.config import Settings
-from wenmai.eval import get_eval_dashboard, list_eval_run_summaries, run_eval
-from wenmai.eval import pipeline as eval_pipeline
-from wenmai.eval.golden import GoldItem
-from wenmai.generation import GenerationError, generate
-from wenmai.knowledge import create_knowledge
-from wenmai.retrieval import retrieve
-from wenmai.tracing.store import read_trace_records
+from lab_knowledge.app import create_app
+from lab_knowledge.components.model_guard import ModelResource, active_resource, end_batch
+from lab_knowledge.config import Settings
+from lab_knowledge.eval import get_eval_dashboard, list_eval_run_summaries, run_eval
+from lab_knowledge.eval import pipeline as eval_pipeline
+from lab_knowledge.eval.golden import GoldItem
+from lab_knowledge.generation import GenerationError, generate
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.retrieval import retrieve
+from lab_knowledge.tracing.store import read_trace_records
 
 
 @pytest.fixture(autouse=True)
@@ -112,7 +112,7 @@ def test_eval_retries_failed_item_then_succeeds(
             raise GenerationError("generation failed", provider_name="fake")
         return real_generate(question, scored_chunks, settings)
 
-    monkeypatch.setattr("wenmai.eval.pipeline.generate", flaky)
+    monkeypatch.setattr("lab_knowledge.eval.pipeline.generate", flaky)
 
     run = run_eval(test_settings)
 
@@ -166,7 +166,7 @@ def test_eval_keeps_failure_after_retries(
         return real_generate(question, scored_chunks, settings)
 
     monkeypatch.setattr(eval_pipeline, "run_eval_group_batched", tracking_batched)
-    monkeypatch.setattr("wenmai.eval.pipeline.generate", always_fail_dense)
+    monkeypatch.setattr("lab_knowledge.eval.pipeline.generate", always_fail_dense)
 
     run = run_eval(test_settings)
 
@@ -253,7 +253,7 @@ def test_run_eval_hit_at_5_survives_generation_failure(
     def fail_generate(*_args: object, **_kwargs: object) -> object:
         raise GenerationError("fake provider failed", provider_name="fake")
 
-    monkeypatch.setattr("wenmai.eval.pipeline.generate", fail_generate)
+    monkeypatch.setattr("lab_knowledge.eval.pipeline.generate", fail_generate)
 
     run = run_eval(test_settings)
 
@@ -331,8 +331,8 @@ def test_eval_single_retrieve_per_item(
         return real_generate(question, scored_chunks, settings)
 
     monkeypatch.setattr(eval_pipeline, "run_eval_group_batched", tracking_batched)
-    monkeypatch.setattr("wenmai.pipelines.query_orchestration.retrieve", counting_retrieve)
-    monkeypatch.setattr("wenmai.eval.pipeline.generate", flaky_generate)
+    monkeypatch.setattr("lab_knowledge.pipelines.query_orchestration.retrieve", counting_retrieve)
+    monkeypatch.setattr("lab_knowledge.eval.pipeline.generate", flaky_generate)
 
     run = run_eval(test_settings)
 
@@ -357,7 +357,7 @@ def test_run_eval_group_batched_sets_active_resource(
         seen.append(active_resource())
         return retrieve(*args, **kwargs)
 
-    monkeypatch.setattr("wenmai.pipelines.query_orchestration.retrieve", spy_retrieve)
+    monkeypatch.setattr("lab_knowledge.pipelines.query_orchestration.retrieve", spy_retrieve)
     golden_items = [
         eval_pipeline.EvalGroupItem(
             item=GoldItem(
@@ -390,13 +390,13 @@ def test_run_eval_group_batched_sets_cross_encoder_during_rerank(
     test_settings.resources.query_phase_batch = True
     seen: list[ModelResource | None] = []
     knowledge = create_knowledge(test_settings)
-    from wenmai.retrieval.retrieve import rerank_chunks as real_rerank
+    from lab_knowledge.retrieval.retrieve import rerank_chunks as real_rerank
 
     def spy_rerank(*args, **kwargs):
         seen.append(active_resource())
         return real_rerank(*args, **kwargs)
 
-    monkeypatch.setattr("wenmai.pipelines.query_orchestration.rerank_chunks", spy_rerank)
+    monkeypatch.setattr("lab_knowledge.pipelines.query_orchestration.rerank_chunks", spy_rerank)
     golden_items = [
         eval_pipeline.EvalGroupItem(
             item=GoldItem(

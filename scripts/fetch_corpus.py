@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch public Minpai-culture corpus items listed in data/corpus/manifest.yaml.
+"""Fetch public research corpus items listed in data/corpus/manifest.yaml.
 
 Respects robots.txt where it can be verified. Skips hosts with unverifiable
 robots rules (including fjtv.net per ticket #32). Existing output files are
@@ -24,7 +24,10 @@ import httpx
 import yaml
 from markitdown import MarkItDown
 
-USER_AGENT = "WenmaiCorpusFetcher/1.0 (+https://github.com/local/wenmai-assistant; corpus-research)"
+USER_AGENT = (
+    "LabKnowledgeCorpusFetcher/1.0 "
+    "(+https://github.com/local/lab-knowledge-assistant; corpus-research)"
+)
 REQUEST_DELAY_SEC = 2.0
 MAX_RETRIES = 3
 RETRY_BACKOFF_SEC = 2.0

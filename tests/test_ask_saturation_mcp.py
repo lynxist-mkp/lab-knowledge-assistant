@@ -9,20 +9,20 @@ import pytest
 from fastapi.testclient import TestClient
 from mcp.server.mcpserver.exceptions import ToolError
 
-from wenmai.app import create_app
-from wenmai.config import AskConcurrencyConfig
-from wenmai.http.ask_governor import (
+from lab_knowledge.app import create_app
+from lab_knowledge.config import AskConcurrencyConfig
+from lab_knowledge.http.ask_governor import (
     AskSaturationError,
     get_ask_governor,
     reset_ask_governor,
 )
-from wenmai.mcp.errors import (
+from lab_knowledge.mcp.errors import (
     AskSaturationToolError,
     saturation_detail_from_tool_error,
 )
-from wenmai.mcp.server import _ask_tool_error, create_mcp_server
-from wenmai.mcp.tools.ask import ask_answer
-from wenmai.task_progress import TaskCounters, persist_task_progress
+from lab_knowledge.mcp.server import _ask_tool_error, create_mcp_server
+from lab_knowledge.mcp.tools.ask import ask_answer
+from lab_knowledge.task_progress import TaskCounters, persist_task_progress
 
 
 @pytest.fixture(autouse=True)

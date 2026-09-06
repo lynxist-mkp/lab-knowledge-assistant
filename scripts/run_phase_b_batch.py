@@ -8,9 +8,13 @@ import json
 import sys
 from pathlib import Path
 
-from wenmai.config import Settings
-from wenmai.eval.corpus_ingest import DEFAULT_ITEMS_DIR, DEFAULT_MANIFEST
-from wenmai.eval.phase_b import DEFAULT_BAD_CASES_PATH, format_metrics_summary, run_phase_b_batch
+from lab_knowledge.config import Settings
+from lab_knowledge.eval.corpus_ingest import DEFAULT_ITEMS_DIR, DEFAULT_MANIFEST
+from lab_knowledge.eval.phase_b import (
+    DEFAULT_BAD_CASES_PATH,
+    format_metrics_summary,
+    run_phase_b_batch,
+)
 
 
 def main() -> None:
@@ -38,7 +42,7 @@ def main() -> None:
         "--bad-cases",
         type=Path,
         default=DEFAULT_BAD_CASES_PATH,
-        help="Bad Case 笔记路径（默认 .scratch/fuyun-wenmai/phase-b-bad-cases.md）",
+        help="Bad Case 笔记路径（默认 .scratch/lab-knowledge/phase-b-bad-cases.md）",
     )
     parser.add_argument(
         "--no-ragas",

@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from wenmai.config import Settings
-from wenmai.eval import list_eval_run_summaries, run_eval, run_rewrite_compare
-from wenmai.eval.views import parse_eval_run_summary
-from wenmai.knowledge import Knowledge, create_knowledge
-from wenmai.models import Chunk
-from wenmai.retrieval import retrieve
+from lab_knowledge.config import Settings
+from lab_knowledge.eval import list_eval_run_summaries, run_eval, run_rewrite_compare
+from lab_knowledge.eval.views import parse_eval_run_summary
+from lab_knowledge.knowledge import Knowledge, create_knowledge
+from lab_knowledge.models import Chunk
+from lab_knowledge.retrieval import retrieve
 
 
 def _chunk(chunk_id: str, document_id: str, text: str) -> Chunk:
@@ -127,7 +127,7 @@ def test_run_eval_passes_empty_extra_queries(
         seen.append(extra_queries)
         return real_retrieve(question, settings, extra_queries=extra_queries, **kwargs)
 
-    monkeypatch.setattr("wenmai.pipelines.query_orchestration.retrieve", tracking_retrieve)
+    monkeypatch.setattr("lab_knowledge.pipelines.query_orchestration.retrieve", tracking_retrieve)
     run_eval(test_settings, knowledge=knowledge)
     assert seen == [[]]
 

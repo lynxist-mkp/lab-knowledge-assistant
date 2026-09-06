@@ -6,8 +6,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from wenmai.app import create_app
-from wenmai.config import Settings
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
 
 
 def _personal_literature_markdown(path: Path) -> Path:

@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-import wenmai.app as app_module
-from wenmai.app import create_app
-from wenmai.components.model_guard import (
+import lab_knowledge.app as app_module
+from lab_knowledge.app import create_app
+from lab_knowledge.components.model_guard import (
     ModelResource,
     active_resource,
     begin_batch,
@@ -18,7 +18,7 @@ from wenmai.components.model_guard import (
     register_unload,
     release_all_resources,
 )
-from wenmai.config import Settings
+from lab_knowledge.config import Settings
 
 
 class FakeTimer:
@@ -75,7 +75,7 @@ def idle_settings(test_settings: Settings) -> Settings:
 def test_shutdown_cancels_pending_idle_timer_and_releases(
     idle_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("wenmai.app.threading.Timer", FakeTimer)
+    monkeypatch.setattr("lab_knowledge.app.threading.Timer", FakeTimer)
     unload = MagicMock()
     register_unload(ModelResource.MLX_VLM, unload)
     begin_batch(ModelResource.MLX_VLM)
@@ -95,10 +95,10 @@ def test_shutdown_cancels_pending_idle_timer_and_releases(
 def test_idle_release_then_shutdown_is_idempotent(
     idle_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("wenmai.app.threading.Timer", FakeTimer)
+    monkeypatch.setattr("lab_knowledge.app.threading.Timer", FakeTimer)
     unload = MagicMock()
     register_unload(ModelResource.CROSS_ENCODER, unload)
-    import wenmai.components.model_guard as model_guard
+    import lab_knowledge.components.model_guard as model_guard
 
     with model_guard._lock:
         model_guard._active = ModelResource.CROSS_ENCODER

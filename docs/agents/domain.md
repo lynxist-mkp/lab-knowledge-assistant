@@ -17,18 +17,18 @@ Completion check: before coding, you should know the canonical term, the governi
 - `CONTEXT.md`: canonical glossary for agents
 - `docs/adr/`: product and infra ADRs
 - `docs/agents/`: agent-facing pointers
-- `wenmai-assistant/CONTEXT.md`: git-tracked copy of the glossary
-- `wenmai-assistant/docs/adr/`: app ADRs
-- `wenmai-assistant/src/wenmai/`: application code
+- `lab-knowledge-assistant/CONTEXT.md`: git-tracked copy of the glossary
+- `lab-knowledge-assistant/docs/adr/`: app ADRs
+- `lab-knowledge-assistant/src/lab_knowledge/`: application code
 
-The Cursor workspace root is not the git clone; git operations use `wenmai-assistant/`.
+The Cursor workspace root is not the git clone; git operations use `lab-knowledge-assistant/`.
 
 ## ADR lookup
 
 Search both directories by topic, not by number:
 
 - `docs/adr/`: includes 扫描件 OCR, Gemma MLX, 双面 UI, 入库质量门
-- `wenmai-assistant/docs/adr/`: includes 双面 UI copy, 评测不写 Trace, 评测共用生成前扩展, 深 module 收口
+- `lab-knowledge-assistant/docs/adr/`: includes 双面 UI copy, 评测不写 Trace, 评测共用生成前扩展, 深 module 收口
 
 Two directories reuse some ADR numbers. When citing one, name it by title as well as number.
 

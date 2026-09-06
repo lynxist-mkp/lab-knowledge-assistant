@@ -6,17 +6,17 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
-from wenmai.config import Settings
-from wenmai.knowledge import create_knowledge
-from wenmai.models import Chunk
-from wenmai.storage.catalog import DocumentCatalog
-from wenmai.storage.compat import (
+from lab_knowledge.config import Settings
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.models import Chunk
+from lab_knowledge.storage.catalog import DocumentCatalog
+from lab_knowledge.storage.compat import (
     dir_has_entries,
     resolve_chroma_persist_path,
     resolve_read_path,
 )
-from wenmai.storage.fingerprints import FingerprintStore
-from wenmai.storage.paths import collection_storage_bindings
+from lab_knowledge.storage.fingerprints import FingerprintStore
+from lab_knowledge.storage.paths import collection_storage_bindings
 
 
 def _other_collection_settings(

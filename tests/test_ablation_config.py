@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from wenmai.eval.ablation import AblationSpec, resolve_ablation
+from lab_knowledge.eval.ablation import AblationSpec, resolve_ablation
 
 
 def test_resolve_ablation_maps_four_groups() -> None:

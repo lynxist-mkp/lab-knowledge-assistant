@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from wenmai.config import Settings
-from wenmai.knowledge import create_knowledge
-from wenmai.pipelines.ingestion import ingest_source
-from wenmai.retrieval import attach_retrieval_trace_stages, retrieve
+from lab_knowledge.config import Settings
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.pipelines.ingestion import ingest_source
+from lab_knowledge.retrieval import attach_retrieval_trace_stages, retrieve
 
 
 def _write_minpai_markdown(path: Path) -> Path:
@@ -94,7 +94,7 @@ def test_unknown_retrieval_mode_raises(test_settings: Settings) -> None:
 def test_rerank_failure_still_returns_fused_chunks(
     test_settings: Settings, tmp_path: Path
 ) -> None:
-    from wenmai.retrieval.retrieve import rerank_chunks
+    from lab_knowledge.retrieval.retrieve import rerank_chunks
 
     test_settings.fakes["reranker"] = "error"
     ingest_source(_write_minpai_markdown(tmp_path / "matsu.md"), test_settings)

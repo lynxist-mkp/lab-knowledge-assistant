@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Stop wenmai uvicorn and local mlx_vlm servers (Gemma :8120, PaddleOCR :8111).
+# Stop local uvicorn and mlx_vlm servers (Gemma :8120, PaddleOCR :8111).
 set -euo pipefail
 
-GEMMA_PORT="${WENMAI_GEMMA_PORT:-8120}"
-PADDLEOCR_PORT="${PADDLEOCR_MLX_PORT:-8111}"
+GEMMA_PORT="${LAB_KNOWLEDGE_GEMMA_PORT:-${LAB_KNOWLEDGE_GEMMA_PORT:-8120}}"
+PADDLEOCR_PORT="${LAB_KNOWLEDGE_LAB_KNOWLEDGE_PADDLEOCR_MLX_PORT:-${LAB_KNOWLEDGE_PADDLEOCR_MLX_PORT:-8111}}"
 
 kill_pids() {
   local label="$1"
@@ -58,8 +58,8 @@ kill_mlx_port() {
   fi
 }
 
-kill_by_pattern "uvicorn (create_app)" "uvicorn wenmai.app:create_app"
-kill_by_pattern "uvicorn (app)" "uvicorn wenmai.app:app"
+kill_by_pattern "uvicorn (create_app)" "uvicorn (wenmai|lab_knowledge)\.app:create_app"
+kill_by_pattern "uvicorn (app)" "uvicorn (wenmai|lab_knowledge)\.app:app"
 kill_mlx_port "mlx_vlm.server (Gemma)" "${GEMMA_PORT}"
 kill_mlx_port "mlx_vlm.server (PaddleOCR)" "${PADDLEOCR_PORT}"
 

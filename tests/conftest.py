@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from wenmai.config import CollectionRegistration, Settings
+from lab_knowledge.config import CollectionRegistration, Settings
 
 
 def register_collection(

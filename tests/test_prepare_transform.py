@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 
-from wenmai.components.transform.base import BaseTransform
-from wenmai.config import Settings
-from wenmai.factories.transform import registry, run_registered
-from wenmai.ingestion.prepare import TransformTraceRecorder, prepare_chunks
-from wenmai.models import Chunk
-from wenmai.tracing.context import TraceContext
+from lab_knowledge.components.transform.base import BaseTransform
+from lab_knowledge.config import Settings
+from lab_knowledge.factories.transform import registry, run_registered
+from lab_knowledge.ingestion.prepare import TransformTraceRecorder, prepare_chunks
+from lab_knowledge.models import Chunk
+from lab_knowledge.tracing.context import TraceContext
 
 
 class _RecorderStub:

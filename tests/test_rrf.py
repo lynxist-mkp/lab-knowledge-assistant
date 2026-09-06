@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from wenmai.app import create_app
-from wenmai.config import Settings
-from wenmai.retrieval import reciprocal_rank_fusion
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
+from lab_knowledge.retrieval import reciprocal_rank_fusion
 
 
 def test_rrf_rank_starts_at_one() -> None:

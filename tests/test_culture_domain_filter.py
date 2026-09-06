@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from wenmai.app import create_app
-from wenmai.config import Settings
-from wenmai.http.ask_service import run_ask
-from wenmai.knowledge import create_knowledge
-from wenmai.models import Chunk
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
+from lab_knowledge.http.ask_service import run_ask
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.models import Chunk
 
 _SHARED_TERM = "通商口岸"
 _HAISI_CHUNK_ID = "doc-haisi:0000"

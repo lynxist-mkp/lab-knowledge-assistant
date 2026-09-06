@@ -7,12 +7,11 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
-from tests.conftest import register_collection
-from wenmai.config import Settings
-from wenmai.knowledge import create_knowledge
-from wenmai.knowledge.read import ReadPath
-from wenmai.models import Chunk
-from wenmai.ops.observation import (
+from lab_knowledge.config import Settings
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.knowledge.read import ReadPath
+from lab_knowledge.models import Chunk
+from lab_knowledge.ops.observation import (
     get_query_detail,
     get_task_investigation,
     get_trace_summary,
@@ -22,10 +21,11 @@ from wenmai.ops.observation import (
     load_health_snapshot,
     load_overview_stats,
 )
-from wenmai.storage.catalog import DocumentCatalog
-from wenmai.task_progress import ChildEvidence, TaskCounters, persist_task_progress
-from wenmai.tracing.context import TraceContext
-from wenmai.tracing.store import get_trace_record, save_trace
+from lab_knowledge.storage.catalog import DocumentCatalog
+from lab_knowledge.task_progress import ChildEvidence, TaskCounters, persist_task_progress
+from lab_knowledge.tracing.context import TraceContext
+from lab_knowledge.tracing.store import get_trace_record, save_trace
+from tests.conftest import register_collection
 
 
 def _other_collection_settings(
@@ -467,7 +467,7 @@ def test_load_health_snapshot_global_vs_scoped(test_settings: Settings) -> None:
     settings = register_collection(test_settings, other_id)
     other_settings = _other_collection_settings(settings, other_id)
 
-    from wenmai.ops.ask_evidence import ask_evidence_path, write_ask_evidence
+    from lab_knowledge.ops.ask_evidence import ask_evidence_path, write_ask_evidence
 
     write_ask_evidence(
         settings,
@@ -826,8 +826,8 @@ def test_task_progress_list_and_detail_respect_collection_scope(
 ) -> None:
     from fastapi.testclient import TestClient
 
-    from wenmai.app import create_app
-    from wenmai.ops.observation import get_task_progress_detail
+    from lab_knowledge.app import create_app
+    from lab_knowledge.ops.observation import get_task_progress_detail
 
     other_id = "other-collection"
     settings = register_collection(test_settings, other_id)

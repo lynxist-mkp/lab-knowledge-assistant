@@ -13,7 +13,7 @@
 ## Quick probe
 
 ```bash
-cd wenmai-assistant
+cd lab-knowledge-assistant
 chmod +x scripts/probe_gemma_mlx.sh
 ./scripts/probe_gemma_mlx.sh
 ```

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run PaddleOCR-VL document parsing in an isolated environment.
 
-Outputs a JSON payload consumed by wenmai.components.paddleocr.adapter.
+Outputs a JSON payload consumed by lab_knowledge.components.paddleocr.adapter.
 Must be invoked via subprocess from the main RAG venv — do not import paddleocr
 from the main project.
 """

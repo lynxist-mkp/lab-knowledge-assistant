@@ -4,8 +4,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="${ROOT}/.venvs/paddleocr-env"
-PRIMARY="${PADDLEOCR_MLX_MODEL:-mlx-community/PaddleOCR-VL-1.6-5bit}"
-FALLBACK="${PADDLEOCR_MLX_FALLBACK:-PaddlePaddle/PaddleOCR-VL-1.6}"
+PRIMARY="${LAB_KNOWLEDGE_PADDLEOCR_MLX_MODEL:-mlx-community/PaddleOCR-VL-1.6-5bit}"
+FALLBACK="${LAB_KNOWLEDGE_PADDLEOCR_MLX_FALLBACK:-PaddlePaddle/PaddleOCR-VL-1.6}"
 
 if [[ ! -x "${VENV}/bin/python" ]]; then
   echo "Missing ${VENV}. Run: ${ROOT}/scripts/setup_paddleocr_env.sh" >&2

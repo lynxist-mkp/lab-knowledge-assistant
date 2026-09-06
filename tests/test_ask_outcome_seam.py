@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from wenmai.config import Settings
-from wenmai.generation import GenerationError, GenerationResult, QueryGenerationError
-from wenmai.models import Chunk, Citation, ScoredChunk
-from wenmai.retrieval.fusion import RetrievalResult
-from wenmai.tracing.ask_payload import AskOutcome, AskTracePayload
-from wenmai.tracing.query_trace import QueryTrace
-from wenmai.tracing.store import get_trace_record
+from lab_knowledge.config import Settings
+from lab_knowledge.generation import GenerationError, GenerationResult, QueryGenerationError
+from lab_knowledge.models import Chunk, Citation, ScoredChunk
+from lab_knowledge.retrieval.fusion import RetrievalResult
+from lab_knowledge.tracing.ask_payload import AskOutcome, AskTracePayload
+from lab_knowledge.tracing.query_trace import QueryTrace
+from lab_knowledge.tracing.store import get_trace_record
 
 
 def _scored_chunk(chunk_id: str = "doc:0001") -> ScoredChunk:

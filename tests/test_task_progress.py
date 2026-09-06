@@ -8,13 +8,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.conftest import register_collection
-from wenmai.app import create_app
-from wenmai.config import Settings
-from wenmai.eval import run_eval
-from wenmai.ops.observation import get_task_progress_detail, list_task_progress_summaries
-from wenmai.pipelines.ingestion import run_prepare_commit
-from wenmai.task_progress import (
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
+from lab_knowledge.eval import run_eval
+from lab_knowledge.ops.observation import get_task_progress_detail, list_task_progress_summaries
+from lab_knowledge.pipelines.ingestion import run_prepare_commit
+from lab_knowledge.task_progress import (
     ChildEvidence,
     EvaluationTaskProgressConfig,
     IngestionTaskProgressConfig,
@@ -30,7 +29,8 @@ from wenmai.task_progress import (
     read_task_progress_records,
     task_progress_path,
 )
-from wenmai.tracing.store import read_trace_records
+from lab_knowledge.tracing.store import read_trace_records
+from tests.conftest import register_collection
 
 
 def _other_collection_settings(
@@ -184,7 +184,7 @@ def test_api_task_progress_detail(test_settings: Settings) -> None:
 
 
 def test_task_progress_builders_import_cleanly() -> None:
-    module = import_module("wenmai.task_progress_builders")
+    module = import_module("lab_knowledge.task_progress_builders")
     assert hasattr(module, "build_ingestion_progress")
 
 
@@ -383,7 +383,7 @@ def test_failed_commit_keeps_document_link_in_task_progress(
     def boom(*_args: object, **_kwargs: object) -> object:
         raise RuntimeError("upsert failed")
 
-    monkeypatch.setattr("wenmai.knowledge.store.Knowledge.commit_document", boom)
+    monkeypatch.setattr("lab_knowledge.knowledge.store.Knowledge.commit_document", boom)
 
     with pytest.raises(RuntimeError, match="upsert failed"):
         run_prepare_commit(source, test_settings)
@@ -451,7 +451,7 @@ def test_task_progress_write_failure_does_not_break_eval_or_ingest(
     monkeypatch,
     without_ragas_judge_key: None,
 ) -> None:
-    from wenmai import task_progress as task_progress_module
+    from lab_knowledge import task_progress as task_progress_module
 
     source = _write_markdown(tmp_path / "doc.md")
     client = TestClient(create_app(test_settings))

@@ -10,7 +10,7 @@
 
 ## 怎么抓
 
-在 `wenmai-assistant` 根目录：
+在 `lab-knowledge-assistant` 根目录：
 
 ```bash
 .venv/bin/python scripts/fetch_corpus.py

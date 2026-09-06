@@ -8,13 +8,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.models import Chunk
+from lab_knowledge.ops.observation import load_overview_stats
+from lab_knowledge.tracing.latency import query_latency_percentiles
 from tests.conftest import register_collection
-from wenmai.app import create_app
-from wenmai.config import Settings
-from wenmai.knowledge import create_knowledge
-from wenmai.models import Chunk
-from wenmai.ops.observation import load_overview_stats
-from wenmai.tracing.latency import query_latency_percentiles
 
 
 def _write_markdown(path: Path, *, culture_domain: str, title: str, body: str) -> Path:

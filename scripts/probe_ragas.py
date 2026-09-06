@@ -6,8 +6,8 @@ from __future__ import annotations
 import json
 import sys
 
-from wenmai.components.evaluator.ragas_probe import build_ragas_judge_llm
-from wenmai.config import Settings
+from lab_knowledge.components.evaluator.ragas_probe import build_ragas_judge_llm
+from lab_knowledge.config import Settings
 
 _SAMPLE = {
     "user_input": "朱熹出生于哪一年？",

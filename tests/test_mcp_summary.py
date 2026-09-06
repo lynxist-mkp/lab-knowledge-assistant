@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
+from lab_knowledge.knowledge import create_document_management
+from lab_knowledge.mcp.tools.documents import documents_get
 from tests.conftest import register_collection
-from wenmai.app import create_app
-from wenmai.config import Settings
-from wenmai.knowledge import create_document_management
-from wenmai.mcp.tools.documents import documents_get
 
 
 def _write_minpai_markdown(path: Path) -> Path:

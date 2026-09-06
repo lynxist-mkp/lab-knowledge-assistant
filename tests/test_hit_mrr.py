@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from wenmai.eval.golden import GoldItem
-from wenmai.eval.metrics import (
+from lab_knowledge.eval.golden import GoldItem
+from lab_knowledge.eval.metrics import (
     hit_at_5,
     mean_reciprocal_rank,
     refusal_accuracy,

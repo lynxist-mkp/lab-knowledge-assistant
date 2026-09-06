@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
-from wenmai.mcp.server import create_mcp_server
-from wenmai.mcp.stdio_safety import install_mcp_stdio_discipline
+from lab_knowledge.mcp.server import create_mcp_server
+from lab_knowledge.mcp.stdio_safety import install_mcp_stdio_discipline
 
 
 def main() -> None:

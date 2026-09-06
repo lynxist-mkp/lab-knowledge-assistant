@@ -2,7 +2,7 @@
 
 评测用的固定尺子。每次改切块、融合权重或 prompt，都用同一份题量；好坏是数出来的。
 
-路径由 `settings.yaml` 的 `evaluation.golden_set` 指向本文件：`data/eval/golden.jsonl`。加载器用 `wenmai.eval.load_golden_set` / `load_golden_set_from_settings`。
+路径由 `settings.yaml` 的 `evaluation.golden_set` 指向本文件：`data/eval/golden.jsonl`。加载器用 `lab_knowledge.eval.load_golden_set` / `load_golden_set_from_settings`。
 
 ## 条目格式
 

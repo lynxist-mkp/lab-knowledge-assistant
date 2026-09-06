@@ -4,7 +4,7 @@ Repeatable local evidence for stdio-first ask/MCP hardening.
 
 ## How to run
 
-From `wenmai-assistant/`:
+From `lab-knowledge-assistant/`:
 
 ```bash
 python scripts/benchmark_ask_path.py --output research/phase-c-ask-benchmark.json

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from wenmai.components.dolphin import transcribe_audio
-from wenmai.config import Dolphin
+from lab_knowledge.components.dolphin import transcribe_audio
+from lab_knowledge.config import Dolphin
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "dolphin"
 

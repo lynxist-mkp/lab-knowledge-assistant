@@ -1,5 +1,5 @@
 [project]
-name = "wenmai-assistant"
+name = "lab-knowledge-assistant"
 version = "0.1.0"
 description = "课题组知识助手：课题组公开语料上的模块化 RAG 原型"
 requires-python = ">=3.12"

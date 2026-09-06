@@ -21,8 +21,8 @@ def test_stop_server_script_shebang_and_safety() -> None:
 
 def test_stop_server_script_contains_kill_patterns() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
-    assert "uvicorn wenmai.app:create_app" in text
-    assert "uvicorn wenmai.app:app" in text
+    assert "uvicorn (wenmai|lab_knowledge)\\.app:create_app" in text
+    assert "uvicorn (wenmai|lab_knowledge)\\.app:app" in text
     assert "mlx_vlm.server" in text
     assert "8120" in text
     assert "8111" in text

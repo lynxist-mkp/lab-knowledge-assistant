@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-import wenmai.app as app_module
-from wenmai.app import create_app
-from wenmai.components.model_guard import (
+import lab_knowledge.app as app_module
+from lab_knowledge.app import create_app
+from lab_knowledge.components.model_guard import (
     ModelResource,
     active_resource,
     begin_batch,
@@ -18,7 +18,7 @@ from wenmai.components.model_guard import (
     register_unload,
     release_all_resources,
 )
-from wenmai.config import Settings
+from lab_knowledge.config import Settings
 
 
 class FakeTimer:
@@ -75,8 +75,8 @@ def idle_settings(test_settings: Settings) -> Settings:
 def test_release_on_idle_after_request(
     idle_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("wenmai.app.threading.Timer", FakeTimer)
-    with patch("wenmai.app.release_all_resources") as mock_release:
+    monkeypatch.setattr("lab_knowledge.app.threading.Timer", FakeTimer)
+    with patch("lab_knowledge.app.release_all_resources") as mock_release:
         with TestClient(create_app(idle_settings)) as client:
             client.get("/")
             assert len(FakeTimer.instances) == 1
@@ -88,8 +88,8 @@ def test_release_on_idle_after_request(
 def test_new_request_cancels_pending_idle_timer(
     idle_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("wenmai.app.threading.Timer", FakeTimer)
-    with patch("wenmai.app.release_all_resources"):
+    monkeypatch.setattr("lab_knowledge.app.threading.Timer", FakeTimer)
+    with patch("lab_knowledge.app.release_all_resources"):
         with TestClient(create_app(idle_settings)) as client:
             client.get("/")
             first_timer = FakeTimer.instances[0]
@@ -102,10 +102,10 @@ def test_new_request_cancels_pending_idle_timer(
 def test_idle_timer_skips_unload_during_batch(
     idle_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("wenmai.app.threading.Timer", FakeTimer)
+    monkeypatch.setattr("lab_knowledge.app.threading.Timer", FakeTimer)
     begin_batch(ModelResource.BGE_M3)
     try:
-        with patch("wenmai.app.release_all_resources") as mock_release:
+        with patch("lab_knowledge.app.release_all_resources") as mock_release:
             with TestClient(create_app(idle_settings)) as client:
                 client.get("/")
                 FakeTimer.instances[0].fire()
@@ -118,7 +118,7 @@ def test_idle_unload_disabled(
     test_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     test_settings.resources.process_idle_unload = False
-    monkeypatch.setattr("wenmai.app.threading.Timer", FakeTimer)
+    monkeypatch.setattr("lab_knowledge.app.threading.Timer", FakeTimer)
     with TestClient(create_app(test_settings)) as client:
         client.get("/")
         assert FakeTimer.instances == []
@@ -127,10 +127,10 @@ def test_idle_unload_disabled(
 def test_idle_release_clears_active_and_unloads(
     idle_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("wenmai.app.threading.Timer", FakeTimer)
+    monkeypatch.setattr("lab_knowledge.app.threading.Timer", FakeTimer)
     unload = MagicMock()
     register_unload(ModelResource.BGE_M3, unload)
-    import wenmai.components.model_guard as model_guard
+    import lab_knowledge.components.model_guard as model_guard
 
     with model_guard._lock:
         model_guard._active = ModelResource.BGE_M3

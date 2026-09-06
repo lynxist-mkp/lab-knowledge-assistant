@@ -6,8 +6,8 @@ from __future__ import annotations
 import argparse
 import logging
 
-from wenmai.config import Settings
-from wenmai.eval import run_eval, run_rewrite_compare
+from lab_knowledge.config import Settings
+from lab_knowledge.eval import run_eval, run_rewrite_compare
 
 logger = logging.getLogger(__name__)
 

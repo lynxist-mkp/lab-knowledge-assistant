@@ -6,14 +6,14 @@ from dataclasses import replace
 
 import pytest
 
-from tests.conftest import register_collection
-from wenmai.config import CollectionRegistration, Settings
-from wenmai.knowledge import create_document_management, create_knowledge
-from wenmai.knowledge.collections import (
+from lab_knowledge.config import CollectionRegistration, Settings
+from lab_knowledge.knowledge import create_document_management, create_knowledge
+from lab_knowledge.knowledge.collections import (
     CollectionReadModel,
     UnknownCollectionError,
 )
-from wenmai.mcp.tools.collections import collections_get_stats, collections_list
+from lab_knowledge.mcp.tools.collections import collections_get_stats, collections_list
+from tests.conftest import register_collection
 
 
 def test_list_collections_legacy_single_collection_config(test_settings: Settings) -> None:

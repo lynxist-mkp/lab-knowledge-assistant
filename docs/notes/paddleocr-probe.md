@@ -19,7 +19,7 @@
 ## Quick setup
 
 ```bash
-cd wenmai-assistant
+cd lab-knowledge-assistant
 ./scripts/setup_paddleocr_env.sh
 ./scripts/download_paddleocr_mlx_models.sh   # 预拉 primary + fallback
 ./scripts/probe_paddleocr_mlx.sh             # 起 server + 跑一页扫描探针 PDF

@@ -9,34 +9,34 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import register_collection
-from wenmai.config import Settings
-from wenmai.http.ops_service import OpsService
-from wenmai.knowledge import create_document_management, create_knowledge
-from wenmai.knowledge.collections import (
+from lab_knowledge.config import Settings
+from lab_knowledge.http.ops_service import OpsService
+from lab_knowledge.knowledge import create_document_management, create_knowledge
+from lab_knowledge.knowledge.collections import (
     CollectionReadModel,
     CollectionScope,
     UnknownCollectionError,
 )
-from wenmai.knowledge.document_card import DocumentNotFoundError
-from wenmai.knowledge.domain import REVIEW_PENDING
-from wenmai.knowledge.image_refs import ImageNotFoundError, ImageReferenceService
-from wenmai.knowledge.store import Knowledge
-from wenmai.mcp.envelope import refs_from_citations, scope_for
-from wenmai.mcp.summary import GetDocumentSummaryError, get_document_summary
-from wenmai.mcp.tools.ask import ask_answer
-from wenmai.mcp.tools.collections import collections_get_stats, collections_list
-from wenmai.mcp.tools.documents import documents_delete, documents_get, documents_list
-from wenmai.mcp.tools.images import images_get_content, images_get_ref
-from wenmai.mcp.tools.reviews import (
+from lab_knowledge.knowledge.document_card import DocumentNotFoundError
+from lab_knowledge.knowledge.domain import REVIEW_PENDING
+from lab_knowledge.knowledge.image_refs import ImageNotFoundError, ImageReferenceService
+from lab_knowledge.knowledge.store import Knowledge
+from lab_knowledge.mcp.envelope import refs_from_citations, scope_for
+from lab_knowledge.mcp.summary import GetDocumentSummaryError, get_document_summary
+from lab_knowledge.mcp.tools.ask import ask_answer
+from lab_knowledge.mcp.tools.collections import collections_get_stats, collections_list
+from lab_knowledge.mcp.tools.documents import documents_delete, documents_get, documents_list
+from lab_knowledge.mcp.tools.images import images_get_content, images_get_ref
+from lab_knowledge.mcp.tools.reviews import (
     reviews_approve,
     reviews_list_pending,
     reviews_reject,
 )
-from wenmai.models import Chunk, Citation
-from wenmai.storage.catalog import DocumentCatalog
-from wenmai.storage.images import ImageStore
-from wenmai.storage.paths import collection_storage_bindings
+from lab_knowledge.models import Chunk, Citation
+from lab_knowledge.storage.catalog import DocumentCatalog
+from lab_knowledge.storage.images import ImageStore
+from lab_knowledge.storage.paths import collection_storage_bindings
+from tests.conftest import register_collection
 
 
 def _commit(

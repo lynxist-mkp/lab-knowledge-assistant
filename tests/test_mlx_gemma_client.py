@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from wenmai.components.gemma.client import GemmaMlxClient
-from wenmai.config import Settings
+from lab_knowledge.components.gemma.client import GemmaMlxClient
+from lab_knowledge.config import Settings
 
 
 def _settings() -> Settings:
@@ -26,8 +26,11 @@ def test_generate_text_posts_chat_completion_and_touches_server() -> None:
     mock_manager = MagicMock()
 
     with (
-        patch("wenmai.components.gemma.client.get_mlx_vlm_manager", return_value=mock_manager),
-        patch("wenmai.components.gemma.client.is_exclusive", return_value=False),
+        patch(
+            "lab_knowledge.components.gemma.client.get_mlx_vlm_manager",
+            return_value=mock_manager,
+        ),
+        patch("lab_knowledge.components.gemma.client.is_exclusive", return_value=False),
         patch("httpx.post", return_value=mock_response) as post,
     ):
         text = GemmaMlxClient(settings).generate_text("妈祖信仰的发源地在哪里？")
@@ -60,7 +63,10 @@ def test_caption_image_sends_image_url_and_prompt() -> None:
     mock_manager = MagicMock()
 
     with (
-        patch("wenmai.components.gemma.client.get_mlx_vlm_manager", return_value=mock_manager),
+        patch(
+            "lab_knowledge.components.gemma.client.get_mlx_vlm_manager",
+            return_value=mock_manager,
+        ),
         patch("httpx.post", return_value=mock_response) as post,
     ):
         text = GemmaMlxClient(settings).caption_image(image_path, "描述颜色")
@@ -74,7 +80,7 @@ def test_caption_image_sends_image_url_and_prompt() -> None:
 
 
 def test_mlx_gemma_multimodal_provider_uses_client() -> None:
-    from wenmai.factories import multimodal as multimodal_factory
+    from lab_knowledge.factories import multimodal as multimodal_factory
 
     settings = _settings()
     settings.fakes["multimodal"] = "ok"
@@ -84,7 +90,7 @@ def test_mlx_gemma_multimodal_provider_uses_client() -> None:
     mock_client.caption_image.return_value = "图说明"
 
     with patch(
-        "wenmai.components.multimodal.mlx_gemma.GemmaMlxClient", return_value=mock_client
+        "lab_knowledge.components.multimodal.mlx_gemma.GemmaMlxClient", return_value=mock_client
     ):
         provider = multimodal_factory.create(settings)
         assert provider.provider_name == "mlx_gemma"

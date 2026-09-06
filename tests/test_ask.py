@@ -7,15 +7,15 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-import wenmai.pipelines.query as query_compat
-from wenmai.app import create_app
-from wenmai.config import Settings
-from wenmai.generation import QueryGenerationError
-from wenmai.http.ask_service import run_ask
-from wenmai.knowledge import create_knowledge
-from wenmai.models import AskResult
-from wenmai.pipelines.query_orchestration import AskPipelineInput, ask_pipeline_single
-from wenmai.tracing.store import get_trace_record, read_trace_records
+import lab_knowledge.pipelines.query as query_compat
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
+from lab_knowledge.generation import QueryGenerationError
+from lab_knowledge.http.ask_service import run_ask
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.models import AskResult
+from lab_knowledge.pipelines.query_orchestration import AskPipelineInput, ask_pipeline_single
+from lab_knowledge.tracing.store import get_trace_record, read_trace_records
 
 
 def _write_minpai_markdown(path: Path) -> Path:
@@ -191,7 +191,7 @@ def test_http_ask_generation_error_returns_502(
     def _fail_run_ask(question, settings, **kwargs):
         raise QueryGenerationError("surface failed", "trace-surface")
 
-    monkeypatch.setattr("wenmai.http.workbench.run_ask", _fail_run_ask)
+    monkeypatch.setattr("lab_knowledge.http.workbench.run_ask", _fail_run_ask)
 
     response = client.post("/ask", json={"question": "妈祖信仰的发源地在哪里？"})
 
@@ -212,7 +212,7 @@ def test_ask_empty_kb_refuses_without_calling_llm(
         llm_called = True
         raise AssertionError("LLM should not be called for zero chunks")
 
-    monkeypatch.setattr("wenmai.factories.multimodal.create", _fail_if_called)
+    monkeypatch.setattr("lab_knowledge.factories.multimodal.create", _fail_if_called)
 
     result = run_ask("妈祖信仰的发源地在哪里？", test_settings)
 

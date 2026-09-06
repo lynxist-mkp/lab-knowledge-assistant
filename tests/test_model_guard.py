@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from wenmai.components.model_guard import (
+from lab_knowledge.components.model_guard import (
     ModelResource,
     active_resource,
     batch_resource,
@@ -41,7 +41,7 @@ def test_hold_tracks_active_resource() -> None:
 
 
 def test_bge_unloads_when_acquiring_mlx_vlm() -> None:
-    from wenmai.components.embedding.bge_m3 import BgeM3Embedding
+    from lab_knowledge.components.embedding.bge_m3 import BgeM3Embedding
 
     embedder = BgeM3Embedding()
     embedder._model = object()
@@ -51,7 +51,7 @@ def test_bge_unloads_when_acquiring_mlx_vlm() -> None:
 
 def test_release_unloads_held_resource() -> None:
     unload = MagicMock()
-    from wenmai.components.model_guard import register_unload
+    from lab_knowledge.components.model_guard import register_unload
 
     register_unload(ModelResource.BGE_M3, unload)
     with hold(ModelResource.BGE_M3):
@@ -68,7 +68,7 @@ def test_exclusive_disabled_is_noop() -> None:
 
 def test_begin_batch_holds_until_end_batch() -> None:
     unload = MagicMock()
-    from wenmai.components.model_guard import register_unload
+    from lab_knowledge.components.model_guard import register_unload
 
     register_unload(ModelResource.MLX_VLM, unload)
     begin_batch(ModelResource.MLX_VLM)

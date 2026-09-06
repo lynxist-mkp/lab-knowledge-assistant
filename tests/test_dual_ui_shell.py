@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from wenmai.app import create_app
-from wenmai.config import Settings
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
 
 _OLD_HTML_PATHS = (
     "/browse",

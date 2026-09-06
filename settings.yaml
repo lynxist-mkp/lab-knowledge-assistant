@@ -112,10 +112,10 @@ quality_gate:
   preview_pages: 3
 
 paddleocr:
-  python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.venvs/paddleocr-env/bin/python"
-  script: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/scripts/paddleocr_parse_pdf.py"
+  python: ".venvs/paddleocr-env/bin/python"
+  script: "scripts/paddleocr_parse_pdf.py"
   # mlx stack 与 Gemma 共用 minicpm-probe venv（paddleocr-env 的 mlx_vlm 已损坏）
-  mlx_python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.scratch/minicpm-probe/.venv/bin/python3.12"
+  mlx_python: ".scratch/minicpm-probe/.venv/bin/python3.12"
   # ModelScope repo ids — runtime downloads via scripts/resolve_modelscope_model.py (not HuggingFace).
   # 已缓存则直接用本地目录（避免 minicpm-probe venv 缺 modelscope）
   mlx_model: "/Users/linkslinks/.cache/modelscope/models/mlx-community--PaddleOCR-VL-1.6-5bit/snapshots/master"
@@ -127,8 +127,8 @@ paddleocr:
 
 gemma:
   # 本机默认 Gemma：mlx 栈在 minicpm-probe venv（paddleocr-env 的 mlx_vlm 已损坏）
-  mlx_python: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/.scratch/minicpm-probe/.venv/bin/python3.12"
-  resolve_script: "/Users/linkslinks/project/fjgd/ragWork/wenmai-assistant/scripts/resolve_modelscope_model.py"
+  mlx_python: ".scratch/minicpm-probe/.venv/bin/python3.12"
+  resolve_script: "scripts/resolve_modelscope_model.py"
   # 已缓存则直接用本地目录；也可改回 ModelScope id 让 resolve_script 解析
   model: "/Users/linkslinks/.cache/modelscope/models/mlx-community--gemma-4-e2b-it-mxfp4/snapshots/master"
   server_port: 8120

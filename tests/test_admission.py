@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from wenmai.config import Settings
-from wenmai.ingestion.admission import AdmissionGate
-from wenmai.ingestion.quality import peek_source
+from lab_knowledge.config import Settings
+from lab_knowledge.ingestion.admission import AdmissionGate
+from lab_knowledge.ingestion.quality import peek_source
 
 
 def _write_reject_markdown(path: Path) -> Path:

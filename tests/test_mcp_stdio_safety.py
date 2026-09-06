@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 
-from wenmai.mcp.stdio_safety import (
+from lab_knowledge.mcp.stdio_safety import (
     assert_stdout_reserved_for_protocol,
     install_mcp_stdio_discipline,
     is_mcp_stdio_discipline_installed,

@@ -1,4 +1,7 @@
-"""PaddleOCR-VL adapter: layout mapping + subprocess. PDF routing lives in wenmai.ingestion."""
+"""PaddleOCR-VL adapter: layout mapping + subprocess.
+
+PDF routing lives in lab_knowledge.ingestion.
+"""
 
 from __future__ import annotations
 
@@ -11,16 +14,16 @@ from PIL import Image
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
-from wenmai.components.paddleocr.adapter import (
+from lab_knowledge.components.paddleocr.adapter import (
     build_text_from_ocr_payload,
     parse_scanned_pdf,
 )
-from wenmai.config import PaddleOCR, PdfLoad, Settings
-from wenmai.ingestion.pdf_route import (
+from lab_knowledge.config import PaddleOCR, PdfLoad, Settings
+from lab_knowledge.ingestion.pdf_route import (
     choose_pdf_route,
     measure_pdf_chars_per_page,
 )
-from wenmai.storage.document_images import DocumentImages
+from lab_knowledge.storage.document_images import DocumentImages
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "paddleocr"
 
@@ -223,9 +226,9 @@ def test_ingesting_scanned_pdf_writes_chunks_with_image_placeholder(
 ) -> None:
     from fastapi.testclient import TestClient
 
-    from wenmai.app import create_app
-    from wenmai.ingestion import loaders as loaders_module
-    from wenmai.knowledge import create_knowledge
+    from lab_knowledge.app import create_app
+    from lab_knowledge.ingestion import loaders as loaders_module
+    from lab_knowledge.knowledge import create_knowledge
 
     pdf = _write_image_only_pdf(tmp_path / "scan.pdf")
     original_parse = loaders_module.parse_scanned_pdf
@@ -252,9 +255,9 @@ def test_ingesting_scanned_pdf_failure_does_not_fall_back_to_markitdown(
 ) -> None:
     from fastapi.testclient import TestClient
 
-    from wenmai.app import create_app
-    from wenmai.ingestion import loaders as loaders_module
-    from wenmai.knowledge import create_knowledge
+    from lab_knowledge.app import create_app
+    from lab_knowledge.ingestion import loaders as loaders_module
+    from lab_knowledge.knowledge import create_knowledge
 
     pdf = _write_image_only_pdf(tmp_path / "scan.pdf")
 

@@ -10,12 +10,12 @@
 
 ## 先讲哪六个概念
 
-- **提问服务**: HTTP 与 MCP 共用的一次提问入口，位置在 `src/wenmai/http/ask_service.py` 的 `run_ask()`
-- **提问编排**: 提问深 module，负责预处理、检索、精排、生成，位置在 `src/wenmai/pipelines/query_orchestration.py`
-- **入库编排**: 一份材料的 prepare -> commit 深 module，位置在 `src/wenmai/ingestion/orchestrator.py` 和 `src/wenmai/pipelines/ingestion.py`
-- **知识库**: read/write facade，位置在 `src/wenmai/knowledge/store.py`
-- **文档管理**: 运维看板与 MCP 管理类调用的文档生命周期入口，位置在 `src/wenmai/knowledge/document_management.py`
-- **运维观测**: 概览、Trace、任务进展的统一读侧，位置在 `src/wenmai/ops/observation.py`
+- **提问服务**: HTTP 与 MCP 共用的一次提问入口，位置在 `src/lab_knowledge/http/ask_service.py` 的 `run_ask()`
+- **提问编排**: 提问深 module，负责预处理、检索、精排、生成，位置在 `src/lab_knowledge/pipelines/query_orchestration.py`
+- **入库编排**: 一份材料的 prepare -> commit 深 module，位置在 `src/lab_knowledge/ingestion/orchestrator.py` 和 `src/lab_knowledge/pipelines/ingestion.py`
+- **知识库**: read/write facade，位置在 `src/lab_knowledge/knowledge/store.py`
+- **文档管理**: 运维看板与 MCP 管理类调用的文档生命周期入口，位置在 `src/lab_knowledge/knowledge/document_management.py`
+- **运维观测**: 概览、Trace、任务进展的统一读侧，位置在 `src/lab_knowledge/ops/observation.py`
 
 如果先记住这六个名词，再看代码会快很多。
 
@@ -25,10 +25,10 @@
 
 对外契约的稳定入口，负责收口参数和返回值。
 
-- `src/wenmai/http/ask_service.py`: **提问服务**
-- `src/wenmai/http/ops_service.py`: **运维看板服务**
-- `src/wenmai/http/*.py`: HTTP 路由
-- `src/wenmai/mcp/tools/*.py`: MCP tools
+- `src/lab_knowledge/http/ask_service.py`: **提问服务**
+- `src/lab_knowledge/http/ops_service.py`: **运维看板服务**
+- `src/lab_knowledge/http/*.py`: HTTP 路由
+- `src/lab_knowledge/mcp/tools/*.py`: MCP tools
 
 规则：页面和 MCP 优先经服务层，不直接各自拼流水线。
 
@@ -36,12 +36,12 @@
 
 真正承载业务复杂度的地方。
 
-- `src/wenmai/pipelines/query_orchestration.py`: **提问编排**
-- `src/wenmai/ingestion/orchestrator.py`: **入库编排**
-- `src/wenmai/knowledge/document_management.py`: **文档管理**
-- `src/wenmai/ops/observation.py`: **运维观测**
-- `src/wenmai/tracing/query_trace.py`: **QueryTrace**
-- `src/wenmai/task_progress.py`: **任务进展**模型与落盘
+- `src/lab_knowledge/pipelines/query_orchestration.py`: **提问编排**
+- `src/lab_knowledge/ingestion/orchestrator.py`: **入库编排**
+- `src/lab_knowledge/knowledge/document_management.py`: **文档管理**
+- `src/lab_knowledge/ops/observation.py`: **运维观测**
+- `src/lab_knowledge/tracing/query_trace.py`: **QueryTrace**
+- `src/lab_knowledge/task_progress.py`: **任务进展**模型与落盘
 
 规则：要改行为，优先改这一层；不要把新逻辑散落回 handler。
 
@@ -49,9 +49,9 @@
 
 负责具体实现和可替换 provider。
 
-- `src/wenmai/components/*`: LLM、Embedding、Reranker、Vision、Transform 等 provider
-- `src/wenmai/factories/*`: provider 选择
-- `src/wenmai/storage/*`: catalog、images、fingerprints 等存储实现
+- `src/lab_knowledge/components/*`: LLM、Embedding、Reranker、Vision、Transform 等 provider
+- `src/lab_knowledge/factories/*`: provider 选择
+- `src/lab_knowledge/storage/*`: catalog、images、fingerprints 等存储实现
 
 规则：这一层可换实现，但不应该重新定义上层概念。
 
@@ -92,8 +92,8 @@
 ## 运维看板读什么
 
 - 页面入口: `templates/ops.html`
-- 路由入口: `src/wenmai/http/ops.py`
-- 服务入口: `src/wenmai/http/ops_service.py`
+- 路由入口: `src/lab_knowledge/http/ops.py`
+- 服务入口: `src/lab_knowledge/http/ops_service.py`
 
 读侧分工：
 

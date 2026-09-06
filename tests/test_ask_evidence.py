@@ -5,15 +5,15 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 
-from tests.conftest import register_collection
-from wenmai.config import Settings
-from wenmai.ops.ask_evidence import (
+from lab_knowledge.config import Settings
+from lab_knowledge.ops.ask_evidence import (
     ask_evidence_path,
     read_ask_evidence_records,
     summarize_ask_evidence,
     write_ask_evidence,
 )
-from wenmai.ops.observation import load_health_snapshot
+from lab_knowledge.ops.observation import load_health_snapshot
+from tests.conftest import register_collection
 
 
 def _other_collection_settings(

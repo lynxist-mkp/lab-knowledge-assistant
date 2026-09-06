@@ -6,12 +6,12 @@ from pathlib import Path
 
 import yaml
 
-from wenmai.config import Settings
-from wenmai.knowledge import create_knowledge
-from wenmai.models import AskResult, Chunk
-from wenmai.pipelines.query_orchestration import AskPipelineInput, ask_pipeline_single
-from wenmai.retrieval import retrieve
-from wenmai.tracing.store import get_trace_record
+from lab_knowledge.config import Settings
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.models import AskResult, Chunk
+from lab_knowledge.pipelines.query_orchestration import AskPipelineInput, ask_pipeline_single
+from lab_knowledge.retrieval import retrieve
+from lab_knowledge.tracing.store import get_trace_record
 
 
 def _chunk(chunk_id: str, document_id: str, text: str) -> Chunk:

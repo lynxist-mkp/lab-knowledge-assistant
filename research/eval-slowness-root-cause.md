@@ -2,7 +2,7 @@
 
 **Issue:** #39 量化 eval 耗时结构与变慢根因  
 **Date:** 2026-09-01  
-**Evidence sources:** `src/wenmai/eval/{runner,pipeline,ragas_metrics}.py`, `src/wenmai/pipelines/query_core.py`, `settings.yaml`, `data/eval/runs/*.json`, `data/eval/golden.jsonl`, `.scratch/qa/eval-run.log`
+**Evidence sources:** `src/lab_knowledge/eval/{runner,pipeline,ragas_metrics}.py`, `src/lab_knowledge/pipelines/query_core.py`, `settings.yaml`, `data/eval/runs/*.json`, `data/eval/golden.jsonl`, `.scratch/qa/eval-run.log`
 
 ---
 
@@ -194,8 +194,8 @@ Compared to historical 42-item run: **168 eval_item ops**, **~126 BGE + 42 CE** 
 
 ## References
 
-- `src/wenmai/eval/runner.py` — `_run_grouped_eval`: nested `for group in groups for item in items`
-- `src/wenmai/eval/pipeline.py` — `eval_item`: direct `retrieve` + `generate`
-- `src/wenmai/pipelines/query_core.py` — `run_ask_pipeline` phase batching
-- `src/wenmai/components/model_guard.py` — `hold()` evicts other resources; `end_batch()` unloads
+- `src/lab_knowledge/eval/runner.py` — `_run_grouped_eval`: nested `for group in groups for item in items`
+- `src/lab_knowledge/eval/pipeline.py` — `eval_item`: direct `retrieve` + `generate`
+- `src/lab_knowledge/pipelines/query_core.py` — `run_ask_pipeline` phase batching
+- `src/lab_knowledge/components/model_guard.py` — `hold()` evicts other resources; `end_batch()` unloads
 - `docs/adr/0004-eval-no-trace.md` — eval bypasses `ask_question` by design

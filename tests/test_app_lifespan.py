@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from wenmai.app import create_app
-from wenmai.components.model_guard import (
+from lab_knowledge.app import create_app
+from lab_knowledge.components.model_guard import (
     ModelResource,
     active_resource,
     begin_batch,
@@ -17,7 +17,7 @@ from wenmai.components.model_guard import (
     register_unload,
     release_all_resources,
 )
-from wenmai.config import Settings
+from lab_knowledge.config import Settings
 
 
 @pytest.fixture(autouse=True)
@@ -29,7 +29,7 @@ def reset_model_guard() -> None:
 
 
 def test_release_all_resources_on_shutdown(test_settings: Settings) -> None:
-    with patch("wenmai.app.release_all_resources") as mock_release:
+    with patch("lab_knowledge.app.release_all_resources") as mock_release:
         with TestClient(create_app(test_settings)) as client:
             client.get("/")
         mock_release.assert_called_once()

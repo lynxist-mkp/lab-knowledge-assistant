@@ -6,9 +6,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from wenmai.app import create_app
-from wenmai.components.bm25.tokenizer import ChineseTokenizer
-from wenmai.config import Settings
+from lab_knowledge.app import create_app
+from lab_knowledge.components.bm25.tokenizer import ChineseTokenizer
+from lab_knowledge.config import Settings
 
 
 def _tokenizer(settings: Settings) -> ChineseTokenizer:

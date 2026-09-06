@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from wenmai.config import Settings
-from wenmai.ingestion.quality import evaluate_quality_gate
-from wenmai.knowledge import create_knowledge
-from wenmai.ops.observation import get_ingestion_detail
-from wenmai.pipelines.ingestion import ingest_source
-from wenmai.retrieval import retrieve
+from lab_knowledge.config import Settings
+from lab_knowledge.ingestion.quality import evaluate_quality_gate
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.ops.observation import get_ingestion_detail
+from lab_knowledge.pipelines.ingestion import ingest_source
+from lab_knowledge.retrieval import retrieve
 
 
 def _write_gray_markdown(path: Path, test_settings: Settings, extra: str = "") -> Path:

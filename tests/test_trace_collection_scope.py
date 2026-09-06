@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from wenmai.config import Settings
-from wenmai.knowledge import create_knowledge
-from wenmai.models import Chunk
-from wenmai.tracing.context import TraceContext
-from wenmai.tracing.store import (
+from lab_knowledge.config import Settings
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.models import Chunk
+from lab_knowledge.tracing.context import TraceContext
+from lab_knowledge.tracing.store import (
     average_query_latency_ms,
     filter_trace_records,
     get_trace_record,

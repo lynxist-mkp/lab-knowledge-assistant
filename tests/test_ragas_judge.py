@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from wenmai.components.evaluator.ragas_probe import build_ragas_judge_llm
-from wenmai.config import Settings, resolve_ragas_judge
-from wenmai.eval.read import get_ragas_status
+from lab_knowledge.components.evaluator.ragas_probe import build_ragas_judge_llm
+from lab_knowledge.config import Settings, resolve_ragas_judge
+from lab_knowledge.eval.read import get_ragas_status
 
 
 def test_empty_provider_defaults_to_zhipu() -> None:
@@ -91,7 +91,7 @@ def test_build_ragas_judge_llm_passes_max_tokens(
         raise RuntimeError("stop after capture")
 
     monkeypatch.setattr(
-        "wenmai.components.evaluator.ragas_probe.llm_factory",
+        "lab_knowledge.components.evaluator.ragas_probe.llm_factory",
         fake_llm_factory,
     )
     with pytest.raises(RuntimeError, match="stop after capture"):

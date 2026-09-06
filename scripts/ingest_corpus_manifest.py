@@ -8,9 +8,9 @@ import logging
 import sys
 from pathlib import Path
 
-from wenmai.components.model_guard import configure
-from wenmai.config import Settings
-from wenmai.eval.corpus_ingest import (
+from lab_knowledge.components.model_guard import configure
+from lab_knowledge.config import Settings
+from lab_knowledge.eval.corpus_ingest import (
     DEFAULT_ITEMS_DIR,
     DEFAULT_MANIFEST,
     ingest_corpus_manifest,

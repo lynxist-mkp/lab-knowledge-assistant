@@ -6,10 +6,10 @@ import threading
 
 from fastapi.testclient import TestClient
 
-from wenmai.app import create_app
-from wenmai.config import AskConcurrencyConfig
-from wenmai.http.ask_governor import get_ask_governor, reset_ask_governor
-from wenmai.task_progress import TaskCounters, persist_task_progress
+from lab_knowledge.app import create_app
+from lab_knowledge.config import AskConcurrencyConfig
+from lab_knowledge.http.ask_governor import get_ask_governor, reset_ask_governor
+from lab_knowledge.task_progress import TaskCounters, persist_task_progress
 
 
 def test_http_ask_returns_503_when_governor_is_busy(test_settings) -> None:

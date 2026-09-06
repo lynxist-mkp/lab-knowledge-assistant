@@ -5,8 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Intact mlx stack lives in the MiniCPM probe venv (paddleocr-env's mlx_vlm was corrupted).
 PY="${ROOT}/.scratch/minicpm-probe/.venv/bin/python3.12"
-MODEL="${WENMAI_GEMMA_MODEL:-/Users/linkslinks/.cache/modelscope/models/mlx-community--gemma-4-e2b-it-mxfp4/snapshots/master}"
-PORT="${WENMAI_GEMMA_PORT:-8120}"
+MODEL="${LAB_KNOWLEDGE_GEMMA_MODEL:-${LAB_KNOWLEDGE_GEMMA_MODEL:-/Users/linkslinks/.cache/modelscope/models/mlx-community--gemma-4-e2b-it-mxfp4/snapshots/master}}"
+PORT="${LAB_KNOWLEDGE_GEMMA_PORT:-${LAB_KNOWLEDGE_GEMMA_PORT:-8120}}"
 LOG="${ROOT}/.scratch/gemma-server.log"
 
 if [[ ! -x "$PY" ]]; then

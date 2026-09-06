@@ -7,16 +7,16 @@ from dataclasses import replace
 
 import pytest
 
-import wenmai.http.ask_governor as ask_governor
-from tests.conftest import register_collection
-from wenmai.config import AskConcurrencyConfig, Settings
-from wenmai.http.ask_governor import (
+import lab_knowledge.http.ask_governor as ask_governor
+from lab_knowledge.config import AskConcurrencyConfig, Settings
+from lab_knowledge.http.ask_governor import (
     AskConcurrencyGovernor,
     AskSaturationError,
     reset_ask_governor,
 )
-from wenmai.ops.ask_evidence import summarize_ask_evidence
-from wenmai.task_progress import TaskCounters, persist_task_progress
+from lab_knowledge.ops.ask_evidence import summarize_ask_evidence
+from lab_knowledge.task_progress import TaskCounters, persist_task_progress
+from tests.conftest import register_collection
 
 
 @pytest.fixture(autouse=True)

@@ -7,16 +7,16 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from wenmai.app import create_app
-from wenmai.config import Settings
-from wenmai.eval import get_eval_dashboard
-from wenmai.eval.read import (
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
+from lab_knowledge.eval import get_eval_dashboard
+from lab_knowledge.eval.read import (
     get_eval_run_detail,
     get_eval_run_summary,
     get_ragas_status,
     list_eval_run_summaries,
 )
-from wenmai.eval.views import GroupMetricsView, parse_eval_run_summary
+from lab_knowledge.eval.views import GroupMetricsView, parse_eval_run_summary
 
 
 def _sample_metrics(hit: float, mrr: float, refusal: float) -> dict[str, float | int]:

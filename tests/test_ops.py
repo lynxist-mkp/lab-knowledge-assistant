@@ -8,11 +8,11 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from lab_knowledge.app import create_app
+from lab_knowledge.config import Settings
+from lab_knowledge.knowledge import create_knowledge
+from lab_knowledge.models import Chunk
 from tests.conftest import register_collection
-from wenmai.app import create_app
-from wenmai.config import Settings
-from wenmai.knowledge import create_knowledge
-from wenmai.models import Chunk
 
 
 def _other_collection_settings(
@@ -210,7 +210,7 @@ def test_ops_overview_api_contract(test_settings: Settings, tmp_path: Path) -> N
 
 def test_ops_browse_api_contract(test_settings: Settings) -> None:
     """Browse API contract returns culture domain groups with documents and chunk previews."""
-    from wenmai.models import Chunk
+    from lab_knowledge.models import Chunk
 
     app = create_app(test_settings)
     app.state.knowledge.commit_document(
@@ -287,7 +287,7 @@ def test_ops_browse_api_contract(test_settings: Settings) -> None:
 
 
 def test_ops_browse_shows_pending_review_status(test_settings: Settings) -> None:
-    from wenmai.models import Chunk
+    from lab_knowledge.models import Chunk
 
     app = create_app(test_settings)
     app.state.knowledge.commit_document(
@@ -320,7 +320,7 @@ def test_ops_browse_shows_pending_review_status(test_settings: Settings) -> None
 
 
 def test_ops_browse_surfaces_semantic_enrichment_fields(test_settings: Settings) -> None:
-    from wenmai.models import Chunk
+    from lab_knowledge.models import Chunk
 
     app = create_app(test_settings)
     app.state.knowledge.commit_document(
@@ -373,7 +373,7 @@ def test_ops_browse_search_matches_semantic_enrichment_fields(test_settings: Set
 def test_ops_collection_query_params_route_overview_and_browse(
     test_settings: Settings,
 ) -> None:
-    from wenmai.models import Chunk
+    from lab_knowledge.models import Chunk
 
     other_id = "other-collection"
     settings = register_collection(test_settings, other_id)
@@ -706,7 +706,7 @@ def _plant_pending_doc(
     culture_domain: str,
     text: str,
 ) -> None:
-    from wenmai.models import Chunk
+    from lab_knowledge.models import Chunk
 
     app.state.knowledge.commit_document(
         source_path=f"/tmp/{document_id}.md",
@@ -818,7 +818,7 @@ def test_review_pending_approve_reject_api_contract(
 def test_review_api_query_params_route_to_alternate_collection(
     test_settings: Settings,
 ) -> None:
-    from wenmai.models import Chunk
+    from lab_knowledge.models import Chunk
 
     other_id = "other-collection"
     settings = register_collection(test_settings, other_id)
@@ -947,8 +947,8 @@ def test_api_traces_collection_query_params_route_list_and_detail(
 
 
 def test_ops_health_snapshot_supports_collection_scope(test_settings: Settings) -> None:
-    from wenmai.ops.ask_evidence import write_ask_evidence
-    from wenmai.task_progress import TaskCounters, persist_task_progress
+    from lab_knowledge.ops.ask_evidence import write_ask_evidence
+    from lab_knowledge.task_progress import TaskCounters, persist_task_progress
 
     other_id = "other-collection"
     settings = register_collection(test_settings, other_id)
@@ -1044,7 +1044,7 @@ def test_ops_unknown_collection_returns_404(test_settings: Settings) -> None:
 def test_api_chunks_collection_query_params_route_detail(
     test_settings: Settings,
 ) -> None:
-    from wenmai.models import Chunk
+    from lab_knowledge.models import Chunk
 
     other_id = "other-collection"
     settings = register_collection(test_settings, other_id)
