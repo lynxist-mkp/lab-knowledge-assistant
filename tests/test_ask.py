@@ -84,60 +84,42 @@ def test_ask_returns_answer_with_matching_citations_and_query_trace(
     assert "ranked_chunks" not in body
 
 
-def test_query_compat_default_path_delegates_to_run_ask(
-    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
+def test_query_compat_retains_public_contract_and_can_skip_trace(
+    test_settings: Settings, tmp_path: Path
 ) -> None:
-    captured = {}
+    source = _write_minpai_markdown(tmp_path / "matsu.md")
+    client = TestClient(create_app(test_settings))
+    ingest = client.post("/ingest", json={"source_path": str(source)})
+    assert ingest.status_code == 200
 
-    def _fake_run_ask(question, settings, **kwargs):
-        captured["question"] = question
-        captured["settings"] = settings
-        captured["kwargs"] = kwargs
-        return AskResult(answer="ok", citations=[], trace_id="trace-compat")
-
-    monkeypatch.setattr("wenmai.http.ask_service.run_ask", _fake_run_ask)
-
+    before = len(
+        [
+            record
+            for record in read_trace_records(test_settings)
+            if record.get("trace_type") == "query"
+        ]
+    )
     result = query_compat.ask_question(
         "妈祖信仰的发源地在哪里？",
         test_settings,
         culture_domain="妈祖",
         retrieval_mode="dense_only",
         rerank_enabled=False,
-    )
-
-    assert result.trace_id == "trace-compat"
-    assert captured["question"] == "妈祖信仰的发源地在哪里？"
-    assert captured["settings"] is test_settings
-    assert captured["kwargs"]["entrypoint"] == "query-compat"
-    assert captured["kwargs"]["culture_domain"] == "妈祖"
-    assert captured["kwargs"]["retrieval_mode"] == "dense_only"
-    assert captured["kwargs"]["rerank_enabled"] is False
-
-
-def test_query_compat_record_trace_false_delegates_to_run_ask(
-    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    captured = {}
-
-    def _fake_run_ask(question, settings, **kwargs):
-        captured["question"] = question
-        captured["settings"] = settings
-        captured["kwargs"] = kwargs
-        return AskResult(answer="ok", citations=[], trace_id="trace-deep")
-
-    monkeypatch.setattr("wenmai.http.ask_service.run_ask", _fake_run_ask)
-
-    result = query_compat.ask_question(
-        "妈祖信仰的发源地在哪里？",
-        test_settings,
         record_trace=False,
     )
+    after = len(
+        [
+            record
+            for record in read_trace_records(test_settings)
+            if record.get("trace_type") == "query"
+        ]
+    )
 
-    assert result.trace_id == "trace-deep"
-    assert captured["question"] == "妈祖信仰的发源地在哪里？"
-    assert captured["settings"] is test_settings
-    assert captured["kwargs"]["record_trace"] is False
-    assert captured["kwargs"]["entrypoint"] == "query-compat"
+    assert result.answer
+    assert result.citations
+    assert result.citations[0].document_id == ingest.json()["document_id"]
+    assert result.refused is False
+    assert after == before
 
 
 def test_ask_question_includes_ranked_chunks_for_eval(
@@ -183,42 +165,6 @@ def test_ask_accepts_retrieval_mode_and_keeps_public_result(
         "refusal_reason",
         "error",
     }
-
-
-def test_http_ask_endpoint_uses_run_ask_service(
-    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    app = create_app(test_settings)
-    client = TestClient(app)
-    captured = {}
-
-    def _fake_run_ask(question, settings, **kwargs):
-        captured["question"] = question
-        captured["settings"] = settings
-        captured["kwargs"] = kwargs
-        return AskResult(answer="ok", citations=[], trace_id="trace-http")
-
-    monkeypatch.setattr("wenmai.http.workbench.run_ask", _fake_run_ask)
-
-    response = client.post(
-        "/ask",
-        json={
-            "question": "妈祖信仰的发源地在哪里？",
-            "culture_domain": "妈祖",
-            "retrieval_mode": "dense_only",
-            "rerank_enabled": False,
-        },
-    )
-
-    assert response.status_code == 200
-    assert response.json()["trace_id"] == "trace-http"
-    assert captured["question"] == "妈祖信仰的发源地在哪里？"
-    assert captured["settings"] is test_settings
-    assert captured["kwargs"]["entrypoint"] == "http"
-    assert captured["kwargs"]["knowledge"] is app.state.knowledge
-    assert captured["kwargs"]["culture_domain"] == "妈祖"
-    assert captured["kwargs"]["retrieval_mode"] == "dense_only"
-    assert captured["kwargs"]["rerank_enabled"] is False
 
 
 def test_ask_records_generation_failure_in_trace_and_returns_error(

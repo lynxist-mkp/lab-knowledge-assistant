@@ -88,14 +88,6 @@ class PreparedIngest:
     def previous_document_id(self) -> str | None:
         return self.__body.previous_document_id
 
-    @property
-    def trace_id(self) -> str:
-        return self.__recorder.trace_id
-
-    @property
-    def elapsed_ms(self) -> float:
-        return self.__recorder.trace_context.total_elapsed_ms
-
 
 @dataclass(frozen=True)
 class IngestionLifecycle:
@@ -107,6 +99,14 @@ class IngestionLifecycle:
 
 def count_chunks_with_images(chunks: list[Chunk]) -> int:
     return sum(1 for chunk in chunks if IMAGE_PLACEHOLDER_RE.search(chunk.text))
+
+
+def prepared_trace_id(prepared: PreparedIngest) -> str:
+    return prepared._PreparedIngest__recorder.trace_id
+
+
+def prepared_elapsed_ms(prepared: PreparedIngest) -> float:
+    return prepared._PreparedIngest__recorder.trace_context.total_elapsed_ms
 
 
 def finalize_prepared_ingest_success(
@@ -489,6 +489,8 @@ __all__ = [
     "PreparedIngest",
     "build_ingestion_lifecycle",
     "count_chunks_with_images",
+    "prepared_elapsed_ms",
+    "prepared_trace_id",
     "persist_ingestion_outcome",
     "persist_ingestion_running",
     "prepare_ingest",

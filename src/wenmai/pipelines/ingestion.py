@@ -12,6 +12,8 @@ from wenmai.ingestion.orchestrator import (
     finalize_prepared_ingest_error,
     finalize_prepared_ingest_success,
     prepare_ingest,
+    prepared_elapsed_ms,
+    prepared_trace_id,
 )
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import IngestResult
@@ -77,8 +79,8 @@ def commit_prepared_ingest(
     return IngestResult(
         document_id=prepared.document_id,
         chunk_count=len(prepared.chunks),
-        elapsed_ms=prepared.elapsed_ms,
-        trace_id=prepared.trace_id,
+        elapsed_ms=prepared_elapsed_ms(prepared),
+        trace_id=prepared_trace_id(prepared),
         status=prepared.status,
     )
 

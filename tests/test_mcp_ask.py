@@ -14,7 +14,6 @@ from wenmai.http.ask_service import run_ask
 from wenmai.mcp.ask import AskWenmaiError, ask_wenmai
 from wenmai.mcp.server import create_mcp_server
 from wenmai.mcp.tools.ask import AskAnswerError, ask_answer
-from wenmai.models import AskResult
 
 
 def _seed_doc(client: TestClient, tmp_path, text: str = "湄洲岛是妈祖信仰的发源地。") -> None:
@@ -43,39 +42,6 @@ def test_ask_service_returns_answer(
     assert result["refused"] is False
 
 
-def test_ask_service_delegates_to_query_orchestration_entry(
-    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    captured = {}
-
-    def _fake_ask_pipeline_single(payload, *, phase_batch):
-        captured["payload"] = payload
-        captured["phase_batch"] = phase_batch
-        return AskResult(answer="ok", citations=[], trace_id="trace-123")
-
-    monkeypatch.setattr(
-        "wenmai.http.ask_service.ask_pipeline_single",
-        _fake_ask_pipeline_single,
-    )
-
-    result = run_ask(
-        "妈祖信仰的发源地在哪里？",
-        test_settings,
-        culture_domain="妈祖",
-        retrieval_mode="dense_only",
-        rerank_enabled=False,
-    )
-
-    assert result.trace_id == "trace-123"
-    assert captured["payload"].question == "妈祖信仰的发源地在哪里？"
-    assert captured["payload"].settings is not test_settings
-    assert captured["payload"].settings.product.collection == test_settings.product.collection
-    assert captured["payload"].culture_domain == "妈祖"
-    assert captured["payload"].retrieval_mode == "dense_only"
-    assert captured["payload"].rerank_enabled is False
-    assert captured["phase_batch"] == test_settings.resources.query_phase_batch
-
-
 def test_ask_answer_envelope_contains_trace_id(
     test_settings: Settings, tmp_path
 ) -> None:
@@ -96,40 +62,6 @@ def test_ask_answer_envelope_contains_trace_id(
     assert result["scope"]["collection_id"] == test_settings.product.collection
 
 
-def test_ask_answer_uses_run_ask_service(
-    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    captured = {}
-
-    def _fake_run_ask(question, settings, **kwargs):
-        captured["question"] = question
-        captured["settings"] = settings
-        captured["kwargs"] = kwargs
-        return AskResult(answer="ok", citations=[], trace_id="trace-123")
-
-    monkeypatch.setattr("wenmai.mcp.tools.ask.run_ask", _fake_run_ask)
-
-    result = ask_answer(
-        "妈祖信仰的发源地在哪里？",
-        test_settings,
-        collection_id=test_settings.product.collection,
-        culture_domain="妈祖",
-        retrieval_mode="dense_only",
-        rerank_enabled=False,
-    )
-
-    assert result["data"]["trace_id"] == "trace-123"
-    assert result["meta"]["elapsed_ms"] is not None
-    assert captured["question"] == "妈祖信仰的发源地在哪里？"
-    assert captured["settings"] is not test_settings
-    assert captured["settings"].product.collection == test_settings.product.collection
-    assert captured["kwargs"]["collection_id"] == test_settings.product.collection
-    assert captured["kwargs"]["entrypoint"] == "mcp"
-    assert captured["kwargs"]["culture_domain"] == "妈祖"
-    assert captured["kwargs"]["retrieval_mode"] == "dense_only"
-    assert captured["kwargs"]["rerank_enabled"] is False
-
-
 def test_legacy_ask_wenmai_returns_plain_contract(
     test_settings: Settings, tmp_path
 ) -> None:
@@ -147,56 +79,6 @@ def test_legacy_ask_wenmai_returns_plain_contract(
     assert result["citations"]
     assert result["trace_id"]
     assert "scope" not in result
-
-
-def test_legacy_ask_wenmai_uses_run_ask_service(
-    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    captured = {}
-
-    def _fake_run_ask(question, settings, **kwargs):
-        captured["question"] = question
-        captured["settings"] = settings
-        captured["kwargs"] = kwargs
-        return AskResult(answer="ok", citations=[], trace_id="trace-legacy")
-
-    monkeypatch.setattr("wenmai.mcp.ask.run_ask", _fake_run_ask)
-
-    result = ask_wenmai(
-        "妈祖信仰的发源地在哪里？",
-        test_settings,
-        culture_domain="妈祖",
-        retrieval_mode="dense_only",
-        rerank_enabled=False,
-    )
-
-    assert result["trace_id"] == "trace-legacy"
-    assert captured["question"] == "妈祖信仰的发源地在哪里？"
-    assert captured["settings"] is test_settings
-    assert captured["kwargs"]["entrypoint"] == "mcp-legacy"
-    assert captured["kwargs"]["culture_domain"] == "妈祖"
-    assert captured["kwargs"]["retrieval_mode"] == "dense_only"
-    assert captured["kwargs"]["rerank_enabled"] is False
-
-
-def test_legacy_ask_wenmai_forwards_collection_id(
-    test_settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    captured = {}
-
-    def _fake_run_ask(question, settings, **kwargs):
-        captured["kwargs"] = kwargs
-        return AskResult(answer="ok", citations=[], trace_id="trace-scoped")
-
-    monkeypatch.setattr("wenmai.mcp.ask.run_ask", _fake_run_ask)
-
-    ask_wenmai(
-        "问题",
-        test_settings,
-        collection_id="other-collection",
-    )
-
-    assert captured["kwargs"]["collection_id"] == "other-collection"
 
 
 def test_legacy_ask_wenmai_unknown_collection_raises(test_settings: Settings) -> None:

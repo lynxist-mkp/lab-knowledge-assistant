@@ -12,6 +12,7 @@ from tests.conftest import register_collection
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.eval import run_eval
+from wenmai.ingestion.orchestrator import prepared_trace_id
 from wenmai.models import IngestResult
 from wenmai.ops.observation import get_task_progress_detail, list_task_progress_summaries
 from wenmai.pipelines.ingestion import commit_prepared_ingest, prepare_ingest_source
@@ -385,6 +386,8 @@ def test_failed_commit_keeps_document_link_in_task_progress(
     assert not hasattr(prepared, "body")
     assert not hasattr(prepared, "lifecycle")
     assert not hasattr(prepared, "_recorder")
+    assert not hasattr(prepared, "trace_id")
+    assert not hasattr(prepared, "elapsed_ms")
     assert not hasattr(prepared, "set_summary")
     assert not hasattr(prepared, "record_embed")
     assert not hasattr(prepared, "record_upsert")
@@ -400,9 +403,10 @@ def test_failed_commit_keeps_document_link_in_task_progress(
     with pytest.raises(RuntimeError, match="upsert failed"):
         commit_prepared_ingest(prepared, test_settings)
 
+    trace_id = prepared_trace_id(prepared)
     detail = get_task_progress_detail(
         test_settings,
-        f"ingestion:{prepared.trace_id}",
+        f"ingestion:{trace_id}",
     )
     assert detail is not None
     assert detail.summary.status == "failed"
