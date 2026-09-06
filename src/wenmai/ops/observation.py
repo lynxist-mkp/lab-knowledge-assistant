@@ -149,12 +149,15 @@ def list_task_progress_summaries(
     has_trace: bool | None = None,
     config_fingerprint: str | None = None,
     needs_attention: bool | None = None,
+    collection_id: str | None = None,
 ) -> list[TaskProgressSummary]:
+    scope = resolve_routable_collection_scope(settings, collection_id)
     summaries = list_task_progress(
         settings,
         task_type=task_type,
         status=status,
         failure_kind=failure_kind,
+        collection_id=scope.collection_id,
     )
     if degraded is not None:
         summaries = [item for item in summaries if item.degraded is degraded]
@@ -178,8 +181,14 @@ def has_running_long_tasks(settings: Settings) -> bool:
     )
 
 
-def get_task_progress_detail(settings: Settings, task_id: str) -> TaskProgressDetail | None:
-    return get_task_progress(settings, task_id)
+def get_task_progress_detail(
+    settings: Settings,
+    task_id: str,
+    *,
+    collection_id: str | None = None,
+) -> TaskProgressDetail | None:
+    scope = resolve_routable_collection_scope(settings, collection_id)
+    return get_task_progress(settings, task_id, collection_id=scope.collection_id)
 
 
 def get_task_investigation(
@@ -189,7 +198,7 @@ def get_task_investigation(
     collection_id: str | None = None,
 ) -> TaskInvestigationView | None:
     scope = resolve_routable_collection_scope(settings, collection_id)
-    detail = get_task_progress(settings, task_id)
+    detail = get_task_progress(settings, task_id, collection_id=scope.collection_id)
     if detail is None:
         return None
     eval_run_id = detail.summary.links.get("eval_run")
@@ -212,10 +221,6 @@ def get_task_investigation(
             for item in list_task_progress_summaries(
                 settings,
                 config_fingerprint=detail.summary.config_fingerprint,
-            )
-            if _summary_matches_collection(
-                settings,
-                item,
                 collection_id=scope.collection_id,
             )
             if item.task_id != detail.summary.task_id
@@ -376,25 +381,6 @@ def _has_trace_link(summary: TaskProgressSummary) -> bool:
     if summary.links.get("trace_id"):
         return True
     return False
-
-
-def _summary_matches_collection(
-    settings: Settings,
-    summary: TaskProgressSummary,
-    *,
-    collection_id: str,
-) -> bool:
-    trace_id = summary.links.get("trace_id")
-    if not trace_id:
-        return False
-    return (
-        get_trace_summary(
-            settings,
-            trace_id,
-            collection_id=collection_id,
-        )
-        is not None
-    )
 
 
 def _needs_attention(summary: TaskProgressSummary) -> bool:

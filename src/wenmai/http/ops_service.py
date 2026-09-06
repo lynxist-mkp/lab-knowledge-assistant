@@ -97,6 +97,7 @@ class OpsService:
         has_trace: bool | None = None,
         config_fingerprint: str | None = None,
         needs_attention: bool | None = None,
+        collection_id: str | None = None,
     ) -> list[TaskProgressSummary]:
         return list_task_progress_summaries(
             self._settings,
@@ -107,10 +108,20 @@ class OpsService:
             has_trace=has_trace,
             config_fingerprint=config_fingerprint,
             needs_attention=needs_attention,
+            collection_id=collection_id,
         )
 
-    def task_progress_detail(self, task_id: str) -> TaskProgressDetail | None:
-        return get_task_progress_detail(self._settings, task_id)
+    def task_progress_detail(
+        self,
+        task_id: str,
+        *,
+        collection_id: str | None = None,
+    ) -> TaskProgressDetail | None:
+        return get_task_progress_detail(
+            self._settings,
+            task_id,
+            collection_id=collection_id,
+        )
 
     def task_progress_investigation(
         self,

@@ -135,6 +135,7 @@ def create_ops_router() -> APIRouter:
         ]
 
     @router.get("/api/tasks/progress")
+    @_translate_unknown_collection
     def api_task_progress(
         request: Request,
         task_type: str | None = None,
@@ -144,6 +145,7 @@ def create_ops_router() -> APIRouter:
         has_trace: bool | None = None,
         config_fingerprint: str | None = None,
         needs_attention: bool | None = None,
+        collection_id: str | None = None,
     ) -> list[dict[str, object]]:
         return [
             item.as_dict()
@@ -155,12 +157,21 @@ def create_ops_router() -> APIRouter:
                 has_trace=has_trace,
                 config_fingerprint=config_fingerprint,
                 needs_attention=needs_attention,
+                collection_id=collection_id,
             )
         ]
 
     @router.get("/api/tasks/progress/{task_id}")
-    def api_task_progress_detail(request: Request, task_id: str) -> dict[str, object]:
-        detail = request.app.state.ops_service.task_progress_detail(task_id)
+    @_translate_unknown_collection
+    def api_task_progress_detail(
+        request: Request,
+        task_id: str,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
+        detail = request.app.state.ops_service.task_progress_detail(
+            task_id,
+            collection_id=collection_id,
+        )
         if detail is None:
             raise HTTPException(status_code=404, detail="task progress not found")
         return detail.as_dict()

@@ -294,6 +294,43 @@ def task_progress_path(settings: Settings) -> Path:
     return raw if raw.is_absolute() else settings.root / raw
 
 
+def stamp_task_progress_collection_id(
+    payload: dict[str, Any], settings: Settings
+) -> dict[str, Any]:
+    stamped = dict(payload)
+    stamped["collection_id"] = settings.product.collection
+    return stamped
+
+
+def task_progress_belongs_to_collection(
+    record: dict[str, Any],
+    collection_id: str,
+    *,
+    default_collection_id: str,
+) -> bool:
+    record_collection = record.get("collection_id")
+    if record_collection is None:
+        return collection_id == default_collection_id
+    return record_collection == collection_id
+
+
+def filter_task_progress_records(
+    records: list[dict[str, Any]],
+    *,
+    collection_id: str,
+    default_collection_id: str,
+) -> list[dict[str, Any]]:
+    return [
+        record
+        for record in records
+        if task_progress_belongs_to_collection(
+            record,
+            collection_id,
+            default_collection_id=default_collection_id,
+        )
+    ]
+
+
 def write_task_progress(settings: Settings, payload: dict[str, Any]) -> Path:
     path = task_progress_path(settings)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -302,7 +339,7 @@ def write_task_progress(settings: Settings, payload: dict[str, Any]) -> Path:
     return path
 
 
-def read_task_progress_records(settings: Settings) -> list[dict[str, Any]]:
+def _read_all_task_progress_records(settings: Settings) -> list[dict[str, Any]]:
     path = task_progress_path(settings)
     if not path.exists():
         return []
@@ -320,15 +357,31 @@ def read_task_progress_records(settings: Settings) -> list[dict[str, Any]]:
     return records
 
 
+def read_task_progress_records(
+    settings: Settings,
+    *,
+    collection_id: str | None = None,
+) -> list[dict[str, Any]]:
+    records = _read_all_task_progress_records(settings)
+    if collection_id is None:
+        return records
+    return filter_task_progress_records(
+        records,
+        collection_id=collection_id,
+        default_collection_id=settings.default_collection_id,
+    )
+
+
 def list_task_progress(
     settings: Settings,
     *,
     task_type: str | None = None,
     status: str | None = None,
     failure_kind: str | None = None,
+    collection_id: str | None = None,
 ) -> list[TaskProgressSummary]:
     latest_by_id: dict[str, TaskProgressSummary] = {}
-    for item in reversed(read_task_progress_records(settings)):
+    for item in reversed(read_task_progress_records(settings, collection_id=collection_id)):
         summary = TaskProgressSummary.from_dict(item)
         if summary.task_id and summary.task_id not in latest_by_id:
             latest_by_id[summary.task_id] = summary
@@ -342,8 +395,13 @@ def list_task_progress(
     return summaries
 
 
-def get_task_progress(settings: Settings, task_id: str) -> TaskProgressDetail | None:
-    for record in reversed(read_task_progress_records(settings)):
+def get_task_progress(
+    settings: Settings,
+    task_id: str,
+    *,
+    collection_id: str | None = None,
+) -> TaskProgressDetail | None:
+    for record in reversed(read_task_progress_records(settings, collection_id=collection_id)):
         if str(record.get("task_id") or "") == task_id:
             return TaskProgressDetail.from_dict(record)
     return None
@@ -470,7 +528,7 @@ def persist_task_progress(
         "stages": [stage.as_dict() for stage in resolved_stages],
         "children": [child.as_dict() for child in resolved_children],
     }
-    return write_task_progress(settings, payload)
+    return write_task_progress(settings, stamp_task_progress_collection_id(payload, settings))
 
 
 def safe_persist_task_progress(settings: Settings, **kwargs: Any) -> Path | None:
@@ -672,6 +730,7 @@ __all__ = [
     "derive_failure_kind",
     "derive_task_counters",
     "derive_task_status",
+    "filter_task_progress_records",
     "get_task_progress",
     "infer_failure_kind",
     "list_task_progress",
@@ -683,5 +742,7 @@ __all__ = [
     "safe_persist_task_progress_outcome",
     "safe_persist_task_progress_running",
     "safe_persist_task_progress",
+    "stamp_task_progress_collection_id",
+    "task_progress_belongs_to_collection",
     "task_progress_path",
 ]

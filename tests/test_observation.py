@@ -7,6 +7,8 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+from tests.conftest import register_collection
+
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.knowledge.read import ReadPath
@@ -25,9 +27,6 @@ from wenmai.storage.catalog import DocumentCatalog
 from wenmai.task_progress import ChildEvidence, TaskCounters, persist_task_progress
 from wenmai.tracing.context import TraceContext
 from wenmai.tracing.store import get_trace_record, save_trace
-
-
-from tests.conftest import register_collection
 
 
 def _other_collection_settings(
@@ -566,21 +565,34 @@ def test_task_investigation_trace_summaries_respect_collection_scope(
         + "\n",
         encoding="utf-8",
     )
-    for trace_id in ("legacy-ing", "scoped-ing"):
-        persist_task_progress(
-            test_settings,
-            task_id=f"ingestion:{trace_id}",
-            task_type="ingestion",
-            status="succeeded",
-            started_at="2026-06-01T12:00:00+00:00",
-            finished_at="2026-06-01T12:00:01+00:00",
-            last_progress_at="2026-06-01T12:00:01+00:00",
-            trigger_source="ingest_api",
-            owner_surface="ops",
-            config_snapshot={"mode": "full"},
-            links={"trace_id": trace_id},
-            counters=TaskCounters(total=1, completed=1),
-        )
+    persist_task_progress(
+        test_settings,
+        task_id="ingestion:legacy-ing",
+        task_type="ingestion",
+        status="succeeded",
+        started_at="2026-06-01T12:00:00+00:00",
+        finished_at="2026-06-01T12:00:01+00:00",
+        last_progress_at="2026-06-01T12:00:01+00:00",
+        trigger_source="ingest_api",
+        owner_surface="ops",
+        config_snapshot={"mode": "full"},
+        links={"trace_id": "legacy-ing"},
+        counters=TaskCounters(total=1, completed=1),
+    )
+    persist_task_progress(
+        _other_collection_settings(test_settings, other_id),
+        task_id="ingestion:scoped-ing",
+        task_type="ingestion",
+        status="succeeded",
+        started_at="2026-06-01T12:00:00+00:00",
+        finished_at="2026-06-01T12:00:01+00:00",
+        last_progress_at="2026-06-01T12:00:01+00:00",
+        trigger_source="ingest_api",
+        owner_surface="ops",
+        config_snapshot={"mode": "full"},
+        links={"trace_id": "scoped-ing"},
+        counters=TaskCounters(total=1, completed=1),
+    )
 
     default_investigation = get_task_investigation(
         settings,
@@ -601,8 +613,7 @@ def test_task_investigation_trace_summaries_respect_collection_scope(
         "ingestion:legacy-ing",
         collection_id=other_id,
     )
-    assert missing_on_other is not None
-    assert missing_on_other.trace_summaries == []
+    assert missing_on_other is None
 
 
 def test_task_investigation_config_related_tasks_respect_collection_scope(
@@ -658,12 +669,16 @@ def test_task_investigation_config_related_tasks_respect_collection_scope(
         "\n".join(json.dumps(item, ensure_ascii=False) for item in traces) + "\n",
         encoding="utf-8",
     )
-    for task_id, trace_id in (
-        ("evaluation:default-task", "default-trace"),
-        ("evaluation:other-task", "other-trace"),
+    for task_id, trace_id, scoped_settings in (
+        ("evaluation:default-task", "default-trace", test_settings),
+        (
+            "evaluation:other-task",
+            "other-trace",
+            _other_collection_settings(test_settings, other_id),
+        ),
     ):
         persist_task_progress(
-            test_settings,
+            scoped_settings,
             task_id=task_id,
             task_type="evaluation",
             status="succeeded",
@@ -692,3 +707,89 @@ def test_task_investigation_config_related_tasks_respect_collection_scope(
     assert [item.task_id for item in default_investigation.config_related_tasks] == []
     assert other_investigation is not None
     assert [item.task_id for item in other_investigation.config_related_tasks] == []
+
+
+def test_task_progress_list_and_detail_respect_collection_scope(
+    test_settings: Settings,
+) -> None:
+    from fastapi.testclient import TestClient
+
+    from wenmai.app import create_app
+    from wenmai.ops.observation import get_task_progress_detail
+
+    other_id = "other-collection"
+    settings = register_collection(test_settings, other_id)
+    legacy_path = Path(test_settings.observability.task_progress_file)
+    if not legacy_path.is_absolute():
+        legacy_path = test_settings.root / legacy_path
+    legacy_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_path.write_text(
+        json.dumps(
+            {
+                "task_id": "evaluation:legacy",
+                "task_type": "evaluation",
+                "status": "succeeded",
+                "started_at": "2026-06-01T12:00:00+00:00",
+                "finished_at": "2026-06-01T12:00:01+00:00",
+                "last_progress_at": "2026-06-01T12:00:01+00:00",
+                "trigger_source": "eval_runner",
+                "owner_surface": "ops",
+                "config_fingerprint": "legacy",
+                "config_snapshot": {},
+                "counters": TaskCounters(total=1, completed=1).as_dict(),
+                "failure_kind": "none",
+                "degraded": False,
+                "links": {},
+                "stages": [],
+                "children": [],
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    persist_task_progress(
+        _other_collection_settings(test_settings, other_id),
+        task_id="evaluation:scoped",
+        task_type="evaluation",
+        status="succeeded",
+        started_at="2026-06-01T12:00:00+00:00",
+        finished_at="2026-06-01T12:00:01+00:00",
+        last_progress_at="2026-06-01T12:00:01+00:00",
+        trigger_source="eval_runner",
+        owner_surface="ops",
+        config_snapshot={"groups": ["rrf"]},
+        counters=TaskCounters(total=1, completed=1),
+    )
+
+    default_summaries = list_task_progress_summaries(settings)
+    assert [item.task_id for item in default_summaries] == ["evaluation:legacy"]
+
+    other_summaries = list_task_progress_summaries(settings, collection_id=other_id)
+    assert [item.task_id for item in other_summaries] == ["evaluation:scoped"]
+
+    assert get_task_progress_detail(settings, "evaluation:legacy") is not None
+    assert (
+        get_task_progress_detail(settings, "evaluation:legacy", collection_id=other_id)
+        is None
+    )
+    assert (
+        get_task_progress_detail(settings, "evaluation:scoped", collection_id=other_id)
+        is not None
+    )
+    assert get_task_progress_detail(settings, "evaluation:scoped") is None
+
+    client = TestClient(create_app(settings))
+    unknown = client.get(
+        "/api/tasks/progress/evaluation:scoped",
+        params={"collection_id": "missing-collection"},
+    )
+    assert unknown.status_code == 404
+    assert unknown.json()["detail"] == "collection not found"
+
+    missing = client.get(
+        "/api/tasks/progress/evaluation:legacy",
+        params={"collection_id": other_id},
+    )
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "task progress not found"

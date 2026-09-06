@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from importlib import import_module
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.conftest import register_collection
 
 from wenmai.app import create_app
 from wenmai.config import Settings
@@ -21,11 +23,25 @@ from wenmai.task_progress import (
     TaskCounters,
     TaskProgressOutcome,
     TaskProgressRun,
+    get_task_progress,
+    list_task_progress,
     persist_task_progress,
     persist_task_progress_outcome,
     persist_task_progress_running,
+    read_task_progress_records,
+    task_progress_path,
 )
 from wenmai.tracing.store import read_trace_records
+
+
+def _other_collection_settings(
+    test_settings: Settings, other_id: str = "other-collection"
+) -> Settings:
+    registered = register_collection(test_settings, other_id)
+    return replace(
+        registered,
+        product=replace(test_settings.product, collection=other_id),
+    )
 
 
 def _write_markdown(path: Path, title: str = "测试文档", body: str = "闽派文化材料。") -> Path:
@@ -452,3 +468,103 @@ def test_task_progress_write_failure_does_not_break_eval_or_ingest(
     _prepare_eval(test_settings, tmp_path / "eval")
     run = run_eval(test_settings)
     assert run.item_count == 2
+
+
+def test_persist_task_progress_stamps_collection_id(test_settings: Settings) -> None:
+    persist_task_progress(
+        test_settings,
+        task_id="evaluation:stamp",
+        task_type="evaluation",
+        status="succeeded",
+        started_at="2026-09-05T00:00:00+00:00",
+        finished_at="2026-09-05T00:00:01+00:00",
+        last_progress_at="2026-09-05T00:00:01+00:00",
+        trigger_source="eval_runner",
+        owner_surface="ops",
+        config_snapshot={"groups": ["rrf"]},
+        counters=TaskCounters(total=1, completed=1),
+    )
+    records = read_task_progress_records(test_settings)
+    assert records[-1]["collection_id"] == test_settings.product.collection
+
+
+def test_task_progress_collection_filter_and_legacy_visibility(
+    test_settings: Settings,
+) -> None:
+    other_id = "other-collection"
+    register_collection(test_settings, other_id)
+    other_settings = _other_collection_settings(test_settings, other_id)
+
+    # Legacy record: write directly without collection_id field.
+    legacy_path = task_progress_path(test_settings)
+    legacy_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_path.write_text(
+        json.dumps(
+            {
+                "task_id": "ingestion:legacy",
+                "task_type": "ingestion",
+                "status": "succeeded",
+                "started_at": "2026-06-01T12:00:00+00:00",
+                "finished_at": "2026-06-01T12:00:01+00:00",
+                "last_progress_at": "2026-06-01T12:00:01+00:00",
+                "trigger_source": "ingest_api",
+                "owner_surface": "ops",
+                "config_fingerprint": "legacy",
+                "config_snapshot": {},
+                "counters": TaskCounters(total=1, completed=1).as_dict(),
+                "failure_kind": "none",
+                "degraded": False,
+                "links": {},
+                "stages": [],
+                "children": [],
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    persist_task_progress(
+        other_settings,
+        task_id="ingestion:scoped",
+        task_type="ingestion",
+        status="succeeded",
+        started_at="2026-06-01T12:00:00+00:00",
+        finished_at="2026-06-01T12:00:01+00:00",
+        last_progress_at="2026-06-01T12:00:01+00:00",
+        trigger_source="ingest_api",
+        owner_surface="ops",
+        config_snapshot={"mode": "full"},
+        counters=TaskCounters(total=1, completed=1),
+    )
+
+    default_ids = {
+        item.task_id
+        for item in list_task_progress(
+            test_settings, collection_id=test_settings.default_collection_id
+        )
+    }
+    other_ids = {
+        item.task_id
+        for item in list_task_progress(test_settings, collection_id=other_id)
+    }
+    assert default_ids == {"ingestion:legacy"}
+    assert other_ids == {"ingestion:scoped"}
+
+    assert (
+        get_task_progress(
+            test_settings,
+            "ingestion:legacy",
+            collection_id=test_settings.default_collection_id,
+        )
+        is not None
+    )
+    assert (
+        get_task_progress(
+            test_settings,
+            "ingestion:scoped",
+            collection_id=test_settings.default_collection_id,
+        )
+        is None
+    )
+    assert get_task_progress(test_settings, "ingestion:legacy", collection_id=other_id) is None
+    assert get_task_progress(test_settings, "ingestion:scoped", collection_id=other_id) is not None
