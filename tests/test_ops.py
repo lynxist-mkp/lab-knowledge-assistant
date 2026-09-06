@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
+from wenmai.models import Chunk
 
 
 def _write_markdown(path: Path, *, culture_domain: str, title: str, body: str) -> Path:
@@ -695,4 +696,91 @@ def test_review_api_query_params_route_to_alternate_collection(
     pending_after = client.get("/api/review/pending", params={"collection_id": other_id})
     assert pending_after.status_code == 200
     assert pending_after.json() == []
+
+
+def test_api_traces_collection_query_params_route_list_and_detail(
+    test_settings: Settings,
+    tmp_path: Path,
+) -> None:
+    other_id = "other-collection"
+    other_settings = replace(
+        test_settings,
+        product=replace(test_settings.product, collection=other_id),
+    )
+    create_knowledge(other_settings).commit_document(
+        source_path="/tmp/trace-api-other.md",
+        sha256="trace-api-other",
+        document_id="trace-api-other",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="trace-api-other:0000",
+                document_id="trace-api-other",
+                text="其他集合 trace API 材料。",
+                metadata={
+                    "document_id": "trace-api-other",
+                    "title": "trace-api-other",
+                    "culture_domain": "妈祖",
+                    "审阅状态": "已通过",
+                },
+            ),
+        ],
+    )
+
+    trace_path = Path(test_settings.paths.traces)
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_trace = {
+        "trace_id": "legacy-api-query",
+        "trace_type": "query",
+        "started_at": "2026-06-01T12:00:00+00:00",
+        "finished_at": "2026-06-01T12:00:01+00:00",
+        "total_elapsed_ms": 10.0,
+        "stages": [],
+        "error": None,
+        "metadata": {"question": "legacy"},
+    }
+    scoped_trace = {
+        **legacy_trace,
+        "trace_id": "scoped-api-query",
+        "collection_id": other_id,
+        "metadata": {"question": "scoped"},
+    }
+    trace_path.write_text(
+        "\n".join(
+            json.dumps(item, ensure_ascii=False)
+            for item in (legacy_trace, scoped_trace)
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    client = TestClient(create_app(test_settings))
+
+    default_list = client.get("/api/traces/query")
+    assert default_list.status_code == 200
+    assert [item["trace_id"] for item in default_list.json()] == ["legacy-api-query"]
+
+    other_list = client.get("/api/traces/query", params={"collection_id": other_id})
+    assert other_list.status_code == 200
+    assert [item["trace_id"] for item in other_list.json()] == ["scoped-api-query"]
+
+    default_detail = client.get("/api/traces/legacy-api-query")
+    assert default_detail.status_code == 200
+    assert default_detail.json()["trace_type"] == "query"
+
+    missing_on_other = client.get(
+        "/api/traces/legacy-api-query",
+        params={"collection_id": other_id},
+    )
+    assert missing_on_other.status_code == 404
+
+    scoped_detail = client.get(
+        "/api/traces/scoped-api-query",
+        params={"collection_id": other_id},
+    )
+    assert scoped_detail.status_code == 200
+    assert scoped_detail.json()["question"] == "scoped"
+
+    missing_on_default = client.get("/api/traces/scoped-api-query")
+    assert missing_on_default.status_code == 404
 

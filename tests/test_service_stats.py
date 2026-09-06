@@ -155,6 +155,67 @@ def test_query_latency_percentiles_empty_traces(test_settings: Settings) -> None
     assert latency == {"total": {"p50": None, "p95": None}}
 
 
+def test_overview_latency_isolated_by_collection(test_settings: Settings) -> None:
+    from dataclasses import replace
+
+    other_id = "other-collection"
+    other_settings = replace(
+        test_settings,
+        product=replace(test_settings.product, collection=other_id),
+    )
+    create_knowledge(other_settings).commit_document(
+        source_path="/tmp/latency-other.md",
+        sha256="latency-other",
+        document_id="latency-other",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="latency-other:0000",
+                document_id="latency-other",
+                text="其他集合延迟",
+                metadata={
+                    "document_id": "latency-other",
+                    "title": "latency-other",
+                    "culture_domain": "妈祖",
+                    "审阅状态": "已通过",
+                },
+            )
+        ],
+    )
+
+    trace_path = Path(test_settings.paths.traces)
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    for trace_id, elapsed_ms, collection_id in [
+        ("default-fast", 100.0, None),
+        ("default-slow", 300.0, None),
+        ("other-only", 999.0, other_id),
+    ]:
+        payload: dict[str, object] = {
+            "trace_id": trace_id,
+            "trace_type": "query",
+            "started_at": "2026-06-01T12:00:00+00:00",
+            "finished_at": "2026-06-01T12:00:01+00:00",
+            "total_elapsed_ms": elapsed_ms,
+            "stages": [],
+            "error": None,
+            "metadata": {},
+        }
+        if collection_id is not None:
+            payload["collection_id"] = collection_id
+        with trace_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+    default_stats = load_overview_stats(test_settings)
+    other_stats = load_overview_stats(test_settings, collection_id=other_id)
+
+    assert default_stats.avg_query_latency_ms == pytest.approx(200.0)
+    assert default_stats.query_latency_p50_ms == pytest.approx(100.0)
+    assert default_stats.query_latency_p95_ms == pytest.approx(300.0)
+    assert other_stats.avg_query_latency_ms == pytest.approx(999.0)
+    assert other_stats.query_latency_p50_ms == pytest.approx(999.0)
+    assert other_stats.query_latency_p95_ms == pytest.approx(999.0)
+
+
 def test_overview_avg_query_latency_from_traces(test_settings: Settings) -> None:
     trace_path = Path(test_settings.paths.traces)
     trace_path.parent.mkdir(parents=True, exist_ok=True)

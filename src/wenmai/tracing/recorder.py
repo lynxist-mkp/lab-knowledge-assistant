@@ -9,6 +9,7 @@ from wenmai.tracing.ask_payload import AskOutcome, AskTracePayload
 from wenmai.tracing.context import TraceContext
 from wenmai.tracing.stage_result import StageResult, stage_to_dict
 from wenmai.tracing.stages.query import QueryStage
+from wenmai.tracing.store import stamp_trace_collection_id
 from wenmai.tracing.writer import JsonlTraceWriter
 
 QUERY_TRACE_SCHEMA_VERSION = 2
@@ -127,7 +128,8 @@ class TraceRecorder:
         return payload
 
     def save(self, settings: Settings) -> None:
-        JsonlTraceWriter(store_path(settings, "traces")).write_payload(self.to_dict())
+        payload = stamp_trace_collection_id(self.to_dict(), settings)
+        JsonlTraceWriter(store_path(settings, "traces")).write_payload(payload)
 
     def finalize_ask(self, outcome: AskOutcome) -> object:
         if outcome.generation_error is not None:

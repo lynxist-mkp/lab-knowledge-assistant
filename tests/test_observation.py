@@ -14,6 +14,7 @@ from wenmai.models import Chunk
 from wenmai.ops.observation import (
     get_query_detail,
     get_task_investigation,
+    get_trace_summary,
     has_running_long_tasks,
     list_query_summaries,
     list_task_progress_summaries,
@@ -22,6 +23,8 @@ from wenmai.ops.observation import (
 )
 from wenmai.storage.catalog import DocumentCatalog
 from wenmai.task_progress import ChildEvidence, TaskCounters, persist_task_progress
+from wenmai.tracing.context import TraceContext
+from wenmai.tracing.store import get_trace_record, save_trace
 
 
 def test_load_overview_stats_empty_catalog(test_settings: Settings) -> None:
@@ -167,17 +170,32 @@ def test_task_investigation_links_query_trace_and_config_peers(
 ) -> None:
     trace_path = Path(test_settings.paths.traces)
     trace_path.parent.mkdir(parents=True, exist_ok=True)
-    trace = {
-        "trace_id": "query-trace-1",
-        "trace_type": "query",
-        "started_at": "2026-06-01T12:10:00+00:00",
-        "finished_at": "2026-06-01T12:10:01+00:00",
-        "total_elapsed_ms": 80.0,
-        "stages": [],
-        "error": None,
-        "metadata": {"question": "妈祖信仰的发源地在哪里？"},
-    }
-    trace_path.write_text(json.dumps(trace, ensure_ascii=False) + "\n", encoding="utf-8")
+    traces = [
+        {
+            "trace_id": "query-trace-1",
+            "trace_type": "query",
+            "started_at": "2026-06-01T12:10:00+00:00",
+            "finished_at": "2026-06-01T12:10:01+00:00",
+            "total_elapsed_ms": 80.0,
+            "stages": [],
+            "error": None,
+            "metadata": {"question": "妈祖信仰的发源地在哪里？"},
+        },
+        {
+            "trace_id": "query-trace-peer",
+            "trace_type": "query",
+            "started_at": "2026-06-01T12:11:00+00:00",
+            "finished_at": "2026-06-01T12:11:01+00:00",
+            "total_elapsed_ms": 60.0,
+            "stages": [],
+            "error": None,
+            "metadata": {"question": "妈祖信仰传播到哪里？"},
+        },
+    ]
+    trace_path.write_text(
+        "\n".join(json.dumps(item, ensure_ascii=False) for item in traces) + "\n",
+        encoding="utf-8",
+    )
     persist_task_progress(
         test_settings,
         task_id="evaluation:query-hop",
@@ -205,6 +223,7 @@ def test_task_investigation_links_query_trace_and_config_peers(
         trigger_source="eval_runner",
         owner_surface="ops",
         config_snapshot={"groups": ["rrf"]},
+        links={"trace_id": "query-trace-peer"},
         counters=TaskCounters(total=1, completed=1),
         failure_kind="none",
     )
@@ -409,3 +428,266 @@ def test_has_running_long_tasks_reads_via_observation_seam(test_settings: Settin
     )
 
     assert has_running_long_tasks(test_settings) is True
+
+
+def test_trace_collection_filter_legacy_default_only_smoke(
+    test_settings: Settings,
+    tmp_path: Path,
+) -> None:
+    other_id = "other-collection"
+    other_settings = replace(
+        test_settings,
+        product=replace(test_settings.product, collection=other_id),
+    )
+    create_knowledge(other_settings).commit_document(
+        source_path="/tmp/trace-scope-other.md",
+        sha256="trace-scope-other",
+        document_id="trace-scope-other",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="trace-scope-other:0000",
+                document_id="trace-scope-other",
+                text="trace scope",
+                metadata={
+                    "document_id": "trace-scope-other",
+                    "title": "trace-scope-other",
+                    "culture_domain": "妈祖",
+                    "审阅状态": "已通过",
+                },
+            )
+        ],
+    )
+    trace_path = Path(test_settings.paths.traces)
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_trace = {
+        "trace_id": "legacy-query",
+        "trace_type": "query",
+        "started_at": "2026-06-01T12:00:00+00:00",
+        "finished_at": "2026-06-01T12:00:01+00:00",
+        "total_elapsed_ms": 10.0,
+        "stages": [],
+        "error": None,
+        "metadata": {"question": "legacy"},
+    }
+    scoped_trace = {
+        **legacy_trace,
+        "trace_id": "scoped-query",
+        "collection_id": other_id,
+        "metadata": {"question": "scoped"},
+    }
+    trace_path.write_text(
+        "\n".join(
+            json.dumps(item, ensure_ascii=False)
+            for item in (legacy_trace, scoped_trace)
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    default_summaries = list_query_summaries(test_settings)
+    assert [item.trace_id for item in default_summaries] == ["legacy-query"]
+
+    other_summaries = list_query_summaries(test_settings, collection_id=other_id)
+    assert [item.trace_id for item in other_summaries] == ["scoped-query"]
+
+    assert get_trace_summary(test_settings, "legacy-query") is not None
+    assert get_trace_summary(test_settings, "legacy-query", collection_id=other_id) is None
+    assert get_trace_summary(test_settings, "scoped-query", collection_id=other_id) is not None
+    assert get_trace_summary(test_settings, "scoped-query") is None
+
+
+def test_save_trace_stamps_collection_id(test_settings: Settings) -> None:
+    trace = TraceContext(trace_type="query", metadata={"question": "stamp?"})
+    save_trace(test_settings, trace)
+    record = get_trace_record(test_settings, trace.trace_id)
+    assert record is not None
+    assert record["collection_id"] == test_settings.product.collection
+    detail = get_query_detail(test_settings, trace.trace_id)
+    assert detail is not None
+    assert detail.summary.trace_id == trace.trace_id
+
+
+def test_task_investigation_trace_summaries_respect_collection_scope(
+    test_settings: Settings,
+    tmp_path: Path,
+) -> None:
+    other_id = "other-collection"
+    other_settings = replace(
+        test_settings,
+        product=replace(test_settings.product, collection=other_id),
+    )
+    create_knowledge(other_settings).commit_document(
+        source_path="/tmp/investigation-other.md",
+        sha256="investigation-other",
+        document_id="investigation-other",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="investigation-other:0000",
+                document_id="investigation-other",
+                text="investigation scope",
+                metadata={
+                    "document_id": "investigation-other",
+                    "title": "investigation-other",
+                    "culture_domain": "妈祖",
+                    "审阅状态": "已通过",
+                },
+            )
+        ],
+    )
+    trace_path = Path(test_settings.paths.traces)
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_trace = {
+        "trace_id": "legacy-ing",
+        "trace_type": "ingestion",
+        "started_at": "2026-06-01T12:00:00+00:00",
+        "finished_at": "2026-06-01T12:00:01+00:00",
+        "total_elapsed_ms": 10.0,
+        "stages": [],
+        "error": None,
+        "metadata": {"document_id": "legacy-doc"},
+    }
+    scoped_trace = {
+        **legacy_trace,
+        "trace_id": "scoped-ing",
+        "collection_id": other_id,
+        "metadata": {"document_id": "scoped-doc"},
+    }
+    trace_path.write_text(
+        "\n".join(
+            json.dumps(item, ensure_ascii=False)
+            for item in (legacy_trace, scoped_trace)
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    for trace_id in ("legacy-ing", "scoped-ing"):
+        persist_task_progress(
+            test_settings,
+            task_id=f"ingestion:{trace_id}",
+            task_type="ingestion",
+            status="succeeded",
+            started_at="2026-06-01T12:00:00+00:00",
+            finished_at="2026-06-01T12:00:01+00:00",
+            last_progress_at="2026-06-01T12:00:01+00:00",
+            trigger_source="ingest_api",
+            owner_surface="ops",
+            config_snapshot={"mode": "full"},
+            links={"trace_id": trace_id},
+            counters=TaskCounters(total=1, completed=1),
+        )
+
+    default_investigation = get_task_investigation(
+        test_settings,
+        "ingestion:legacy-ing",
+    )
+    other_investigation = get_task_investigation(
+        test_settings,
+        "ingestion:scoped-ing",
+        collection_id=other_id,
+    )
+    assert default_investigation is not None
+    assert [item.trace_id for item in default_investigation.trace_summaries] == ["legacy-ing"]
+    assert other_investigation is not None
+    assert [item.trace_id for item in other_investigation.trace_summaries] == ["scoped-ing"]
+
+    missing_on_other = get_task_investigation(
+        test_settings,
+        "ingestion:legacy-ing",
+        collection_id=other_id,
+    )
+    assert missing_on_other is not None
+    assert missing_on_other.trace_summaries == []
+
+
+def test_task_investigation_config_related_tasks_respect_collection_scope(
+    test_settings: Settings,
+) -> None:
+    other_id = "other-collection"
+    other_settings = replace(
+        test_settings,
+        product=replace(test_settings.product, collection=other_id),
+    )
+    create_knowledge(other_settings).commit_document(
+        source_path="/tmp/investigation-peer-other.md",
+        sha256="investigation-peer-other",
+        document_id="investigation-peer-other",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="investigation-peer-other:0000",
+                document_id="investigation-peer-other",
+                text="peer scope",
+                metadata={
+                    "document_id": "investigation-peer-other",
+                    "title": "investigation-peer-other",
+                    "culture_domain": "妈祖",
+                    "审阅状态": "已通过",
+                },
+            )
+        ],
+    )
+    trace_path = Path(test_settings.paths.traces)
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    traces = [
+        {
+            "trace_id": "default-trace",
+            "trace_type": "query",
+            "started_at": "2026-06-01T12:20:00+00:00",
+            "finished_at": "2026-06-01T12:20:01+00:00",
+            "total_elapsed_ms": 10.0,
+            "stages": [],
+            "error": None,
+            "metadata": {"question": "default"},
+        },
+        {
+            "trace_id": "other-trace",
+            "trace_type": "query",
+            "collection_id": other_id,
+            "started_at": "2026-06-01T12:21:00+00:00",
+            "finished_at": "2026-06-01T12:21:01+00:00",
+            "total_elapsed_ms": 20.0,
+            "stages": [],
+            "error": None,
+            "metadata": {"question": "other"},
+        },
+    ]
+    trace_path.write_text(
+        "\n".join(json.dumps(item, ensure_ascii=False) for item in traces) + "\n",
+        encoding="utf-8",
+    )
+    for task_id, trace_id in (
+        ("evaluation:default-task", "default-trace"),
+        ("evaluation:other-task", "other-trace"),
+    ):
+        persist_task_progress(
+            test_settings,
+            task_id=task_id,
+            task_type="evaluation",
+            status="succeeded",
+            started_at="2026-06-01T12:20:00+00:00",
+            finished_at="2026-06-01T12:20:01+00:00",
+            last_progress_at="2026-06-01T12:20:01+00:00",
+            trigger_source="eval_runner",
+            owner_surface="ops",
+            config_snapshot={"groups": ["rrf"]},
+            links={"trace_id": trace_id},
+            counters=TaskCounters(total=1, completed=1),
+            failure_kind="none",
+        )
+
+    default_investigation = get_task_investigation(
+        test_settings,
+        "evaluation:default-task",
+    )
+    other_investigation = get_task_investigation(
+        test_settings,
+        "evaluation:other-task",
+        collection_id=other_id,
+    )
+
+    assert default_investigation is not None
+    assert [item.task_id for item in default_investigation.config_related_tasks] == []
+    assert other_investigation is not None
+    assert [item.task_id for item in other_investigation.config_related_tasks] == []

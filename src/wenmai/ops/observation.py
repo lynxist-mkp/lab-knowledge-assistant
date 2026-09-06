@@ -103,26 +103,38 @@ def load_overview_stats(
     settings: Settings, *, collection_id: str | None = None
 ) -> OverviewStats:
     """Settings → OverviewStats：目录计数 + 查询延迟分位（含 stage_latency）。"""
-    scoped_settings = resolve_routable_collection_scope(settings, collection_id).settings
+    scope = resolve_routable_collection_scope(settings, collection_id)
+    scoped_settings = scope.settings
     read = ReadPath.catalog_only(DocumentCatalog.from_settings(scoped_settings))
     latency = query_latency_percentiles(
         settings,
+        collection_id=scope.collection_id,
         recent_n=settings.observability.query_latency_recent_n,
     )
     total = latency.get("total") or {}
     return OverviewStats(
         document_count=read.document_count,
         chunk_count=read.chunk_count,
-        avg_query_latency_ms=average_query_latency_ms(settings),
+        avg_query_latency_ms=average_query_latency_ms(
+            settings,
+            collection_id=scope.collection_id,
+        ),
         query_latency_p50_ms=total.get("p50"),
         query_latency_p95_ms=total.get("p95"),
         stage_latency=latency,
     )
 
 
-def list_query_summaries(settings: Settings) -> list[QueryTraceSummary]:
+def list_query_summaries(
+    settings: Settings,
+    *,
+    collection_id: str | None = None,
+) -> list[QueryTraceSummary]:
+    scope = resolve_routable_collection_scope(settings, collection_id)
     records = [
-        record for record in read_trace_records(settings) if record.get("trace_type") == "query"
+        record
+        for record in read_trace_records(settings, collection_id=scope.collection_id)
+        if record.get("trace_type") == "query"
     ]
     return [QueryTrace.summarize(record) for record in reversed(records)]
 
@@ -170,17 +182,28 @@ def get_task_progress_detail(settings: Settings, task_id: str) -> TaskProgressDe
     return get_task_progress(settings, task_id)
 
 
-def get_task_investigation(settings: Settings, task_id: str) -> TaskInvestigationView | None:
+def get_task_investigation(
+    settings: Settings,
+    task_id: str,
+    *,
+    collection_id: str | None = None,
+) -> TaskInvestigationView | None:
     detail = get_task_progress(settings, task_id)
     if detail is None:
         return None
+    scope = resolve_routable_collection_scope(settings, collection_id)
     eval_run_id = detail.summary.links.get("eval_run")
     return TaskInvestigationView(
         task=detail,
         trace_summaries=[
             summary
             for trace_id in _trace_ids(detail)
-            if (summary := get_trace_summary(settings, trace_id)) is not None
+            if (summary := get_trace_summary(
+                settings,
+                trace_id,
+                collection_id=scope.collection_id,
+            ))
+            is not None
         ],
         eval_run=get_eval_run_summary(settings, eval_run_id) if eval_run_id else None,
         links=_evidence_links(detail),
@@ -189,6 +212,11 @@ def get_task_investigation(settings: Settings, task_id: str) -> TaskInvestigatio
             for item in list_task_progress_summaries(
                 settings,
                 config_fingerprint=detail.summary.config_fingerprint,
+            )
+            if _summary_matches_collection(
+                settings,
+                item,
+                collection_id=scope.collection_id,
             )
             if item.task_id != detail.summary.task_id
         ][:10],
@@ -247,17 +275,32 @@ def load_health_snapshot(
     return ObservationHealthSnapshot(signals=signals, anomalies=anomalies[:10])
 
 
-def list_ingestion_summaries(settings: Settings) -> list[IngestionTraceSummary]:
+def list_ingestion_summaries(
+    settings: Settings,
+    *,
+    collection_id: str | None = None,
+) -> list[IngestionTraceSummary]:
+    scope = resolve_routable_collection_scope(settings, collection_id)
     records = [
         record
-        for record in read_trace_records(settings)
+        for record in read_trace_records(settings, collection_id=scope.collection_id)
         if record.get("trace_type") == "ingestion"
     ]
     return [summarize_ingestion_trace(record) for record in reversed(records)]
 
 
-def get_trace_summary(settings: Settings, trace_id: str) -> TraceSummary | None:
-    record = get_trace_record(settings, trace_id)
+def get_trace_summary(
+    settings: Settings,
+    trace_id: str,
+    *,
+    collection_id: str | None = None,
+) -> TraceSummary | None:
+    scope = resolve_routable_collection_scope(settings, collection_id)
+    record = get_trace_record(
+        settings,
+        trace_id,
+        collection_id=scope.collection_id,
+    )
     if record is None:
         return None
     trace_type = record.get("trace_type")
@@ -268,8 +311,18 @@ def get_trace_summary(settings: Settings, trace_id: str) -> TraceSummary | None:
     return None
 
 
-def get_trace_detail(settings: Settings, trace_id: str) -> TraceDetail | None:
-    record = get_trace_record(settings, trace_id)
+def get_trace_detail(
+    settings: Settings,
+    trace_id: str,
+    *,
+    collection_id: str | None = None,
+) -> TraceDetail | None:
+    scope = resolve_routable_collection_scope(settings, collection_id)
+    record = get_trace_record(
+        settings,
+        trace_id,
+        collection_id=scope.collection_id,
+    )
     if record is None:
         return None
     trace_type = record.get("trace_type")
@@ -280,20 +333,38 @@ def get_trace_detail(settings: Settings, trace_id: str) -> TraceDetail | None:
     return None
 
 
-def get_query_detail(settings: Settings, trace_id: str) -> QueryTraceDetail | None:
-    detail = get_trace_detail(settings, trace_id)
+def get_query_detail(
+    settings: Settings,
+    trace_id: str,
+    *,
+    collection_id: str | None = None,
+) -> QueryTraceDetail | None:
+    detail = get_trace_detail(settings, trace_id, collection_id=collection_id)
     return detail if isinstance(detail, QueryTraceDetail) else None
 
 
-def get_ingestion_detail(settings: Settings, trace_id: str) -> IngestionTraceDetail | None:
-    detail = get_trace_detail(settings, trace_id)
+def get_ingestion_detail(
+    settings: Settings,
+    trace_id: str,
+    *,
+    collection_id: str | None = None,
+) -> IngestionTraceDetail | None:
+    detail = get_trace_detail(settings, trace_id, collection_id=collection_id)
     return detail if isinstance(detail, IngestionTraceDetail) else None
 
 
 def list_trace_degradations(
-    settings: Settings, trace_id: str
+    settings: Settings,
+    trace_id: str,
+    *,
+    collection_id: str | None = None,
 ) -> list[StageDegradation] | None:
-    record = get_trace_record(settings, trace_id)
+    scope = resolve_routable_collection_scope(settings, collection_id)
+    record = get_trace_record(
+        settings,
+        trace_id,
+        collection_id=scope.collection_id,
+    )
     if record is None:
         return None
     if record.get("trace_type") != "ingestion":
@@ -305,6 +376,25 @@ def _has_trace_link(summary: TaskProgressSummary) -> bool:
     if summary.links.get("trace_id"):
         return True
     return False
+
+
+def _summary_matches_collection(
+    settings: Settings,
+    summary: TaskProgressSummary,
+    *,
+    collection_id: str,
+) -> bool:
+    trace_id = summary.links.get("trace_id")
+    if not trace_id:
+        return False
+    return (
+        get_trace_summary(
+            settings,
+            trace_id,
+            collection_id=collection_id,
+        )
+        is not None
+    )
 
 
 def _needs_attention(summary: TaskProgressSummary) -> bool:

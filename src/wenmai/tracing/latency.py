@@ -29,12 +29,13 @@ def stage_percentiles(values: list[float]) -> dict[str, float | None]:
 def _query_records(
     settings: Settings,
     *,
+    collection_id: str | None = None,
     started_at_min: str | None = None,
     recent_n: int | None = None,
 ) -> list[dict[str, Any]]:
     records = [
         record
-        for record in read_trace_records(settings)
+        for record in read_trace_records(settings, collection_id=collection_id)
         if record.get("trace_type") == "query"
     ]
     if started_at_min is not None:
@@ -82,12 +83,14 @@ def latency_ms_payload(
 def query_latency_percentiles(
     settings: Settings,
     *,
+    collection_id: str | None = None,
     started_at_min: str | None = None,
     recent_n: int | None = None,
 ) -> dict[str, StageLatencyPercentiles]:
     return latency_ms_payload(
         _query_records(
             settings,
+            collection_id=collection_id,
             started_at_min=started_at_min,
             recent_n=recent_n,
         )

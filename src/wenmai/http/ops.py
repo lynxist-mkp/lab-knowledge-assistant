@@ -89,12 +89,28 @@ def create_ops_router() -> APIRouter:
         return {"document_id": document_id, "审阅状态": "已驳回"}
 
     @router.get("/api/traces/ingestion")
-    def api_ingestion_traces(request: Request) -> list[dict[str, object]]:
-        return [item.as_dict() for item in request.app.state.ops_service.ingestion_traces()]
+    def api_ingestion_traces(
+        request: Request,
+        collection_id: str | None = None,
+    ) -> list[dict[str, object]]:
+        return [
+            item.as_dict()
+            for item in request.app.state.ops_service.ingestion_traces(
+                collection_id=collection_id
+            )
+        ]
 
     @router.get("/api/traces/query")
-    def api_query_traces(request: Request) -> list[dict[str, object]]:
-        return [item.as_dict() for item in request.app.state.ops_service.query_traces()]
+    def api_query_traces(
+        request: Request,
+        collection_id: str | None = None,
+    ) -> list[dict[str, object]]:
+        return [
+            item.as_dict()
+            for item in request.app.state.ops_service.query_traces(
+                collection_id=collection_id
+            )
+        ]
 
     @router.get("/api/tasks/progress")
     def api_task_progress(
@@ -128,31 +144,57 @@ def create_ops_router() -> APIRouter:
         return detail.as_dict()
 
     @router.get("/api/tasks/progress/{task_id}/investigation")
-    def api_task_progress_investigation(request: Request, task_id: str) -> dict[str, object]:
-        detail = request.app.state.ops_service.task_progress_investigation(task_id)
+    def api_task_progress_investigation(
+        request: Request,
+        task_id: str,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
+        detail = request.app.state.ops_service.task_progress_investigation(
+            task_id,
+            collection_id=collection_id,
+        )
         if detail is None:
             raise HTTPException(status_code=404, detail="task progress not found")
         return detail.as_dict()
 
     @router.get("/api/traces/{trace_id}")
-    def api_trace_detail(request: Request, trace_id: str) -> dict[str, object]:
-        detail = request.app.state.ops_service.trace_detail(trace_id)
+    def api_trace_detail(
+        request: Request,
+        trace_id: str,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
+        detail = request.app.state.ops_service.trace_detail(
+            trace_id,
+            collection_id=collection_id,
+        )
         if detail is None:
             raise HTTPException(status_code=404, detail="trace not found")
         return detail.as_dict()
 
     @router.get("/api/traces/{trace_id}/summary")
-    def api_trace_summary(request: Request, trace_id: str) -> dict[str, object]:
-        summary = request.app.state.ops_service.trace_summary(trace_id)
+    def api_trace_summary(
+        request: Request,
+        trace_id: str,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
+        summary = request.app.state.ops_service.trace_summary(
+            trace_id,
+            collection_id=collection_id,
+        )
         if summary is None:
             raise HTTPException(status_code=404, detail="trace not found")
         return summary.as_dict()
 
     @router.get("/api/traces/{trace_id}/degradations")
     def api_trace_degradations(
-        request: Request, trace_id: str
+        request: Request,
+        trace_id: str,
+        collection_id: str | None = None,
     ) -> list[dict[str, str]]:
-        degradations = request.app.state.ops_service.trace_degradations(trace_id)
+        degradations = request.app.state.ops_service.trace_degradations(
+            trace_id,
+            collection_id=collection_id,
+        )
         if degradations is None:
             raise HTTPException(status_code=404, detail="trace not found")
         return [item.as_dict() for item in degradations]

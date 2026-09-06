@@ -73,11 +73,19 @@ class OpsService:
         scoped = self._document_management.for_collection(collection_id)
         scoped.reject_review(document_id)
 
-    def ingestion_traces(self) -> list[TraceSummary]:
-        return list_ingestion_summaries(self._settings)
+    def ingestion_traces(
+        self,
+        *,
+        collection_id: str | None = None,
+    ) -> list[TraceSummary]:
+        return list_ingestion_summaries(self._settings, collection_id=collection_id)
 
-    def query_traces(self) -> list[TraceSummary]:
-        return list_query_summaries(self._settings)
+    def query_traces(
+        self,
+        *,
+        collection_id: str | None = None,
+    ) -> list[TraceSummary]:
+        return list_query_summaries(self._settings, collection_id=collection_id)
 
     def task_progress(
         self,
@@ -104,17 +112,53 @@ class OpsService:
     def task_progress_detail(self, task_id: str) -> TaskProgressDetail | None:
         return get_task_progress_detail(self._settings, task_id)
 
-    def task_progress_investigation(self, task_id: str) -> TaskInvestigationView | None:
-        return get_task_investigation(self._settings, task_id)
+    def task_progress_investigation(
+        self,
+        task_id: str,
+        *,
+        collection_id: str | None = None,
+    ) -> TaskInvestigationView | None:
+        return get_task_investigation(
+            self._settings,
+            task_id,
+            collection_id=collection_id,
+        )
 
-    def trace_detail(self, trace_id: str) -> TraceDetail | None:
-        return get_trace_detail(self._settings, trace_id)
+    def trace_detail(
+        self,
+        trace_id: str,
+        *,
+        collection_id: str | None = None,
+    ) -> TraceDetail | None:
+        return get_trace_detail(
+            self._settings,
+            trace_id,
+            collection_id=collection_id,
+        )
 
-    def trace_summary(self, trace_id: str) -> TraceSummary | None:
-        return get_trace_summary(self._settings, trace_id)
+    def trace_summary(
+        self,
+        trace_id: str,
+        *,
+        collection_id: str | None = None,
+    ) -> TraceSummary | None:
+        return get_trace_summary(
+            self._settings,
+            trace_id,
+            collection_id=collection_id,
+        )
 
-    def trace_degradations(self, trace_id: str) -> list[StageDegradation] | None:
-        return list_trace_degradations(self._settings, trace_id)
+    def trace_degradations(
+        self,
+        trace_id: str,
+        *,
+        collection_id: str | None = None,
+    ) -> list[StageDegradation] | None:
+        return list_trace_degradations(
+            self._settings,
+            trace_id,
+            collection_id=collection_id,
+        )
 
 
 def create_ops_service(
