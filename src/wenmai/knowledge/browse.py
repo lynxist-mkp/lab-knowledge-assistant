@@ -8,6 +8,28 @@ from wenmai.models import Chunk
 
 
 @dataclass(frozen=True)
+class ChunkDetail:
+    chunk_id: str
+    document_id: str
+    title: str
+    culture_domain: str
+    review_status: str
+    text: str
+    metadata: dict[str, Any]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "chunk_id": self.chunk_id,
+            "document_id": self.document_id,
+            "title": self.title,
+            "culture_domain": self.culture_domain,
+            "审阅状态": self.review_status,
+            "text": self.text,
+            "metadata": self.metadata,
+        }
+
+
+@dataclass(frozen=True)
 class ChunkSummary:
     chunk_id: str
     document_id: str
@@ -68,13 +90,13 @@ class OverviewStats:
         return asdict(self)
 
 
-def chunk_detail_from_chunk(chunk: Chunk) -> dict[str, Any]:
-    return {
-        "chunk_id": chunk.chunk_id,
-        "document_id": chunk.document_id,
-        "title": title(chunk),
-        "culture_domain": culture_domain(chunk),
-        "审阅状态": review_status(chunk),
-        "text": chunk.text,
-        "metadata": chunk.metadata,
-    }
+def chunk_detail_from_chunk(chunk: Chunk) -> ChunkDetail:
+    return ChunkDetail(
+        chunk_id=chunk.chunk_id,
+        document_id=chunk.document_id,
+        title=title(chunk),
+        culture_domain=culture_domain(chunk),
+        review_status=review_status(chunk),
+        text=chunk.text,
+        metadata=chunk.metadata,
+    )

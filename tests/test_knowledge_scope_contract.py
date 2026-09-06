@@ -457,6 +457,24 @@ def test_document_management_get_document_unknown_collection_raises(
         mgmt.get_document("doc-summary", collection_id="missing")
 
 
+def test_document_management_get_chunk_detail_returns_domain_read_model(
+    test_settings: Settings,
+) -> None:
+    knowledge = create_knowledge(test_settings)
+    _commit(knowledge, "doc-chunk-detail", "片段详情正文")
+    mgmt = create_document_management(test_settings, knowledge=knowledge)
+
+    detail = mgmt.get_chunk_detail(
+        "doc-chunk-detail:0000",
+        collection_id=test_settings.product.collection,
+    )
+
+    assert detail is not None
+    assert detail.document_id == "doc-chunk-detail"
+    assert detail.text == "片段详情正文"
+    assert detail.as_dict()["审阅状态"] == "已通过"
+
+
 def test_mcp_get_document_summary_uses_document_management(
     test_settings: Settings,
 ) -> None:

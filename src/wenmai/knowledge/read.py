@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from wenmai.knowledge.browse import CultureDomainGroup, chunk_detail_from_chunk
+from wenmai.knowledge.browse import ChunkDetail, CultureDomainGroup, chunk_detail_from_chunk
 from wenmai.knowledge.document_card import DocumentCard, DocumentNotFoundError
 from wenmai.knowledge.domain import is_searchable
 from wenmai.models import Chunk, ScoredChunk
@@ -100,7 +100,7 @@ class ReadPath:
     def browse_by_culture_domain(self) -> list[CultureDomainGroup]:
         return self._catalog.browse_groups()
 
-    def chunk_detail(self, chunk_id: str) -> dict[str, Any] | None:
+    def chunk_detail(self, chunk_id: str) -> ChunkDetail | None:
         chunk = self.get_by_chunk_id(chunk_id)
         if chunk is None:
             return None

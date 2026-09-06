@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from wenmai.config import Settings
-from wenmai.knowledge.browse import CultureDomainGroup, DocumentSummary
+from wenmai.knowledge.browse import ChunkDetail, CultureDomainGroup, DocumentSummary
 from wenmai.knowledge.collections import (
     Collection,
     CollectionReadModel,
@@ -95,7 +95,7 @@ class DocumentManagement:
         chunk_id: str,
         *,
         collection_id: str | None = None,
-    ) -> dict[str, Any] | None:
+    ) -> ChunkDetail | None:
         return self.for_collection(collection_id)._knowledge.chunk_detail(chunk_id)
 
     def delete_document(self, document_id: str, *, collection_id: str | None = None) -> None:

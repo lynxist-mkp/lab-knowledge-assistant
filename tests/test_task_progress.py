@@ -382,6 +382,12 @@ def test_failed_commit_keeps_document_link_in_task_progress(
     source = _write_markdown(tmp_path / "doc.md")
     prepared = prepare_ingest_source(source, test_settings)
     assert not isinstance(prepared, IngestResult)
+    assert not hasattr(prepared, "set_summary")
+    assert not hasattr(prepared, "record_embed")
+    assert not hasattr(prepared, "record_upsert")
+    assert not hasattr(prepared, "close_and_save")
+    assert not hasattr(prepared, "save_on_error")
+    assert not hasattr(prepared, "persist_outcome")
 
     def boom(*_args: object, **_kwargs: object) -> object:
         raise RuntimeError("upsert failed")

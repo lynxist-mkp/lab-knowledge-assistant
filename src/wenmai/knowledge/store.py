@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Literal
 
 from wenmai.config import Settings
 from wenmai.factories import bm25 as bm25_factory
 from wenmai.factories import embedding as embedding_factory
 from wenmai.factories import vector_store as vector_store_factory
 from wenmai.factories.loader import ensure_providers
-from wenmai.knowledge.browse import CultureDomainGroup
+from wenmai.knowledge.browse import ChunkDetail, CultureDomainGroup
 from wenmai.knowledge.collections import resolve_collection_scope
 from wenmai.knowledge.document_card import DocumentCard
 from wenmai.knowledge.read import ReadPath
@@ -168,7 +168,7 @@ class Knowledge:
     def browse_by_culture_domain(self) -> list[CultureDomainGroup]:
         return self._read.browse_by_culture_domain()
 
-    def chunk_detail(self, chunk_id: str) -> dict[str, Any] | None:
+    def chunk_detail(self, chunk_id: str) -> ChunkDetail | None:
         return self._read.chunk_detail(chunk_id)
 
     def document_card(self, document_id: str) -> DocumentCard:

@@ -79,7 +79,7 @@ def create_workbench_router() -> APIRouter:
         )
         if detail is None:
             raise HTTPException(status_code=404, detail="chunk not found")
-        return detail
+        return detail.as_dict()
 
     @router.get("/api/documents/{document_id}")
     @_translate_unknown_collection

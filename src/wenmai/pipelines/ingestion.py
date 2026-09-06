@@ -7,7 +7,12 @@ from typing import Protocol
 from wenmai.components.model_guard import ModelResource
 from wenmai.components.model_guard import phase_batch as model_phase_batch
 from wenmai.config import Settings
-from wenmai.ingestion.orchestrator import PreparedIngest, prepare_ingest
+from wenmai.ingestion.orchestrator import (
+    PreparedIngest,
+    finalize_prepared_ingest_error,
+    finalize_prepared_ingest_success,
+    prepare_ingest,
+)
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import IngestResult
 from wenmai.tracing import StageRecord
@@ -42,8 +47,6 @@ def commit_prepared_ingest(
     body = prepared.body
 
     try:
-        prepared.set_summary()
-
         upserted = knowledge.commit_document(
             source_path=body.document_source_path,
             sha256=body.document_id,
@@ -52,22 +55,24 @@ def commit_prepared_ingest(
             chunks=body.chunks,
             previous_document_id=body.previous_document_id,
         )
-        prepared.record_embed(
-            provider=upserted.embed_provider,
-            elapsed_ms=upserted.embed_elapsed_ms,
+        finalize_prepared_ingest_success(
+            prepared,
+            settings,
+            embed_provider=upserted.embed_provider,
+            embed_elapsed_ms=upserted.embed_elapsed_ms,
             chunk_count=upserted.chunk_count,
             embed_dimension=upserted.embed_dimension,
+            upsert_provider=upserted.upsert_provider,
+            upsert_elapsed_ms=upserted.upsert_elapsed_ms,
+            document_id=body.document_id,
         )
-        prepared.record_upsert(
-            provider=upserted.upsert_provider,
-            elapsed_ms=upserted.upsert_elapsed_ms,
-            chunk_count=upserted.chunk_count,
-        )
-        prepared.close_and_save(settings)
-        prepared.persist_outcome(settings, document_id=body.document_id)
     except Exception as exc:
-        prepared.save_on_error(settings, exc)
-        prepared.persist_outcome(settings, document_id=body.document_id)
+        finalize_prepared_ingest_error(
+            prepared,
+            settings,
+            exc,
+            document_id=body.document_id,
+        )
         raise
 
     return IngestResult(

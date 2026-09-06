@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
 from wenmai.config import Settings
@@ -492,7 +490,7 @@ def test_chunk_detail_delegates_to_read_path(test_settings: Settings) -> None:
     chunk_id = "doc-detail:0000"
     sentinel = knowledge._read.chunk_detail(chunk_id)
 
-    def fail_chunk_detail(_chunk_id: str) -> dict[str, Any] | None:
+    def fail_chunk_detail(_chunk_id: str) -> object:
         raise AssertionError("Knowledge.chunk_detail should delegate to ReadPath")
 
     knowledge._read.chunk_detail = fail_chunk_detail  # type: ignore[method-assign]

@@ -313,10 +313,10 @@ def test_get_chunk_detail_returns_final_text(test_settings: Settings, tmp_path: 
     detail = create_knowledge(test_settings).chunk_detail(chunk_id)
 
     assert detail is not None
-    assert detail["chunk_id"] == chunk_id
-    assert detail["culture_domain"] == "妈祖"
-    assert "正文段落" in detail["text"]
-    assert caption_text in detail["text"]
+    assert detail.chunk_id == chunk_id
+    assert detail.culture_domain == "妈祖"
+    assert "正文段落" in detail.text
+    assert caption_text in detail.text
 
 
 def test_api_overview_and_browse_endpoints(test_settings: Settings, tmp_path: Path) -> None:
