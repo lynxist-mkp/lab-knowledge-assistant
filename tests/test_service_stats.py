@@ -13,6 +13,7 @@ from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
 from wenmai.ops.observation import load_overview_stats
+from tests.conftest import register_collection
 from wenmai.tracing.latency import query_latency_percentiles
 
 
@@ -155,15 +156,22 @@ def test_query_latency_percentiles_empty_traces(test_settings: Settings) -> None
     assert latency == {"total": {"p50": None, "p95": None}}
 
 
-def test_overview_latency_isolated_by_collection(test_settings: Settings) -> None:
+def _other_collection_settings(
+    test_settings: Settings, other_id: str = "other-collection"
+) -> Settings:
     from dataclasses import replace
 
-    other_id = "other-collection"
-    other_settings = replace(
-        test_settings,
+    registered = register_collection(test_settings, other_id)
+    return replace(
+        registered,
         product=replace(test_settings.product, collection=other_id),
     )
-    create_knowledge(other_settings).commit_document(
+
+
+def test_overview_latency_isolated_by_collection(test_settings: Settings) -> None:
+    other_id = "other-collection"
+    settings = register_collection(test_settings, other_id)
+    create_knowledge(_other_collection_settings(test_settings, other_id)).commit_document(
         source_path="/tmp/latency-other.md",
         sha256="latency-other",
         document_id="latency-other",
@@ -205,8 +213,8 @@ def test_overview_latency_isolated_by_collection(test_settings: Settings) -> Non
         with trace_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
-    default_stats = load_overview_stats(test_settings)
-    other_stats = load_overview_stats(test_settings, collection_id=other_id)
+    default_stats = load_overview_stats(settings)
+    other_stats = load_overview_stats(settings, collection_id=other_id)
 
     assert default_stats.avg_query_latency_ms == pytest.approx(200.0)
     assert default_stats.query_latency_p50_ms == pytest.approx(100.0)

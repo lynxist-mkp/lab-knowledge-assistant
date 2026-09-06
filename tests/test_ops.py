@@ -7,11 +7,22 @@ from dataclasses import replace
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from tests.conftest import register_collection
 
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.knowledge import create_knowledge
 from wenmai.models import Chunk
+
+
+def _other_collection_settings(
+    test_settings: Settings, other_id: str = "other-collection"
+) -> Settings:
+    registered = register_collection(test_settings, other_id)
+    return replace(
+        registered,
+        product=replace(test_settings.product, collection=other_id),
+    )
 
 
 def _write_markdown(path: Path, *, culture_domain: str, title: str, body: str) -> Path:
@@ -288,11 +299,8 @@ def test_ops_collection_query_params_route_overview_and_browse(
     from wenmai.models import Chunk
 
     other_id = "other-collection"
-    other_settings = replace(
-        test_settings,
-        product=replace(test_settings.product, collection=other_id),
-    )
-    other_knowledge = create_knowledge(other_settings)
+    settings = register_collection(test_settings, other_id)
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     other_knowledge.commit_document(
         source_path="/tmp/doc-other-ops.md",
         sha256="doc-other-ops",
@@ -313,7 +321,7 @@ def test_ops_collection_query_params_route_overview_and_browse(
         ],
     )
 
-    client = TestClient(create_app(test_settings))
+    client = TestClient(create_app(settings))
 
     default_overview = client.get("/api/stats/overview")
     other_overview = client.get("/api/stats/overview", params={"collection_id": other_id})
@@ -654,11 +662,8 @@ def test_review_api_query_params_route_to_alternate_collection(
     from wenmai.models import Chunk
 
     other_id = "other-collection"
-    other_settings = replace(
-        test_settings,
-        product=replace(test_settings.product, collection=other_id),
-    )
-    other_knowledge = create_knowledge(other_settings)
+    settings = register_collection(test_settings, other_id)
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     other_knowledge.commit_document(
         source_path="/tmp/doc-other-review.md",
         sha256="doc-other-review",
@@ -679,7 +684,7 @@ def test_review_api_query_params_route_to_alternate_collection(
     )
     other_knowledge.set_review_status("doc-other-review", "待审")
 
-    client = TestClient(create_app(test_settings))
+    client = TestClient(create_app(settings))
 
     pending = client.get("/api/review/pending", params={"collection_id": other_id})
     assert pending.status_code == 200
@@ -703,11 +708,8 @@ def test_api_traces_collection_query_params_route_list_and_detail(
     tmp_path: Path,
 ) -> None:
     other_id = "other-collection"
-    other_settings = replace(
-        test_settings,
-        product=replace(test_settings.product, collection=other_id),
-    )
-    create_knowledge(other_settings).commit_document(
+    settings = register_collection(test_settings, other_id)
+    create_knowledge(_other_collection_settings(test_settings, other_id)).commit_document(
         source_path="/tmp/trace-api-other.md",
         sha256="trace-api-other",
         document_id="trace-api-other",
@@ -754,7 +756,7 @@ def test_api_traces_collection_query_params_route_list_and_detail(
         encoding="utf-8",
     )
 
-    client = TestClient(create_app(test_settings))
+    client = TestClient(create_app(settings))
 
     default_list = client.get("/api/traces/query")
     assert default_list.status_code == 200
@@ -783,4 +785,33 @@ def test_api_traces_collection_query_params_route_list_and_detail(
 
     missing_on_default = client.get("/api/traces/scoped-api-query")
     assert missing_on_default.status_code == 404
+
+
+def test_ops_unknown_collection_returns_404(test_settings: Settings) -> None:
+    client = TestClient(create_app(test_settings))
+    unknown = {"collection_id": "missing"}
+
+    collection_scoped_gets = (
+        "/api/stats/overview",
+        "/api/browse",
+        "/api/review/pending",
+        "/api/traces/ingestion",
+        "/api/traces/query",
+        "/api/traces/any-trace",
+        "/api/traces/any-trace/summary",
+        "/api/traces/any-trace/degradations",
+        "/api/tasks/progress/ingestion:demo/investigation",
+    )
+    for path in collection_scoped_gets:
+        response = client.get(path, params=unknown)
+        assert response.status_code == 404
+        assert response.json()["detail"] == "collection not found"
+
+    for path in (
+        "/api/review/doc-1/approve",
+        "/api/review/doc-1/reject",
+    ):
+        response = client.post(path, params=unknown)
+        assert response.status_code == 404
+        assert response.json()["detail"] == "collection not found"
 

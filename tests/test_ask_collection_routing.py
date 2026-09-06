@@ -15,6 +15,19 @@ from wenmai.mcp.tools.ask import ask_answer
 from wenmai.models import AskResult, Chunk
 
 
+from tests.conftest import register_collection
+
+
+def _other_collection_settings(
+    test_settings: Settings, other_id: str = "other-collection"
+) -> Settings:
+    registered = register_collection(test_settings, other_id)
+    return replace(
+        registered,
+        product=replace(test_settings.product, collection=other_id),
+    )
+
+
 def _commit(knowledge, document_id: str, text: str) -> None:
     knowledge.commit_document(
         source_path=f"/tmp/{document_id}.md",
@@ -37,18 +50,17 @@ def _commit(knowledge, document_id: str, text: str) -> None:
     )
 
 
-def test_resolve_routable_collection_scope_accepts_storage_backed_alternate(
+def test_resolve_routable_collection_scope_accepts_registered_alternate(
     test_settings: Settings,
 ) -> None:
     other_id = "other-collection"
-    other_settings = replace(
-        test_settings,
-        product=replace(test_settings.product, collection=other_id),
-    )
-    other_knowledge = create_knowledge(other_settings)
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     _commit(other_knowledge, "other-scope-doc", "其他集合作用域")
 
-    scope = resolve_routable_collection_scope(test_settings, other_id)
+    scope = resolve_routable_collection_scope(
+        register_collection(test_settings, other_id),
+        other_id,
+    )
 
     assert scope.collection_id == other_id
     assert scope.settings.product.collection == other_id
@@ -155,21 +167,18 @@ def test_run_ask_routes_retrieval_to_other_collection_storage(
     default_knowledge = create_knowledge(test_settings)
     _commit(default_knowledge, "default-doc", "DEFAULT_MARKER_abc 默认集合内容")
 
-    other_settings = replace(
-        test_settings,
-        product=replace(test_settings.product, collection=other_id),
-    )
-    other_knowledge = create_knowledge(other_settings)
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     _commit(other_knowledge, "other-doc", "OTHER_MARKER_xyz 其他集合内容")
 
+    registered = register_collection(test_settings, other_id)
     other_result = run_ask(
         "OTHER_MARKER_xyz 在哪里",
-        test_settings,
+        registered,
         collection_id=other_id,
     )
     default_result = run_ask(
         "DEFAULT_MARKER_abc 在哪里",
-        test_settings,
+        registered,
         collection_id=default_id,
     )
 
@@ -183,16 +192,12 @@ def test_ask_surface_explicit_collection_id_routes_to_scoped_storage(
     test_settings: Settings,
 ) -> None:
     other_id = "other-collection"
-    other_settings = replace(
-        test_settings,
-        product=replace(test_settings.product, collection=other_id),
-    )
-    other_knowledge = create_knowledge(other_settings)
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     _commit(other_knowledge, "surface-other-doc", "SURFACE_MARKER_qwe 表面路由")
 
     result = ask_surface(
         "SURFACE_MARKER_qwe 在哪里",
-        test_settings,
+        register_collection(test_settings, other_id),
         collection_id=other_id,
     )
 

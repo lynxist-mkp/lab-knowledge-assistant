@@ -23,13 +23,37 @@ class CollectionScope:
     settings: Settings
 
 
+def is_registered_collection(settings: Settings, collection_id: str) -> bool:
+    return any(reg.collection_id == collection_id for reg in settings.collections)
+
+
+def display_name_for_collection(settings: Settings, collection_id: str) -> str:
+    for registration in settings.collections:
+        if registration.collection_id == collection_id:
+            return registration.display_name
+    return settings.product.name
+
+
+def iter_configured_collections(settings: Settings) -> list[tuple[str, str]]:
+    """Return configured collections as (collection_id, display_name), default first."""
+    default_id = settings.default_collection_id
+    seen = {default_id}
+    configured = [(default_id, display_name_for_collection(settings, default_id))]
+    for registration in settings.collections:
+        if registration.collection_id in seen:
+            continue
+        seen.add(registration.collection_id)
+        configured.append((registration.collection_id, registration.display_name))
+    return configured
+
+
 def resolve_collection_scope(
     settings: Settings, collection_id: str | None = None
 ) -> CollectionScope:
     resolved = resolve_collection_id(settings, collection_id)
     return CollectionScope(
         collection_id=resolved,
-        display_name=settings.product.name,
+        display_name=display_name_for_collection(settings, resolved),
         settings=_settings_for_collection(settings, resolved),
     )
 
@@ -38,6 +62,8 @@ def resolve_collection_id(settings: Settings, collection_id: str | None) -> str:
     default = settings.product.collection
     if collection_id is None or collection_id == default:
         return default
+    if is_registered_collection(settings, collection_id):
+        return collection_id
     raise UnknownCollectionError(collection_id)
 
 
@@ -49,30 +75,18 @@ def _settings_for_collection(settings: Settings, collection_id: str) -> Settings
     )
 
 
-def _collection_storage_exists(settings: Settings, collection_id: str) -> bool:
-    from wenmai.storage.paths import collection_storage_bindings
-
-    bindings = collection_storage_bindings(_settings_for_collection(settings, collection_id))
-    return (
-        bindings.catalog_path.exists()
-        or bindings.catalog_read_path().exists()
-        or bindings.chroma_persist_path().exists()
-        or bindings.bm25_path.exists()
-    )
-
-
 def resolve_routable_collection_scope(
     settings: Settings, collection_id: str | None = None
 ) -> CollectionScope:
-    """Resolve a collection scope that can be routed to existing collection storage."""
+    """Resolve a collection scope for routing to configured collection storage."""
     if collection_id is None:
         return resolve_collection_scope(settings, None)
     if collection_id == settings.default_collection_id:
         return resolve_collection_scope(settings, collection_id)
-    if _collection_storage_exists(settings, collection_id):
+    if is_registered_collection(settings, collection_id):
         return CollectionScope(
             collection_id=collection_id,
-            display_name=settings.product.name,
+            display_name=display_name_for_collection(settings, collection_id),
             settings=_settings_for_collection(settings, collection_id),
         )
     raise UnknownCollectionError(collection_id)
@@ -145,7 +159,14 @@ class CollectionReadModel:
         return resolve_routable_collection_scope(self._settings, collection_id)
 
     def list_collections(self) -> list[Collection]:
-        return [self.get_collection(self.default_collection_id)]
+        return [
+            Collection(
+                collection_id=collection_id,
+                display_name=display_name,
+                stats=self.get_stats(collection_id),
+            )
+            for collection_id, display_name in iter_configured_collections(self._settings)
+        ]
 
     def get_collection(self, collection_id: str | None = None) -> Collection:
         scope = self.resolve_scope(collection_id)
@@ -217,6 +238,9 @@ __all__ = [
     "CultureDomainStats",
     "ReviewStatusCounts",
     "UnknownCollectionError",
+    "display_name_for_collection",
+    "is_registered_collection",
+    "iter_configured_collections",
     "resolve_routable_collection_scope",
     "resolve_collection_id",
     "resolve_collection_scope",

@@ -1,9 +1,24 @@
 from __future__ import annotations
 
+import functools
+from collections.abc import Callable
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
+from wenmai.knowledge.collections import UnknownCollectionError
 from wenmai.knowledge.document_card import DocumentNotFoundError
+
+
+def _translate_unknown_collection(func: Callable[..., object]) -> Callable[..., object]:
+    @functools.wraps(func)
+    def wrapper(*args: object, **kwargs: object) -> object:
+        try:
+            return func(*args, **kwargs)
+        except UnknownCollectionError as exc:
+            raise HTTPException(status_code=404, detail="collection not found") from exc
+
+    return wrapper
 
 
 def create_ops_router() -> APIRouter:
@@ -15,6 +30,7 @@ def create_ops_router() -> APIRouter:
         return templates.TemplateResponse(request, "ops.html", {})
 
     @router.get("/api/stats/overview")
+    @_translate_unknown_collection
     def api_overview_stats(
         request: Request,
         collection_id: str | None = None,
@@ -35,6 +51,7 @@ def create_ops_router() -> APIRouter:
         ).as_dict()
 
     @router.get("/api/browse")
+    @_translate_unknown_collection
     def api_browse(
         request: Request,
         collection_id: str | None = None,
@@ -47,6 +64,7 @@ def create_ops_router() -> APIRouter:
         ]
 
     @router.get("/api/review/pending")
+    @_translate_unknown_collection
     def api_review_pending(
         request: Request,
         collection_id: str | None = None,
@@ -59,6 +77,7 @@ def create_ops_router() -> APIRouter:
         ]
 
     @router.post("/api/review/{document_id}/approve")
+    @_translate_unknown_collection
     def api_review_approve(
         request: Request,
         document_id: str,
@@ -74,6 +93,7 @@ def create_ops_router() -> APIRouter:
         return {"document_id": document_id, "审阅状态": "已通过"}
 
     @router.post("/api/review/{document_id}/reject")
+    @_translate_unknown_collection
     def api_review_reject(
         request: Request,
         document_id: str,
@@ -89,6 +109,7 @@ def create_ops_router() -> APIRouter:
         return {"document_id": document_id, "审阅状态": "已驳回"}
 
     @router.get("/api/traces/ingestion")
+    @_translate_unknown_collection
     def api_ingestion_traces(
         request: Request,
         collection_id: str | None = None,
@@ -101,6 +122,7 @@ def create_ops_router() -> APIRouter:
         ]
 
     @router.get("/api/traces/query")
+    @_translate_unknown_collection
     def api_query_traces(
         request: Request,
         collection_id: str | None = None,
@@ -144,6 +166,7 @@ def create_ops_router() -> APIRouter:
         return detail.as_dict()
 
     @router.get("/api/tasks/progress/{task_id}/investigation")
+    @_translate_unknown_collection
     def api_task_progress_investigation(
         request: Request,
         task_id: str,
@@ -158,6 +181,7 @@ def create_ops_router() -> APIRouter:
         return detail.as_dict()
 
     @router.get("/api/traces/{trace_id}")
+    @_translate_unknown_collection
     def api_trace_detail(
         request: Request,
         trace_id: str,
@@ -172,6 +196,7 @@ def create_ops_router() -> APIRouter:
         return detail.as_dict()
 
     @router.get("/api/traces/{trace_id}/summary")
+    @_translate_unknown_collection
     def api_trace_summary(
         request: Request,
         trace_id: str,
@@ -186,6 +211,7 @@ def create_ops_router() -> APIRouter:
         return summary.as_dict()
 
     @router.get("/api/traces/{trace_id}/degradations")
+    @_translate_unknown_collection
     def api_trace_degradations(
         request: Request,
         trace_id: str,

@@ -1,11 +1,31 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 import yaml
 
-from wenmai.config import Settings
+from wenmai.config import CollectionRegistration, Settings
+
+
+def register_collection(
+    settings: Settings,
+    collection_id: str,
+    display_name: str = "测试集合",
+) -> Settings:
+    """Return settings with an additional explicitly registered collection."""
+    if collection_id == settings.default_collection_id:
+        return settings
+    if any(reg.collection_id == collection_id for reg in settings.collections):
+        return settings
+    return replace(
+        settings,
+        collections=[
+            *settings.collections,
+            CollectionRegistration(collection_id=collection_id, display_name=display_name),
+        ],
+    )
 
 
 @pytest.fixture

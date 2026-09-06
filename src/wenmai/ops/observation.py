@@ -188,10 +188,10 @@ def get_task_investigation(
     *,
     collection_id: str | None = None,
 ) -> TaskInvestigationView | None:
+    scope = resolve_routable_collection_scope(settings, collection_id)
     detail = get_task_progress(settings, task_id)
     if detail is None:
         return None
-    scope = resolve_routable_collection_scope(settings, collection_id)
     eval_run_id = detail.summary.links.get("eval_run")
     return TaskInvestigationView(
         task=detail,

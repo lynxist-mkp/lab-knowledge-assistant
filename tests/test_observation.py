@@ -27,6 +27,19 @@ from wenmai.tracing.context import TraceContext
 from wenmai.tracing.store import get_trace_record, save_trace
 
 
+from tests.conftest import register_collection
+
+
+def _other_collection_settings(
+    test_settings: Settings, other_id: str = "other-collection"
+) -> Settings:
+    registered = register_collection(test_settings, other_id)
+    return replace(
+        registered,
+        product=replace(test_settings.product, collection=other_id),
+    )
+
+
 def test_load_overview_stats_empty_catalog(test_settings: Settings) -> None:
     stats = load_overview_stats(test_settings)
     assert stats.document_count == 0
@@ -35,11 +48,8 @@ def test_load_overview_stats_empty_catalog(test_settings: Settings) -> None:
 
 def test_load_overview_stats_routes_to_alternate_collection(test_settings: Settings) -> None:
     other_id = "other-collection"
-    other_settings = replace(
-        test_settings,
-        product=replace(test_settings.product, collection=other_id),
-    )
-    other_knowledge = create_knowledge(other_settings)
+    settings = register_collection(test_settings, other_id)
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     other_knowledge.commit_document(
         source_path="/tmp/overview-other.md",
         sha256="overview-other",
@@ -60,8 +70,8 @@ def test_load_overview_stats_routes_to_alternate_collection(test_settings: Setti
         ],
     )
 
-    default_stats = load_overview_stats(test_settings)
-    other_stats = load_overview_stats(test_settings, collection_id=other_id)
+    default_stats = load_overview_stats(settings)
+    other_stats = load_overview_stats(settings, collection_id=other_id)
 
     assert default_stats.document_count == 0
     assert other_stats.document_count == 1
@@ -435,11 +445,8 @@ def test_trace_collection_filter_legacy_default_only_smoke(
     tmp_path: Path,
 ) -> None:
     other_id = "other-collection"
-    other_settings = replace(
-        test_settings,
-        product=replace(test_settings.product, collection=other_id),
-    )
-    create_knowledge(other_settings).commit_document(
+    settings = register_collection(test_settings, other_id)
+    create_knowledge(_other_collection_settings(test_settings, other_id)).commit_document(
         source_path="/tmp/trace-scope-other.md",
         sha256="trace-scope-other",
         document_id="trace-scope-other",
@@ -485,16 +492,16 @@ def test_trace_collection_filter_legacy_default_only_smoke(
         encoding="utf-8",
     )
 
-    default_summaries = list_query_summaries(test_settings)
+    default_summaries = list_query_summaries(settings)
     assert [item.trace_id for item in default_summaries] == ["legacy-query"]
 
-    other_summaries = list_query_summaries(test_settings, collection_id=other_id)
+    other_summaries = list_query_summaries(settings, collection_id=other_id)
     assert [item.trace_id for item in other_summaries] == ["scoped-query"]
 
-    assert get_trace_summary(test_settings, "legacy-query") is not None
-    assert get_trace_summary(test_settings, "legacy-query", collection_id=other_id) is None
-    assert get_trace_summary(test_settings, "scoped-query", collection_id=other_id) is not None
-    assert get_trace_summary(test_settings, "scoped-query") is None
+    assert get_trace_summary(settings, "legacy-query") is not None
+    assert get_trace_summary(settings, "legacy-query", collection_id=other_id) is None
+    assert get_trace_summary(settings, "scoped-query", collection_id=other_id) is not None
+    assert get_trace_summary(settings, "scoped-query") is None
 
 
 def test_save_trace_stamps_collection_id(test_settings: Settings) -> None:
@@ -513,11 +520,8 @@ def test_task_investigation_trace_summaries_respect_collection_scope(
     tmp_path: Path,
 ) -> None:
     other_id = "other-collection"
-    other_settings = replace(
-        test_settings,
-        product=replace(test_settings.product, collection=other_id),
-    )
-    create_knowledge(other_settings).commit_document(
+    settings = register_collection(test_settings, other_id)
+    create_knowledge(_other_collection_settings(test_settings, other_id)).commit_document(
         source_path="/tmp/investigation-other.md",
         sha256="investigation-other",
         document_id="investigation-other",
@@ -579,11 +583,11 @@ def test_task_investigation_trace_summaries_respect_collection_scope(
         )
 
     default_investigation = get_task_investigation(
-        test_settings,
+        settings,
         "ingestion:legacy-ing",
     )
     other_investigation = get_task_investigation(
-        test_settings,
+        settings,
         "ingestion:scoped-ing",
         collection_id=other_id,
     )
@@ -593,7 +597,7 @@ def test_task_investigation_trace_summaries_respect_collection_scope(
     assert [item.trace_id for item in other_investigation.trace_summaries] == ["scoped-ing"]
 
     missing_on_other = get_task_investigation(
-        test_settings,
+        settings,
         "ingestion:legacy-ing",
         collection_id=other_id,
     )
@@ -605,11 +609,8 @@ def test_task_investigation_config_related_tasks_respect_collection_scope(
     test_settings: Settings,
 ) -> None:
     other_id = "other-collection"
-    other_settings = replace(
-        test_settings,
-        product=replace(test_settings.product, collection=other_id),
-    )
-    create_knowledge(other_settings).commit_document(
+    settings = register_collection(test_settings, other_id)
+    create_knowledge(_other_collection_settings(test_settings, other_id)).commit_document(
         source_path="/tmp/investigation-peer-other.md",
         sha256="investigation-peer-other",
         document_id="investigation-peer-other",
@@ -678,11 +679,11 @@ def test_task_investigation_config_related_tasks_respect_collection_scope(
         )
 
     default_investigation = get_task_investigation(
-        test_settings,
+        settings,
         "evaluation:default-task",
     )
     other_investigation = get_task_investigation(
-        test_settings,
+        settings,
         "evaluation:other-task",
         collection_id=other_id,
     )

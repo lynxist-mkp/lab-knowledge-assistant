@@ -8,6 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from tests.conftest import register_collection
 
 from wenmai.config import Settings
 from wenmai.http.ops_service import OpsService
@@ -76,10 +77,17 @@ def _envelope_keys() -> set[str]:
 def _other_collection_settings(
     test_settings: Settings, other_id: str = "other-collection"
 ) -> Settings:
+    registered = register_collection(test_settings, other_id)
     return replace(
-        test_settings,
+        registered,
         product=replace(test_settings.product, collection=other_id),
     )
+
+
+def _settings_with_other_collection(
+    test_settings: Settings, other_id: str = "other-collection"
+) -> Settings:
+    return register_collection(test_settings, other_id)
 
 
 def test_collection_stats_status_layering(test_settings: Settings) -> None:
@@ -565,10 +573,48 @@ def test_ask_answer_envelope_and_collection_scope(test_settings: Settings) -> No
     assert result["meta"]["elapsed_ms"] is not None
 
 
+def _assert_mcp_unknown_collection_raises(callable, *args, **kwargs) -> None:
+    """MCP tools must wrap UnknownCollectionError in a plain ValueError."""
+    with pytest.raises(ValueError, match="unknown collection") as exc_info:
+        callable(*args, **kwargs)
+    assert type(exc_info.value) is ValueError
+    assert isinstance(exc_info.value.__cause__, UnknownCollectionError)
+    assert exc_info.value.__cause__.collection_id == "missing"
+
+
 def test_ask_answer_unknown_collection_raises(test_settings: Settings) -> None:
     knowledge = create_knowledge(test_settings)
-    with pytest.raises(ValueError, match="unknown collection"):
-        ask_answer("问题", test_settings, collection_id="missing", knowledge=knowledge)
+    _assert_mcp_unknown_collection_raises(
+        ask_answer,
+        "问题",
+        test_settings,
+        collection_id="missing",
+        knowledge=knowledge,
+    )
+
+
+def test_mcp_tools_unknown_collection_raise_value_error(test_settings: Settings) -> None:
+    mgmt = create_document_management(test_settings, knowledge=create_knowledge(test_settings))
+
+    _assert_mcp_unknown_collection_raises(collections_get_stats, mgmt, collection_id="missing")
+    _assert_mcp_unknown_collection_raises(documents_list, mgmt, collection_id="missing")
+    _assert_mcp_unknown_collection_raises(
+        documents_get, mgmt, "doc-1", collection_id="missing"
+    )
+    _assert_mcp_unknown_collection_raises(
+        documents_delete, mgmt, "doc-1", collection_id="missing"
+    )
+    _assert_mcp_unknown_collection_raises(reviews_list_pending, mgmt, collection_id="missing")
+    _assert_mcp_unknown_collection_raises(
+        reviews_approve, mgmt, "doc-1", collection_id="missing"
+    )
+    _assert_mcp_unknown_collection_raises(
+        reviews_reject, mgmt, "doc-1", collection_id="missing"
+    )
+    _assert_mcp_unknown_collection_raises(images_get_ref, mgmt, "img-1", collection_id="missing")
+    _assert_mcp_unknown_collection_raises(
+        images_get_content, mgmt, "img-1", collection_id="missing"
+    )
 
 
 def test_mcp_reviews_pending_approve_reject_contract(test_settings: Settings) -> None:
@@ -759,7 +805,7 @@ def test_document_management_routes_to_storage_backed_alternate_collection(
     other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     _commit(other_knowledge, "other-only", "其他集合文档")
 
-    mgmt = create_document_management(test_settings)
+    mgmt = create_document_management(_settings_with_other_collection(test_settings, other_id))
 
     assert {doc.document_id for doc in mgmt.list_documents(collection_id=default_id)} == {
         "default-only"
@@ -786,7 +832,7 @@ def test_document_management_for_collection_accepts_storage_backed_alternate(
     other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     _commit(other_knowledge, "scoped-other", "作用域其他集合")
 
-    mgmt = create_document_management(test_settings)
+    mgmt = create_document_management(_settings_with_other_collection(test_settings, other_id))
     scoped = mgmt.for_collection(other_id)
 
     assert scoped.scope.collection_id == other_id
@@ -817,7 +863,7 @@ def test_document_management_review_routes_to_alternate_collection(
         review_status=REVIEW_PENDING,
     )
 
-    mgmt = create_document_management(test_settings)
+    mgmt = create_document_management(_settings_with_other_collection(test_settings, other_id))
 
     assert {doc.document_id for doc in mgmt.list_pending_reviews(collection_id=other_id)} == {
         "pending-other"
@@ -857,7 +903,7 @@ def test_document_management_images_route_to_alternate_collection(
         mime_type="image/png",
     )
 
-    mgmt = create_document_management(test_settings)
+    mgmt = create_document_management(_settings_with_other_collection(test_settings, other_id))
 
     assert (
         mgmt.get_image_ref(
@@ -893,7 +939,7 @@ def test_mcp_documents_routes_to_alternate_collection(test_settings: Settings) -
     other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     _commit(other_knowledge, "mcp-other", "MCP 其他集合")
 
-    mgmt = create_document_management(test_settings)
+    mgmt = create_document_management(_settings_with_other_collection(test_settings, other_id))
 
     listed = documents_list(mgmt, collection_id=other_id)
     assert listed["scope"]["collection_id"] == other_id
@@ -912,7 +958,7 @@ def test_mcp_reviews_route_to_alternate_collection(test_settings: Settings) -> N
     other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     _commit(other_knowledge, "review-other", "审阅其他", review_status=REVIEW_PENDING)
 
-    mgmt = create_document_management(test_settings)
+    mgmt = create_document_management(_settings_with_other_collection(test_settings, other_id))
 
     pending = reviews_list_pending(mgmt, collection_id=other_id)
     assert pending["scope"]["collection_id"] == other_id
@@ -937,7 +983,7 @@ def test_mcp_images_route_to_alternate_collection(test_settings: Settings) -> No
         mime_type="image/png",
     )
 
-    mgmt = create_document_management(test_settings)
+    mgmt = create_document_management(_settings_with_other_collection(test_settings, other_id))
 
     ref = images_get_ref(mgmt, other_image_id, collection_id=other_id)
     assert ref["scope"]["collection_id"] == other_id
@@ -966,7 +1012,7 @@ def test_ops_service_routes_browse_and_reviews_to_alternate_collection(
         review_status=REVIEW_PENDING,
     )
 
-    service = OpsService(test_settings)
+    service = OpsService(_settings_with_other_collection(test_settings, other_id))
 
     default_groups = service.browse_groups(collection_id=default_id)
     other_groups = service.browse_groups(collection_id=other_id)
@@ -998,7 +1044,10 @@ def test_collection_read_model_stats_route_to_alternate_collection(
     other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     _commit(other_knowledge, "stats-other", "其他统计", review_status=REVIEW_PENDING)
 
-    model = CollectionReadModel(test_settings, default_knowledge)
+    model = CollectionReadModel(
+        _settings_with_other_collection(test_settings, other_id),
+        default_knowledge,
+    )
 
     default_stats = model.get_stats(default_id)
     other_stats = model.get_stats(other_id)
@@ -1017,7 +1066,8 @@ def test_collection_read_model_resolve_scope_accepts_storage_backed_alternate(
     _commit(other_knowledge, "scope-other", "作用域其他")
 
     scope = CollectionReadModel(
-        test_settings, create_knowledge(test_settings)
+        _settings_with_other_collection(test_settings, other_id),
+        create_knowledge(test_settings),
     ).resolve_scope(other_id)
 
     assert scope.collection_id == other_id
@@ -1031,7 +1081,7 @@ def test_mcp_collections_stats_route_to_alternate_collection(
     other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     _commit(other_knowledge, "mcp-stats-other", "MCP 统计其他", review_status=REVIEW_PENDING)
 
-    mgmt = create_document_management(test_settings)
+    mgmt = create_document_management(_settings_with_other_collection(test_settings, other_id))
 
     stats = collections_get_stats(mgmt, collection_id=other_id)
 
@@ -1053,7 +1103,7 @@ def test_ops_service_overview_stats_route_to_alternate_collection(
     other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
     _commit(other_knowledge, "overview-other", "概览其他")
 
-    service = OpsService(test_settings)
+    service = OpsService(_settings_with_other_collection(test_settings, other_id))
 
     default_stats = service.overview_stats(collection_id=default_id)
     other_stats = service.overview_stats(collection_id=other_id)

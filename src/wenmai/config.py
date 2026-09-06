@@ -33,6 +33,28 @@ class Product:
     collection: str
 
 
+@dataclass(frozen=True)
+class CollectionRegistration:
+    collection_id: str
+    display_name: str
+
+
+def _build_collections(raw: list[Any]) -> list[CollectionRegistration]:
+    registrations: list[CollectionRegistration] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            raise ValueError(
+                "collections entries must be objects with collection_id and display_name"
+            )
+        registrations.append(
+            CollectionRegistration(
+                collection_id=str(item["collection_id"]),
+                display_name=str(item["display_name"]),
+            )
+        )
+    return registrations
+
+
 @dataclass
 class Paths:
     chroma: str
@@ -245,6 +267,7 @@ class Settings:
     paddleocr: PaddleOCR
     gemma: Gemma
     resources: Resources = field(default_factory=Resources)
+    collections: list[CollectionRegistration] = field(default_factory=list)
     fakes: dict[str, str] = field(default_factory=dict)
     root: Path = field(default_factory=lambda: Path("."))
     default_collection_id: str = ""
@@ -254,6 +277,7 @@ class Settings:
         product = _build(Product, raw["product"])
         return cls(
             product=product,
+            collections=_build_collections(raw.get("collections") or []),
             paths=_build(Paths, raw["paths"]),
             chunking=_build(Chunking, raw["chunking"]),
             transform=_build(TransformConfig, _normalize_transform(raw["transform"])),

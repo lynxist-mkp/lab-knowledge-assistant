@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from wenmai.knowledge.collections import UnknownCollectionError
 from wenmai.knowledge.document_card import DocumentNotFoundError
 from wenmai.knowledge.document_management import DocumentManagement
 from wenmai.mcp.envelope import McpMeta, McpRefs, envelope, scope_for
@@ -13,7 +14,10 @@ def documents_list(
     collection_id: str | None = None,
     culture_domain: str | None = None,
 ) -> dict[str, Any]:
-    scoped = document_management.for_collection(collection_id)
+    try:
+        scoped = document_management.for_collection(collection_id)
+    except UnknownCollectionError as exc:
+        raise ValueError(str(exc)) from exc
     documents = scoped.list_documents(culture_domain=culture_domain)
     data = [document.as_dict() for document in documents]
     refs = McpRefs(document_ids=[document.document_id for document in documents])
@@ -34,7 +38,10 @@ def documents_get(
     *,
     collection_id: str | None = None,
 ) -> dict[str, Any]:
-    scoped = document_management.for_collection(collection_id)
+    try:
+        scoped = document_management.for_collection(collection_id)
+    except UnknownCollectionError as exc:
+        raise ValueError(str(exc)) from exc
     try:
         card = scoped.get_document(document_id)
     except DocumentNotFoundError as exc:
@@ -57,7 +64,10 @@ def documents_delete(
     *,
     collection_id: str | None = None,
 ) -> dict[str, Any]:
-    scoped = document_management.for_collection(collection_id)
+    try:
+        scoped = document_management.for_collection(collection_id)
+    except UnknownCollectionError as exc:
+        raise ValueError(str(exc)) from exc
     try:
         scoped.delete_document(document_id)
     except DocumentNotFoundError as exc:

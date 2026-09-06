@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from wenmai.knowledge.collections import UnknownCollectionError
 from wenmai.knowledge.document_card import DocumentNotFoundError
 from wenmai.knowledge.document_management import DocumentManagement
 from wenmai.mcp.envelope import McpMeta, McpRefs, envelope, scope_for
@@ -12,7 +13,10 @@ def reviews_list_pending(
     *,
     collection_id: str | None = None,
 ) -> dict[str, Any]:
-    scoped = document_management.for_collection(collection_id)
+    try:
+        scoped = document_management.for_collection(collection_id)
+    except UnknownCollectionError as exc:
+        raise ValueError(str(exc)) from exc
     pending = scoped.list_pending_reviews()
     data = [item.as_dict() for item in pending]
     refs = McpRefs(document_ids=[item.document_id for item in pending])
@@ -30,7 +34,10 @@ def reviews_approve(
     *,
     collection_id: str | None = None,
 ) -> dict[str, Any]:
-    scoped = document_management.for_collection(collection_id)
+    try:
+        scoped = document_management.for_collection(collection_id)
+    except UnknownCollectionError as exc:
+        raise ValueError(str(exc)) from exc
     try:
         scoped.approve_review(document_id)
     except DocumentNotFoundError as exc:
@@ -49,7 +56,10 @@ def reviews_reject(
     *,
     collection_id: str | None = None,
 ) -> dict[str, Any]:
-    scoped = document_management.for_collection(collection_id)
+    try:
+        scoped = document_management.for_collection(collection_id)
+    except UnknownCollectionError as exc:
+        raise ValueError(str(exc)) from exc
     try:
         scoped.reject_review(document_id)
     except DocumentNotFoundError as exc:
