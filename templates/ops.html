@@ -2320,6 +2320,21 @@
 
   let rawBrowseData = [];
 
+  function getCollectionIdFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const collectionId = params.get('collection_id');
+    return collectionId ? collectionId : null;
+  }
+
+  function buildOpsApiUrl(path) {
+    const collectionId = getCollectionIdFromUrl();
+    if (!collectionId) {
+      return path;
+    }
+    const separator = path.indexOf('?') >= 0 ? '&' : '?';
+    return path + separator + 'collection_id=' + encodeURIComponent(collectionId);
+  }
+
   function escapeHtml(str) {
     if (str == null) return '';
     return String(str)
@@ -2413,7 +2428,7 @@
     chunkDrawerLoading.removeAttribute('hidden');
 
     try {
-      const response = await fetch('/api/chunks/' + encodeURIComponent(chunkId));
+      const response = await fetch(buildOpsApiUrl('/api/chunks/' + encodeURIComponent(chunkId)));
       if (response.status === 404) {
         throw new Error('未找到片段 ' + chunkId);
       }
@@ -2570,7 +2585,7 @@
     overviewLoading.removeAttribute('hidden');
 
     try {
-      const response = await fetch('/api/stats/overview');
+      const response = await fetch(buildOpsApiUrl('/api/stats/overview'));
       if (!response.ok) {
         throw new Error('服务响应异常 (HTTP ' + response.status + ')');
       }
@@ -2722,7 +2737,7 @@
     browseLoading.removeAttribute('hidden');
 
     try {
-      const response = await fetch('/api/browse');
+      const response = await fetch(buildOpsApiUrl('/api/browse'));
       if (!response.ok) {
         throw new Error('服务响应异常 (HTTP ' + response.status + ')');
       }
@@ -2813,7 +2828,7 @@
     reviewLoading.removeAttribute('hidden');
 
     try {
-      const response = await fetch('/api/review/pending');
+      const response = await fetch(buildOpsApiUrl('/api/review/pending'));
       if (!response.ok) {
         throw new Error('服务响应异常 (HTTP ' + response.status + ')');
       }
@@ -2831,7 +2846,7 @@
     const endpoint = action === 'approve'
       ? '/api/review/' + encodeURIComponent(documentId) + '/approve'
       : '/api/review/' + encodeURIComponent(documentId) + '/reject';
-    const response = await fetch(endpoint, { method: 'POST' });
+    const response = await fetch(buildOpsApiUrl(endpoint), { method: 'POST' });
     if (!response.ok) {
       const detail = await response.text();
       throw new Error('操作失败 (HTTP ' + response.status + '): ' + detail);
@@ -2944,7 +2959,7 @@
     }
 
     try {
-      const response = await fetch('/api/ingestion/run', {
+      const response = await fetch(buildOpsApiUrl('/api/ingestion/run'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -3082,7 +3097,7 @@
     traceIngestionLoading.removeAttribute('hidden');
 
     try {
-      const response = await fetch('/api/traces/ingestion');
+      const response = await fetch(buildOpsApiUrl('/api/traces/ingestion'));
       if (!response.ok) {
         throw new Error('服务响应异常 (HTTP ' + response.status + ')');
       }
@@ -3172,7 +3187,7 @@
     traceQueryLoading.removeAttribute('hidden');
 
     try {
-      const response = await fetch('/api/traces/query');
+      const response = await fetch(buildOpsApiUrl('/api/traces/query'));
       if (!response.ok) {
         throw new Error('服务响应异常 (HTTP ' + response.status + ')');
       }
@@ -3264,7 +3279,7 @@
     traceDetailLoading.removeAttribute('hidden');
 
     try {
-      const response = await fetch('/api/traces/' + encodeURIComponent(traceId));
+      const response = await fetch(buildOpsApiUrl('/api/traces/' + encodeURIComponent(traceId)));
       if (!response.ok) {
         throw new Error('服务响应异常 (HTTP ' + response.status + ')');
       }
@@ -3523,18 +3538,8 @@
   /* =========================================================
      5. 评测 (Eval) Logic
      ========================================================= */
-  function getCollectionIdFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-    const collectionId = params.get('collection_id');
-    return collectionId ? collectionId : null;
-  }
-
   function buildEvalRunsUrl() {
-    const collectionId = getCollectionIdFromUrl();
-    if (!collectionId) {
-      return '/api/eval/runs';
-    }
-    return '/api/eval/runs?collection_id=' + encodeURIComponent(collectionId);
+    return buildOpsApiUrl('/api/eval/runs');
   }
 
   async function loadEvalRuns() {

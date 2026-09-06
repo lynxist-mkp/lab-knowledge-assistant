@@ -69,7 +69,9 @@ def test_ops_landmarks_and_overview_panel(test_settings: Settings) -> None:
     # Overview panel landmarks & fetch path
     assert "概览" in html
     assert "知识库概览" in html
-    assert "fetch('/api/stats/overview')" in html or 'fetch("/api/stats/overview")' in html
+    assert "function buildOpsApiUrl" in html
+    assert "function getCollectionIdFromUrl" in html
+    assert "fetch(buildOpsApiUrl('/api/stats/overview'))" in html
     assert 'id="stat-doc-count"' in html
     assert 'id="stat-chunk-count"' in html
     assert 'id="stat-avg-latency"' in html
@@ -98,7 +100,7 @@ def test_ops_browse_panel_wiring(test_settings: Settings) -> None:
     assert 'id="btn-refresh-browse"' in html
 
     # Fetch wiring
-    assert "fetch('/api/browse')" in html or 'fetch("/api/browse")' in html
+    assert "fetch(buildOpsApiUrl('/api/browse'))" in html
 
 
 def test_ops_ingestion_panel_wiring(test_settings: Settings) -> None:
@@ -117,7 +119,7 @@ def test_ops_ingestion_panel_wiring(test_settings: Settings) -> None:
 
     # Ingestion SSE fetch wiring
     assert "/api/ingestion/run" in html
-    assert "fetch('/api/ingestion/run'" in html or 'fetch("/api/ingestion/run"' in html
+    assert "fetch(buildOpsApiUrl('/api/ingestion/run')" in html
 
 
 def test_ops_nav_isolation_from_editor(test_settings: Settings) -> None:
@@ -396,11 +398,9 @@ def test_ops_trace_panel_wiring(test_settings: Settings) -> None:
     assert 'id="trace-detail-close"' in html
 
     # Fetch wiring
-    assert "fetch('/api/traces/ingestion')" in html or 'fetch("/api/traces/ingestion")' in html
-    assert "fetch('/api/traces/query')" in html or 'fetch("/api/traces/query")' in html
-    assert "fetch('/api/traces/' + encodeURIComponent(" in html or (
-        'fetch("/api/traces/" + encodeURIComponent(' in html
-    )
+    assert "fetch(buildOpsApiUrl('/api/traces/ingestion'))" in html
+    assert "fetch(buildOpsApiUrl('/api/traces/query'))" in html
+    assert "fetch(buildOpsApiUrl('/api/traces/' + encodeURIComponent(" in html
     assert "white-space: nowrap" in html
     assert "btn-table-action" in html
     assert "function formatChunkPreview" in html
@@ -428,13 +428,37 @@ def test_ops_eval_panel_wiring(test_settings: Settings) -> None:
     assert "RRF 融合" in html
     assert "RRF + Rerank" in html
 
-    # Fetch and run wiring — collection_id from page URL via buildEvalRunsUrl()
-    assert "function buildEvalRunsUrl" in html
+    # Fetch and run wiring — collection_id from page URL via buildOpsApiUrl()
+    assert "function buildOpsApiUrl" in html
     assert "function getCollectionIdFromUrl" in html
+    assert "function buildEvalRunsUrl" in html
     assert "URLSearchParams" in html
     assert "fetch(buildEvalRunsUrl())" in html
     assert "fetch(buildEvalRunsUrl()," in html
-    assert "'/api/eval/runs?collection_id=' + encodeURIComponent(collectionId)" in html
+    assert "return buildOpsApiUrl('/api/eval/runs')" in html
+
+
+def test_ops_page_collection_scope_url_wiring(test_settings: Settings) -> None:
+    """Ops page: shared buildOpsApiUrl helper wires collection_id for all panel fetches."""
+    client = TestClient(create_app(test_settings))
+    html = _ops_html(client)
+
+    scoped_fetch_paths = (
+        "fetch(buildOpsApiUrl('/api/stats/overview'))",
+        "fetch(buildOpsApiUrl('/api/browse'))",
+        "fetch(buildOpsApiUrl('/api/review/pending'))",
+        "fetch(buildOpsApiUrl('/api/ingestion/run')",
+        "fetch(buildOpsApiUrl('/api/traces/ingestion'))",
+        "fetch(buildOpsApiUrl('/api/traces/query'))",
+        "fetch(buildOpsApiUrl('/api/traces/' + encodeURIComponent(traceId)))",
+        "fetch(buildOpsApiUrl('/api/chunks/' + encodeURIComponent(chunkId)))",
+    )
+    for snippet in scoped_fetch_paths:
+        assert snippet in html
+
+    assert "fetch(buildOpsApiUrl(endpoint), { method: 'POST' })" in html
+    assert "fetch(buildEvalRunsUrl())" in html
+    assert "return buildOpsApiUrl('/api/eval/runs')" in html
 
 
 def test_ops_eval_panel_collection_id_url_wiring(test_settings: Settings) -> None:
@@ -444,7 +468,7 @@ def test_ops_eval_panel_collection_id_url_wiring(test_settings: Settings) -> Non
 
     assert "params.get('collection_id')" in html
     assert "buildEvalRunsUrl()" in html
-    assert "encodeURIComponent(collectionId)" in html
+    assert "buildOpsApiUrl(" in html
 
 
 def test_ops_trace_detail_api_contract(test_settings: Settings, tmp_path: Path) -> None:
@@ -527,7 +551,7 @@ def test_ops_review_panel_wiring(test_settings: Settings) -> None:
     assert 'id="ops-panel-review"' in html
     assert 'id="review-list"' in html
     assert 'id="btn-refresh-review"' in html
-    assert "fetch('/api/review/pending')" in html or 'fetch("/api/review/pending")' in html
+    assert "fetch(buildOpsApiUrl('/api/review/pending'))" in html
     assert "/api/review/" in html
     assert "通过" in html
     assert "驳回" in html
@@ -537,6 +561,7 @@ def test_ops_review_panel_wiring(test_settings: Settings) -> None:
     assert "data-expand-chunks" in html
     assert "data-view-chunk-full" in html
     assert 'id="ops-chunk-drawer"' in html
+    assert "fetch(buildOpsApiUrl('/api/chunks/' + encodeURIComponent(chunkId)))" in html
     assert "eval-compare-table" in html
 
 
@@ -880,6 +905,7 @@ def test_ops_unknown_collection_returns_404(test_settings: Settings) -> None:
         "/api/traces/any-trace/summary",
         "/api/traces/any-trace/degradations",
         "/api/tasks/progress/ingestion:demo/investigation",
+        "/api/chunks/any-chunk",
     )
     for path in collection_scoped_gets:
         response = client.get(path, params=unknown)
@@ -893,4 +919,56 @@ def test_ops_unknown_collection_returns_404(test_settings: Settings) -> None:
         response = client.post(path, params=unknown)
         assert response.status_code == 404
         assert response.json()["detail"] == "collection not found"
+
+
+def test_api_chunks_collection_query_params_route_detail(
+    test_settings: Settings,
+) -> None:
+    from wenmai.models import Chunk
+
+    other_id = "other-collection"
+    settings = register_collection(test_settings, other_id)
+    other_knowledge = create_knowledge(_other_collection_settings(test_settings, other_id))
+    other_knowledge.commit_document(
+        source_path="/tmp/doc-other-chunk.md",
+        sha256="doc-other-chunk",
+        document_id="doc-other-chunk",
+        status="ingested",
+        chunks=[
+            Chunk(
+                chunk_id="doc-other-chunk:0000",
+                document_id="doc-other-chunk",
+                text="其他集合片段正文。",
+                metadata={
+                    "document_id": "doc-other-chunk",
+                    "title": "其他集合片段",
+                    "culture_domain": "妈祖",
+                    "审阅状态": "已通过",
+                },
+            ),
+        ],
+    )
+
+    client = TestClient(create_app(settings))
+    chunk_id = "doc-other-chunk:0000"
+
+    default_detail = client.get(f"/api/chunks/{chunk_id}")
+    assert default_detail.status_code == 404
+
+    scoped_detail = client.get(
+        f"/api/chunks/{chunk_id}",
+        params={"collection_id": other_id},
+    )
+    assert scoped_detail.status_code == 200
+    body = scoped_detail.json()
+    assert body["chunk_id"] == chunk_id
+    assert body["title"] == "其他集合片段"
+    assert "其他集合片段正文" in body["text"]
+
+    unknown = client.get(
+        f"/api/chunks/{chunk_id}",
+        params={"collection_id": "missing"},
+    )
+    assert unknown.status_code == 404
+    assert unknown.json()["detail"] == "collection not found"
 
