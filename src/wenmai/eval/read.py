@@ -6,7 +6,7 @@ from typing import Any
 
 from wenmai.components.evaluator.ragas_probe import probe_ragas_judge
 from wenmai.config import Settings
-from wenmai.eval.persist import runs_dir
+from wenmai.eval.persist import eval_run_belongs_to_collection, runs_dir
 from wenmai.eval.views import (
     EvalDashboardView,
     EvalRunDetail,
@@ -28,38 +28,77 @@ def _load_run_raw(path: Path) -> dict[str, Any] | None:
     return raw
 
 
-def _load_run_summary(path: Path) -> EvalRunSummary | None:
+def _load_run_summary(
+    path: Path,
+    *,
+    settings: Settings | None = None,
+    collection_id: str | None = None,
+) -> EvalRunSummary | None:
     raw = _load_run_raw(path)
     if raw is None:
         return None
+    if collection_id is not None and settings is not None:
+        if not eval_run_belongs_to_collection(
+            raw,
+            collection_id,
+            default_collection_id=settings.default_collection_id,
+        ):
+            return None
     return parse_eval_run_summary(raw)
 
 
-def list_eval_run_summaries(settings: Settings) -> list[EvalRunSummary]:
+def list_eval_run_summaries(
+    settings: Settings, *, collection_id: str | None = None
+) -> list[EvalRunSummary]:
     eval_runs_dir = runs_dir(settings)
     if not eval_runs_dir.is_dir():
         return []
     runs: list[EvalRunSummary] = []
     for path in eval_runs_dir.glob("*.json"):
-        run = _load_run_summary(path)
+        run = _load_run_summary(
+            path,
+            settings=settings,
+            collection_id=collection_id,
+        )
         if run is not None:
             runs.append(run)
     runs.sort(key=lambda item: item.timestamp, reverse=True)
     return runs
 
 
-def get_eval_run_summary(settings: Settings, timestamp: str) -> EvalRunSummary | None:
+def get_eval_run_summary(
+    settings: Settings,
+    timestamp: str,
+    *,
+    collection_id: str | None = None,
+) -> EvalRunSummary | None:
     if not timestamp:
         return None
-    return _load_run_summary(runs_dir(settings) / f"{timestamp}.json")
+    return _load_run_summary(
+        runs_dir(settings) / f"{timestamp}.json",
+        settings=settings,
+        collection_id=collection_id,
+    )
 
 
-def get_eval_run_detail(settings: Settings, timestamp: str) -> EvalRunDetail | None:
+def get_eval_run_detail(
+    settings: Settings,
+    timestamp: str,
+    *,
+    collection_id: str | None = None,
+) -> EvalRunDetail | None:
     if not timestamp:
         return None
     raw = _load_run_raw(runs_dir(settings) / f"{timestamp}.json")
     if raw is None:
         return None
+    if collection_id is not None:
+        if not eval_run_belongs_to_collection(
+            raw,
+            collection_id,
+            default_collection_id=settings.default_collection_id,
+        ):
+            return None
     return parse_eval_run_detail(raw)
 
 
@@ -113,8 +152,10 @@ def get_ragas_status(settings: Settings) -> RagasStatusView:
     )
 
 
-def get_eval_dashboard(settings: Settings) -> EvalDashboardView:
-    history = list_eval_run_summaries(settings)
+def get_eval_dashboard(
+    settings: Settings, *, collection_id: str | None = None
+) -> EvalDashboardView:
+    history = list_eval_run_summaries(settings, collection_id=collection_id)
     group_order = list(settings.evaluation.ablations)
     return EvalDashboardView(
         latest_run=history[0] if history else None,

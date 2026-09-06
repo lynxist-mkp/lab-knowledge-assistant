@@ -1,23 +1,59 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import threading
+from collections.abc import Callable
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from wenmai.config import Settings
 from wenmai.http.schemas import IngestRequest
+from wenmai.knowledge.collections import UnknownCollectionError, resolve_routable_collection_scope
+from wenmai.knowledge.store import Knowledge, create_knowledge
 from wenmai.pipelines.ingestion import ingest_source
+
+
+def _translate_unknown_collection(func: Callable[..., object]) -> Callable[..., object]:
+    @functools.wraps(func)
+    def wrapper(*args: object, **kwargs: object) -> object:
+        try:
+            return func(*args, **kwargs)
+        except UnknownCollectionError as exc:
+            raise HTTPException(status_code=404, detail="collection not found") from exc
+
+    return wrapper
+
+
+def _resolve_ingest_binding(
+    settings: Settings,
+    default_knowledge: Knowledge,
+    collection_id: str | None,
+) -> tuple[Settings, Knowledge]:
+    scope = resolve_routable_collection_scope(settings, collection_id)
+    if scope.settings.product.collection == settings.product.collection:
+        return scope.settings, default_knowledge
+    return scope.settings, create_knowledge(scope.settings)
 
 
 def create_ingest_router() -> APIRouter:
     router = APIRouter()
 
     @router.post("/ingest")
-    def ingest(request: Request, body: IngestRequest) -> dict[str, object]:
-        settings = request.app.state.settings
+    @_translate_unknown_collection
+    def ingest(
+        request: Request,
+        body: IngestRequest,
+        collection_id: str | None = None,
+    ) -> dict[str, object]:
+        settings, knowledge = _resolve_ingest_binding(
+            request.app.state.settings,
+            request.app.state.knowledge,
+            collection_id,
+        )
         path = Path(body.source_path)
         if not path.is_file():
             raise HTTPException(status_code=404, detail="source file not found")
@@ -26,17 +62,24 @@ def create_ingest_router() -> APIRouter:
                 path,
                 settings,
                 pdf_load_mode=body.pdf_load_mode,
-                knowledge=request.app.state.knowledge,
+                knowledge=knowledge,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return result.as_dict()
 
     @router.post("/api/ingestion/run")
+    @_translate_unknown_collection
     async def api_ingestion_run(
-        request: Request, body: IngestRequest
+        request: Request,
+        body: IngestRequest,
+        collection_id: str | None = None,
     ) -> StreamingResponse:
-        settings = request.app.state.settings
+        settings, knowledge = _resolve_ingest_binding(
+            request.app.state.settings,
+            request.app.state.knowledge,
+            collection_id,
+        )
         path = Path(body.source_path)
         if not path.is_file():
             raise HTTPException(status_code=404, detail="source file not found")
@@ -56,7 +99,7 @@ def create_ingest_router() -> APIRouter:
                         settings,
                         pdf_load_mode=body.pdf_load_mode,
                         on_stage=on_stage,
-                        knowledge=request.app.state.knowledge,
+                        knowledge=knowledge,
                     )
                     loop.call_soon_threadsafe(
                         queue.put_nowait,

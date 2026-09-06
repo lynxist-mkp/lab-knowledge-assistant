@@ -227,7 +227,13 @@ def get_task_investigation(
             ))
             is not None
         ],
-        eval_run=get_eval_run_summary(settings, eval_run_id) if eval_run_id else None,
+        eval_run=get_eval_run_summary(
+            settings,
+            eval_run_id,
+            collection_id=scope.collection_id,
+        )
+        if eval_run_id
+        else None,
         links=_evidence_links(detail),
         config_related_tasks=[
             item

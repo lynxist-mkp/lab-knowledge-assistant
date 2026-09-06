@@ -18,6 +18,43 @@ def runs_dir(settings: Settings, *, mkdir: bool = False) -> Path:
     return path
 
 
+def stamp_eval_run_collection_id(
+    payload: dict[str, Any], settings: Settings
+) -> dict[str, Any]:
+    stamped = dict(payload)
+    stamped["collection_id"] = settings.product.collection
+    return stamped
+
+
+def eval_run_belongs_to_collection(
+    record: dict[str, Any],
+    collection_id: str,
+    *,
+    default_collection_id: str,
+) -> bool:
+    record_collection = record.get("collection_id")
+    if record_collection is None:
+        return collection_id == default_collection_id
+    return record_collection == collection_id
+
+
+def filter_eval_run_records(
+    records: list[dict[str, Any]],
+    *,
+    collection_id: str,
+    default_collection_id: str,
+) -> list[dict[str, Any]]:
+    return [
+        record
+        for record in records
+        if eval_run_belongs_to_collection(
+            record,
+            collection_id,
+            default_collection_id=default_collection_id,
+        )
+    ]
+
+
 def write_run_json(settings: Settings, filename: str, payload: dict[str, Any]) -> Path:
     """Write any JSON under the eval runs directory (EvalRun or Phase B summary)."""
     output_path = runs_dir(settings, mkdir=True) / filename
@@ -33,11 +70,19 @@ def persist_eval_artifact(settings: Settings, artifact: dict[str, Any]) -> EvalR
     timestamp = artifact.get("timestamp")
     if not isinstance(timestamp, str) or not timestamp:
         raise ValueError("eval artifact missing timestamp")
-    write_run_json(settings, f"{timestamp}.json", artifact)
-    parsed = parse_eval_run_summary(artifact)
+    stamped = stamp_eval_run_collection_id(artifact, settings)
+    write_run_json(settings, f"{timestamp}.json", stamped)
+    parsed = parse_eval_run_summary(stamped)
     if parsed is None:
         raise RuntimeError("eval run artifact could not be parsed")
     return parsed
 
 
-__all__ = ["persist_eval_artifact", "runs_dir", "write_run_json"]
+__all__ = [
+    "eval_run_belongs_to_collection",
+    "filter_eval_run_records",
+    "persist_eval_artifact",
+    "runs_dir",
+    "stamp_eval_run_collection_id",
+    "write_run_json",
+]
