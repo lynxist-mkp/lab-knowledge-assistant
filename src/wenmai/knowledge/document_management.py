@@ -42,10 +42,6 @@ class DocumentManagement:
         self._scope = scope
 
     @property
-    def knowledge(self) -> Knowledge:
-        return self._knowledge
-
-    @property
     def settings(self) -> Settings:
         return self._settings
 

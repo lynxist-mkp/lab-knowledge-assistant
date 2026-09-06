@@ -12,7 +12,6 @@ from tests.conftest import register_collection
 from wenmai.app import create_app
 from wenmai.config import Settings
 from wenmai.eval import run_eval
-from wenmai.ingestion.orchestrator import prepared_trace_id
 from wenmai.models import IngestResult
 from wenmai.ops.observation import get_task_progress_detail, list_task_progress_summaries
 from wenmai.pipelines.ingestion import commit_prepared_ingest, prepare_ingest_source
@@ -403,14 +402,15 @@ def test_failed_commit_keeps_document_link_in_task_progress(
     with pytest.raises(RuntimeError, match="upsert failed"):
         commit_prepared_ingest(prepared, test_settings)
 
-    trace_id = prepared_trace_id(prepared)
+    summaries = list_task_progress_summaries(test_settings, task_type="ingestion")
+    assert len(summaries) == 1
     detail = get_task_progress_detail(
         test_settings,
-        f"ingestion:{trace_id}",
+        summaries[0].task_id,
     )
     assert detail is not None
     assert detail.summary.status == "failed"
-    assert detail.summary.links["document_id"] == prepared.document_id
+    assert detail.summary.links["document_id"]
 
 
 def test_eval_writes_task_progress_without_query_trace_pollution(

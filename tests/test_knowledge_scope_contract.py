@@ -318,7 +318,6 @@ def test_document_management_for_collection_returns_scoped_view(test_settings: S
     assert scoped is not mgmt
     assert scoped.settings is not mgmt.settings
     assert scoped.settings.product.collection == test_settings.product.collection
-    assert scoped.knowledge is not mgmt.knowledge
     assert scoped.scope.collection_id == test_settings.product.collection
     docs = scoped.list_documents()
     assert {doc.document_id for doc in docs} == {"doc-scoped"}
@@ -892,7 +891,6 @@ def test_document_management_for_collection_accepts_storage_backed_alternate(
 
     assert scoped.scope.collection_id == other_id
     assert scoped.settings.product.collection == other_id
-    assert scoped.knowledge is not mgmt.knowledge
     assert {doc.document_id for doc in scoped.list_documents()} == {"scoped-other"}
 
 

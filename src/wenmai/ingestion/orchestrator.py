@@ -60,33 +60,64 @@ class PreparedIngest:
         self.__lifecycle = lifecycle
         self.__recorder = recorder
 
-    @property
-    def source_path(self) -> Path:
-        return self.__body.source_path
+    def commit(self, settings: Settings, knowledge: Knowledge) -> IngestResult:
+        body = self.__body
+        try:
+            upserted = knowledge.commit_document(
+                source_path=body.document_source_path,
+                sha256=body.document_id,
+                document_id=body.document_id,
+                status=body.status,
+                chunks=body.chunks,
+                previous_document_id=body.previous_document_id,
+            )
+            recorder = self.__recorder
+            recorder.set_summary(
+                source_path=body.document_source_path,
+                document_id=body.document_id,
+                title=body.document_title,
+                status=body.status,
+                chunk_count=len(body.chunks),
+                chunks_with_images=count_chunks_with_images(body.chunks),
+            )
+            recorder.record_embed(
+                provider=upserted.embed_provider,
+                elapsed_ms=upserted.embed_elapsed_ms,
+                chunk_count=upserted.chunk_count,
+                embed_dimension=upserted.embed_dimension,
+            )
+            recorder.record_upsert(
+                provider=upserted.upsert_provider,
+                elapsed_ms=upserted.upsert_elapsed_ms,
+                chunk_count=upserted.chunk_count,
+            )
+            recorder.close_and_save(settings)
+            persist_ingestion_outcome(
+                settings,
+                self.__lifecycle,
+                recorder,
+                document_id=body.document_id,
+            )
+        except Exception as exc:
+            recorder = self.__recorder
+            recorder.trace_context.error = f"{type(exc).__name__}: {exc}"
+            recorder.trace_context.close()
+            recorder.save_on_error(settings)
+            persist_ingestion_outcome(
+                settings,
+                self.__lifecycle,
+                recorder,
+                document_id=body.document_id,
+            )
+            raise
 
-    @property
-    def document_id(self) -> str:
-        return self.__body.document_id
-
-    @property
-    def document_title(self) -> str:
-        return self.__body.document_title
-
-    @property
-    def document_source_path(self) -> str:
-        return self.__body.document_source_path
-
-    @property
-    def status(self) -> str:
-        return self.__body.status
-
-    @property
-    def chunks(self) -> list[Chunk]:
-        return self.__body.chunks
-
-    @property
-    def previous_document_id(self) -> str | None:
-        return self.__body.previous_document_id
+        return IngestResult(
+            document_id=body.document_id,
+            chunk_count=len(body.chunks),
+            elapsed_ms=self.__recorder.trace_context.total_elapsed_ms,
+            trace_id=self.__recorder.trace_id,
+            status=body.status,
+        )
 
 
 @dataclass(frozen=True)
@@ -99,74 +130,6 @@ class IngestionLifecycle:
 
 def count_chunks_with_images(chunks: list[Chunk]) -> int:
     return sum(1 for chunk in chunks if IMAGE_PLACEHOLDER_RE.search(chunk.text))
-
-
-def prepared_trace_id(prepared: PreparedIngest) -> str:
-    return prepared._PreparedIngest__recorder.trace_id
-
-
-def prepared_elapsed_ms(prepared: PreparedIngest) -> float:
-    return prepared._PreparedIngest__recorder.trace_context.total_elapsed_ms
-
-
-def finalize_prepared_ingest_success(
-    prepared: PreparedIngest,
-    settings: Settings,
-    *,
-    embed_provider: str,
-    embed_elapsed_ms: float,
-    chunk_count: int,
-    embed_dimension: int | None,
-    upsert_provider: str,
-    upsert_elapsed_ms: float,
-    document_id: str | None = None,
-) -> None:
-    recorder = prepared._PreparedIngest__recorder
-    recorder.set_summary(
-        source_path=prepared.document_source_path,
-        document_id=prepared.document_id,
-        title=prepared.document_title,
-        status=prepared.status,
-        chunk_count=len(prepared.chunks),
-        chunks_with_images=count_chunks_with_images(prepared.chunks),
-    )
-    recorder.record_embed(
-        provider=embed_provider,
-        elapsed_ms=embed_elapsed_ms,
-        chunk_count=chunk_count,
-        embed_dimension=embed_dimension,
-    )
-    recorder.record_upsert(
-        provider=upsert_provider,
-        elapsed_ms=upsert_elapsed_ms,
-        chunk_count=chunk_count,
-    )
-    recorder.close_and_save(settings)
-    persist_ingestion_outcome(
-        settings,
-        prepared._PreparedIngest__lifecycle,
-        recorder,
-        document_id=document_id,
-    )
-
-
-def finalize_prepared_ingest_error(
-    prepared: PreparedIngest,
-    settings: Settings,
-    exc: Exception,
-    *,
-    document_id: str | None = None,
-) -> None:
-    recorder = prepared._PreparedIngest__recorder
-    recorder.trace_context.error = f"{type(exc).__name__}: {exc}"
-    recorder.trace_context.close()
-    recorder.save_on_error(settings)
-    persist_ingestion_outcome(
-        settings,
-        prepared._PreparedIngest__lifecycle,
-        recorder,
-        document_id=document_id,
-    )
 
 
 def build_ingestion_lifecycle(
@@ -482,15 +445,11 @@ def prepare_ingest(
 
 
 __all__ = [
-    "finalize_prepared_ingest_error",
-    "finalize_prepared_ingest_success",
     "IngestionLifecycle",
     "PrepareBody",
     "PreparedIngest",
     "build_ingestion_lifecycle",
     "count_chunks_with_images",
-    "prepared_elapsed_ms",
-    "prepared_trace_id",
     "persist_ingestion_outcome",
     "persist_ingestion_running",
     "prepare_ingest",

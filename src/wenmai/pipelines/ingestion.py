@@ -9,11 +9,7 @@ from wenmai.components.model_guard import phase_batch as model_phase_batch
 from wenmai.config import Settings
 from wenmai.ingestion.orchestrator import (
     PreparedIngest,
-    finalize_prepared_ingest_error,
-    finalize_prepared_ingest_success,
     prepare_ingest,
-    prepared_elapsed_ms,
-    prepared_trace_id,
 )
 from wenmai.knowledge import Knowledge, create_knowledge
 from wenmai.models import IngestResult
@@ -46,43 +42,7 @@ def commit_prepared_ingest(
 ) -> IngestResult:
     """Phase-2 入库: embed + upsert for a prepared document."""
     knowledge = knowledge or create_knowledge(settings)
-
-    try:
-        upserted = knowledge.commit_document(
-            source_path=prepared.document_source_path,
-            sha256=prepared.document_id,
-            document_id=prepared.document_id,
-            status=prepared.status,
-            chunks=prepared.chunks,
-            previous_document_id=prepared.previous_document_id,
-        )
-        finalize_prepared_ingest_success(
-            prepared,
-            settings,
-            embed_provider=upserted.embed_provider,
-            embed_elapsed_ms=upserted.embed_elapsed_ms,
-            chunk_count=upserted.chunk_count,
-            embed_dimension=upserted.embed_dimension,
-            upsert_provider=upserted.upsert_provider,
-            upsert_elapsed_ms=upserted.upsert_elapsed_ms,
-            document_id=prepared.document_id,
-        )
-    except Exception as exc:
-        finalize_prepared_ingest_error(
-            prepared,
-            settings,
-            exc,
-            document_id=prepared.document_id,
-        )
-        raise
-
-    return IngestResult(
-        document_id=prepared.document_id,
-        chunk_count=len(prepared.chunks),
-        elapsed_ms=prepared_elapsed_ms(prepared),
-        trace_id=prepared_trace_id(prepared),
-        status=prepared.status,
-    )
+    return prepared.commit(settings, knowledge)
 
 
 def run_prepare_commit(
