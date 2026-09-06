@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from wenmai.config import Settings
-from wenmai.storage.paths import store_path
+from wenmai.storage.paths import collection_storage_bindings
 
 _IMAGE_PLACEHOLDER_TEMPLATE = "[IMAGE: {image_id}]"
 IMAGE_PLACEHOLDER_RE = re.compile(r"\[IMAGE:\s*([a-f0-9]+)\s*\]")
@@ -51,10 +51,11 @@ class ImageRecord:
 class ImageStore:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._collection = settings.product.collection
-        self._images_root = store_path(settings, "images") / self._collection
+        bindings = collection_storage_bindings(settings)
+        self._collection = bindings.collection_id
+        self._images_root = bindings.images_root
         self._images_root.mkdir(parents=True, exist_ok=True)
-        self._index_path = store_path(settings, "image_index")
+        self._index_path = bindings.shared_image_index_path
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:

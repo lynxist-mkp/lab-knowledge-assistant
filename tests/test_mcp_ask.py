@@ -7,14 +7,14 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from wenmai.ask_surface import AskSurfaceResult
 from wenmai.app import create_app
+from wenmai.ask_surface import AskSurfaceResult
 from wenmai.config import Settings
 from wenmai.http.ask_service import run_ask
-from wenmai.models import AskResult
 from wenmai.mcp.ask import AskWenmaiError, ask_wenmai
 from wenmai.mcp.server import create_mcp_server
 from wenmai.mcp.tools.ask import AskAnswerError, ask_answer
+from wenmai.models import AskResult
 
 
 def _seed_doc(client: TestClient, tmp_path, text: str = "湄洲岛是妈祖信仰的发源地。") -> None:
@@ -68,7 +68,8 @@ def test_ask_service_delegates_to_query_orchestration_entry(
 
     assert result.trace_id == "trace-123"
     assert captured["payload"].question == "妈祖信仰的发源地在哪里？"
-    assert captured["payload"].settings is test_settings
+    assert captured["payload"].settings is not test_settings
+    assert captured["payload"].settings.product.collection == test_settings.product.collection
     assert captured["payload"].culture_domain == "妈祖"
     assert captured["payload"].retrieval_mode == "dense_only"
     assert captured["payload"].rerank_enabled is False
@@ -123,7 +124,9 @@ def test_ask_answer_uses_shared_surface(
     assert result["data"]["trace_id"] == "trace-123"
     assert result["meta"]["elapsed_ms"] == 12.5
     assert captured["question"] == "妈祖信仰的发源地在哪里？"
-    assert captured["settings"] is test_settings
+    assert captured["settings"] is not test_settings
+    assert captured["settings"].product.collection == test_settings.product.collection
+    assert captured["kwargs"]["collection_id"] == test_settings.product.collection
     assert captured["kwargs"]["entrypoint"] == "mcp"
     assert captured["kwargs"]["culture_domain"] == "妈祖"
     assert captured["kwargs"]["retrieval_mode"] == "dense_only"

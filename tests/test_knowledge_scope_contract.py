@@ -7,8 +7,13 @@ import base64
 import pytest
 
 from wenmai.config import Settings
+from wenmai.http.ops_service import OpsService
 from wenmai.knowledge import create_document_management, create_knowledge
-from wenmai.knowledge.collections import CollectionReadModel, UnknownCollectionError
+from wenmai.knowledge.collections import (
+    CollectionReadModel,
+    CollectionScope,
+    UnknownCollectionError,
+)
 from wenmai.knowledge.domain import REVIEW_PENDING
 from wenmai.knowledge.image_refs import ImageReferenceService
 from wenmai.knowledge.store import Knowledge
@@ -25,6 +30,7 @@ from wenmai.mcp.tools.reviews import (
 )
 from wenmai.models import Chunk, Citation
 from wenmai.storage.images import ImageStore
+from wenmai.storage.paths import collection_storage_bindings
 
 
 def _commit(
@@ -79,11 +85,54 @@ def test_collection_stats_status_layering(test_settings: Settings) -> None:
     assert stats.by_culture_domain[0].pending_chunks == 1
 
 
+def test_collection_scope_defaults_to_configured_collection(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    model = CollectionReadModel(test_settings, knowledge)
+
+    scope = model.resolve_scope()
+
+    assert isinstance(scope, CollectionScope)
+    assert scope.collection_id == test_settings.product.collection
+    assert scope.display_name == test_settings.product.name
+    assert scope.settings is not test_settings
+    assert scope.settings.product.collection == test_settings.product.collection
+    assert scope.settings.product.name == test_settings.product.name
+
+
+def test_collection_scope_explicit_default_matches_default_scope(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    model = CollectionReadModel(test_settings, knowledge)
+
+    implicit = model.resolve_scope()
+    explicit = model.resolve_scope(test_settings.product.collection)
+
+    assert explicit == implicit
+    assert explicit.settings is not implicit.settings
+
+
+def test_collection_storage_bindings_follow_scoped_settings(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    scope = CollectionReadModel(test_settings, knowledge).resolve_scope()
+
+    bindings = collection_storage_bindings(scope.settings)
+
+    assert bindings.collection_id == test_settings.product.collection
+    assert bindings.images_root.name == test_settings.product.collection
+    assert bindings.chroma_path.exists()
+    assert bindings.bm25_path.exists()
+    assert bindings.shared_catalog_path.parent.exists()
+    assert bindings.shared_ingestion_history_path.parent.exists()
+    assert bindings.shared_image_index_path.parent.exists()
+
+
 def test_unknown_collection_id_raises(test_settings: Settings) -> None:
     knowledge = create_knowledge(test_settings)
     model = CollectionReadModel(test_settings, knowledge)
     with pytest.raises(UnknownCollectionError):
         model.get_stats("not-a-real-collection")
+
+    with pytest.raises(UnknownCollectionError):
+        model.resolve_scope("not-a-real-collection")
 
 
 def test_document_management_list_and_delete(test_settings: Settings) -> None:
@@ -108,6 +157,24 @@ def test_document_management_list_and_delete(test_settings: Settings) -> None:
     assert remaining[0].document_id == "doc-b"
 
 
+def test_document_management_for_collection_binds_scope_once(test_settings: Settings) -> None:
+    knowledge = create_knowledge(test_settings)
+    mgmt = create_document_management(test_settings, knowledge=knowledge)
+
+    scoped = mgmt.for_collection(test_settings.product.collection)
+
+    assert scoped is mgmt
+
+
+def test_document_management_for_collection_unknown_collection_raises(
+    test_settings: Settings,
+) -> None:
+    mgmt = create_document_management(test_settings, knowledge=create_knowledge(test_settings))
+
+    with pytest.raises(UnknownCollectionError, match="unknown collection: missing"):
+        mgmt.for_collection("missing")
+
+
 def test_mcp_envelope_shape_for_collections(test_settings: Settings) -> None:
     knowledge = create_knowledge(test_settings)
     _commit(knowledge, "doc-1", "统计用文档")
@@ -122,6 +189,62 @@ def test_mcp_envelope_shape_for_collections(test_settings: Settings) -> None:
     assert set(stats) == _envelope_keys()
     assert stats["data"]["document_count"] == 1
     assert stats["meta"]["count"] == 1
+
+
+def test_mcp_documents_list_uses_collection_bound_document_management(
+    test_settings: Settings,
+) -> None:
+    captured: dict[str, object] = {}
+    scoped_settings = CollectionReadModel(
+        test_settings, create_knowledge(test_settings)
+    ).resolve_scope().settings
+
+    class ScopedDocumentManagement:
+        settings = scoped_settings
+
+        def list_documents(self, *, culture_domain: str | None = None):
+            captured["culture_domain"] = culture_domain
+            return []
+
+    class RootDocumentManagement:
+        settings = test_settings
+
+        def for_collection(self, collection_id: str | None = None):
+            captured["collection_id"] = collection_id
+            return ScopedDocumentManagement()
+
+    result = documents_list(
+        RootDocumentManagement(),  # type: ignore[arg-type]
+        collection_id=test_settings.product.collection,
+        culture_domain="妈祖",
+    )
+
+    assert captured["collection_id"] == test_settings.product.collection
+    assert captured["culture_domain"] == "妈祖"
+    assert result["scope"]["collection_id"] == test_settings.product.collection
+
+
+def test_ops_service_uses_collection_bound_document_management(test_settings: Settings) -> None:
+    captured: dict[str, object] = {}
+
+    class ScopedDocumentManagement:
+        def browse_groups(self):
+            captured["scoped_browse"] = True
+            return ["ok"]
+
+    class RootDocumentManagement:
+        def for_collection(self, collection_id: str | None = None):
+            captured["collection_id"] = collection_id
+            return ScopedDocumentManagement()
+
+    service = OpsService(
+        test_settings,
+        document_management=RootDocumentManagement(),  # type: ignore[arg-type]
+    )
+
+    assert service.browse_groups(collection_id=test_settings.product.collection) == ["ok"]
+    assert captured["collection_id"] == test_settings.product.collection
+    assert captured["scoped_browse"] is True
 
 
 def test_document_management_get_document_summary(test_settings: Settings) -> None:

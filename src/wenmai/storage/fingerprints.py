@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from wenmai.config import Settings
-from wenmai.storage.paths import store_path
+from wenmai.storage.paths import collection_storage_bindings
 
 
 @dataclass(frozen=True)
@@ -41,7 +41,7 @@ class FingerprintStore:
 
     @classmethod
     def from_settings(cls, settings: Settings) -> FingerprintStore:
-        return cls(store_path(settings, "ingestion_history"))
+        return cls(collection_storage_bindings(settings).shared_ingestion_history_path)
 
     def get_by_source_path(self, source_path: str) -> FingerprintRecord | None:
         row = self._conn.execute(

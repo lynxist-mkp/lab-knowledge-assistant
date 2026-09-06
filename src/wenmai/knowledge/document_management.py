@@ -7,8 +7,9 @@ from wenmai.knowledge.browse import CultureDomainGroup, DocumentSummary
 from wenmai.knowledge.collections import (
     Collection,
     CollectionReadModel,
+    CollectionScope,
     CollectionStats,
-    resolve_collection_id,
+    resolve_collection_scope,
 )
 from wenmai.knowledge.document_card import DocumentCard, DocumentNotFoundError
 from wenmai.knowledge.image_refs import ImageContent, ImageNotFoundError, ImageReferenceService
@@ -36,14 +37,21 @@ class DocumentManagement:
     def settings(self) -> Settings:
         return self._settings
 
+    @property
+    def scope(self) -> CollectionScope:
+        return self._collections.resolve_scope()
+
     def list_collections(self) -> list[Collection]:
         return self._collections.list_collections()
 
     def get_collection_stats(self, collection_id: str | None = None) -> CollectionStats:
-        return self._collections.get_stats(collection_id)
+        return self.for_collection(collection_id)._collections.get_stats()
 
-    def _resolve_collection_id(self, collection_id: str | None = None) -> str:
-        return resolve_collection_id(self._settings, collection_id)
+    def for_collection(self, collection_id: str | None = None) -> DocumentManagement:
+        # Today the facade only supports the configured default collection.
+        # Validate the requested scope without rebuilding injected adapters.
+        resolve_collection_scope(self._settings, collection_id)
+        return self
 
     def list_documents(
         self,
@@ -51,8 +59,8 @@ class DocumentManagement:
         collection_id: str | None = None,
         culture_domain: str | None = None,
     ) -> list[DocumentSummary]:
-        self._resolve_collection_id(collection_id)
-        groups = self._knowledge.browse_by_culture_domain()
+        scoped = self.for_collection(collection_id)
+        groups = scoped._knowledge.browse_by_culture_domain()
         documents: list[DocumentSummary] = []
         for group in groups:
             if culture_domain is not None and group.culture_domain != culture_domain:
@@ -63,12 +71,10 @@ class DocumentManagement:
     def browse_groups(
         self, *, collection_id: str | None = None
     ) -> list[CultureDomainGroup]:
-        self._resolve_collection_id(collection_id)
-        return self._knowledge.browse_by_culture_domain()
+        return self.for_collection(collection_id)._knowledge.browse_by_culture_domain()
 
     def get_document(self, document_id: str, *, collection_id: str | None = None) -> DocumentCard:
-        self._resolve_collection_id(collection_id)
-        return self._knowledge.document_card(document_id)
+        return self.for_collection(collection_id)._knowledge.document_card(document_id)
 
     def get_document_summary(
         self, document_id: str, *, collection_id: str | None = None
@@ -77,34 +83,30 @@ class DocumentManagement:
         return self.get_document(document_id, collection_id=collection_id).as_dict()
 
     def delete_document(self, document_id: str, *, collection_id: str | None = None) -> None:
-        self._resolve_collection_id(collection_id)
-        if not self._knowledge.get_by_document_id(document_id):
+        scoped = self.for_collection(collection_id)
+        if not scoped._knowledge.get_by_document_id(document_id):
             raise DocumentNotFoundError(document_id)
-        self._knowledge.delete_document(document_id)
+        scoped._knowledge.delete_document(document_id)
 
     def list_pending_reviews(
         self, *, collection_id: str | None = None
     ) -> list[PendingReviewDocument]:
-        self._resolve_collection_id(collection_id)
-        return self._knowledge.list_pending_review_documents()
+        return self.for_collection(collection_id)._knowledge.list_pending_review_documents()
 
     def approve_review(self, document_id: str, *, collection_id: str | None = None) -> None:
-        self._resolve_collection_id(collection_id)
-        self._knowledge.approve_review(document_id)
+        self.for_collection(collection_id)._knowledge.approve_review(document_id)
 
     def reject_review(self, document_id: str, *, collection_id: str | None = None) -> None:
-        self._resolve_collection_id(collection_id)
-        self._knowledge.reject_review(document_id)
+        self.for_collection(collection_id)._knowledge.reject_review(document_id)
 
     def image_refs_for_document(
         self, document_id: str, *, collection_id: str | None = None
     ) -> list[dict[str, Any]]:
-        self._resolve_collection_id(collection_id)
-        return [ref.as_dict() for ref in self._images.list_refs_for_document(document_id)]
+        scoped = self.for_collection(collection_id)
+        return [ref.as_dict() for ref in scoped._images.list_refs_for_document(document_id)]
 
     def get_image_ref(self, image_id: str, *, collection_id: str | None = None) -> dict[str, Any]:
-        self._resolve_collection_id(collection_id)
-        ref = self._images.get_ref(image_id)
+        ref = self.for_collection(collection_id)._images.get_ref(image_id)
         if ref is None:
             raise ImageNotFoundError(image_id)
         return ref.as_dict()
@@ -112,8 +114,7 @@ class DocumentManagement:
     def get_image_content(
         self, image_id: str, *, collection_id: str | None = None
     ) -> ImageContent:
-        self._resolve_collection_id(collection_id)
-        return self._images.get_content(image_id)
+        return self.for_collection(collection_id)._images.get_content(image_id)
 
 
 def create_document_management(

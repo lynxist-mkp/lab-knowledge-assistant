@@ -12,12 +12,13 @@ def reviews_list_pending(
     *,
     collection_id: str | None = None,
 ) -> dict[str, Any]:
-    pending = document_management.list_pending_reviews(collection_id=collection_id)
+    scoped = document_management.for_collection(collection_id)
+    pending = scoped.list_pending_reviews()
     data = [item.as_dict() for item in pending]
     refs = McpRefs(document_ids=[item.document_id for item in pending])
     return envelope(
         data=data,
-        scope=scope_for(document_management.settings, collection_id=collection_id),
+        scope=scope_for(scoped.settings),
         refs=refs,
         meta=McpMeta(count=len(data)),
     ).as_dict()
@@ -29,13 +30,14 @@ def reviews_approve(
     *,
     collection_id: str | None = None,
 ) -> dict[str, Any]:
+    scoped = document_management.for_collection(collection_id)
     try:
-        document_management.approve_review(document_id, collection_id=collection_id)
+        scoped.approve_review(document_id)
     except DocumentNotFoundError as exc:
         raise ValueError(str(exc)) from exc
     return envelope(
         data={"document_id": document_id, "审阅状态": "已通过"},
-        scope=scope_for(document_management.settings, collection_id=collection_id),
+        scope=scope_for(scoped.settings),
         refs=McpRefs(document_ids=[document_id]),
         meta=McpMeta(count=1),
     ).as_dict()
@@ -47,13 +49,14 @@ def reviews_reject(
     *,
     collection_id: str | None = None,
 ) -> dict[str, Any]:
+    scoped = document_management.for_collection(collection_id)
     try:
-        document_management.reject_review(document_id, collection_id=collection_id)
+        scoped.reject_review(document_id)
     except DocumentNotFoundError as exc:
         raise ValueError(str(exc)) from exc
     return envelope(
         data={"document_id": document_id, "审阅状态": "已驳回"},
-        scope=scope_for(document_management.settings, collection_id=collection_id),
+        scope=scope_for(scoped.settings),
         refs=McpRefs(document_ids=[document_id]),
         meta=McpMeta(count=1),
     ).as_dict()

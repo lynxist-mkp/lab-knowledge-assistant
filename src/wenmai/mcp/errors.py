@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.mcpserver.exceptions import ToolError
 
-from wenmai.http.ask_governor import AskSaturationError, AskSaturationCode
+from wenmai.http.ask_governor import AskSaturationCode, AskSaturationError
 from wenmai.mcp.stdio_safety import redact_error_message
 
 

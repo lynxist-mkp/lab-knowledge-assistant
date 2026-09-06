@@ -13,17 +13,14 @@ def documents_list(
     collection_id: str | None = None,
     culture_domain: str | None = None,
 ) -> dict[str, Any]:
-    documents = document_management.list_documents(
-        collection_id=collection_id,
-        culture_domain=culture_domain,
-    )
+    scoped = document_management.for_collection(collection_id)
+    documents = scoped.list_documents(culture_domain=culture_domain)
     data = [document.as_dict() for document in documents]
     refs = McpRefs(document_ids=[document.document_id for document in documents])
     return envelope(
         data=data,
         scope=scope_for(
-            document_management.settings,
-            collection_id=collection_id,
+            scoped.settings,
             culture_domain=culture_domain,
         ),
         refs=refs,
@@ -37,19 +34,16 @@ def documents_get(
     *,
     collection_id: str | None = None,
 ) -> dict[str, Any]:
+    scoped = document_management.for_collection(collection_id)
     try:
-        card = document_management.get_document(document_id, collection_id=collection_id)
+        card = scoped.get_document(document_id)
     except DocumentNotFoundError as exc:
         raise ValueError(str(exc)) from exc
-    image_refs = document_management.image_refs_for_document(
-        document_id,
-        collection_id=collection_id,
-    )
+    image_refs = scoped.image_refs_for_document(document_id)
     return envelope(
         data={**card.as_dict(), "image_refs": image_refs},
         scope=scope_for(
-            document_management.settings,
-            collection_id=collection_id,
+            scoped.settings,
             culture_domain=card.culture_domain,
         ),
         refs=McpRefs(document_ids=[document_id]),
@@ -63,13 +57,14 @@ def documents_delete(
     *,
     collection_id: str | None = None,
 ) -> dict[str, Any]:
+    scoped = document_management.for_collection(collection_id)
     try:
-        document_management.delete_document(document_id, collection_id=collection_id)
+        scoped.delete_document(document_id)
     except DocumentNotFoundError as exc:
         raise ValueError(str(exc)) from exc
     return envelope(
         data={"document_id": document_id, "deleted": True},
-        scope=scope_for(document_management.settings, collection_id=collection_id),
+        scope=scope_for(scoped.settings),
         refs=McpRefs(document_ids=[document_id]),
         meta=McpMeta(count=1),
     ).as_dict()

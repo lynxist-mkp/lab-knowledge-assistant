@@ -21,12 +21,12 @@ def collections_get_stats(
     collection_id: str | None = None,
 ) -> dict[str, Any]:
     try:
-        stats = document_management.get_collection_stats(collection_id)
+        scoped = document_management.for_collection(collection_id)
+        stats = scoped.get_collection_stats()
     except UnknownCollectionError as exc:
         raise ValueError(str(exc)) from exc
-    resolved = collection_id or document_management.settings.product.collection
     return envelope(
         data=stats.as_dict(),
-        scope=scope_for(document_management.settings, collection_id=resolved),
+        scope=scope_for(scoped.settings),
         meta=McpMeta(count=stats.document_count),
     ).as_dict()

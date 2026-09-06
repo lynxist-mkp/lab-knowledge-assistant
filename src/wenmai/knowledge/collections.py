@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from wenmai.config import Settings
@@ -16,11 +16,37 @@ class UnknownCollectionError(ValueError):
         self.collection_id = collection_id
 
 
+@dataclass(frozen=True)
+class CollectionScope:
+    collection_id: str
+    display_name: str
+    settings: Settings
+
+
+def resolve_collection_scope(
+    settings: Settings, collection_id: str | None = None
+) -> CollectionScope:
+    resolved = resolve_collection_id(settings, collection_id)
+    return CollectionScope(
+        collection_id=resolved,
+        display_name=settings.product.name,
+        settings=_settings_for_collection(settings, resolved),
+    )
+
+
 def resolve_collection_id(settings: Settings, collection_id: str | None) -> str:
     default = settings.product.collection
     if collection_id is None or collection_id == default:
         return default
     raise UnknownCollectionError(collection_id)
+
+
+def _settings_for_collection(settings: Settings, collection_id: str) -> Settings:
+    # Return a collection-scoped settings view so callers can bind adapters once.
+    return replace(
+        settings,
+        product=replace(settings.product, collection=collection_id),
+    )
 
 
 @dataclass(frozen=True)
@@ -86,15 +112,18 @@ class CollectionReadModel:
     def default_collection_id(self) -> str:
         return self._settings.product.collection
 
+    def resolve_scope(self, collection_id: str | None = None) -> CollectionScope:
+        return resolve_collection_scope(self._settings, collection_id)
+
     def list_collections(self) -> list[Collection]:
         return [self.get_collection(self.default_collection_id)]
 
     def get_collection(self, collection_id: str | None = None) -> Collection:
-        resolved = resolve_collection_id(self._settings, collection_id)
+        scope = self.resolve_scope(collection_id)
         return Collection(
-            collection_id=resolved,
-            display_name=self._settings.product.name,
-            stats=self.get_stats(resolved),
+            collection_id=scope.collection_id,
+            display_name=scope.display_name,
+            stats=self.get_stats(scope.collection_id),
         )
 
     def get_stats(self, collection_id: str | None = None) -> CollectionStats:
@@ -143,9 +172,11 @@ class CollectionReadModel:
 __all__ = [
     "Collection",
     "CollectionReadModel",
+    "CollectionScope",
     "CollectionStats",
     "CultureDomainStats",
     "ReviewStatusCounts",
     "UnknownCollectionError",
     "resolve_collection_id",
+    "resolve_collection_scope",
 ]

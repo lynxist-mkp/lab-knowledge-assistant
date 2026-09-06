@@ -9,7 +9,6 @@ from fastapi.templating import Jinja2Templates
 
 from wenmai.components.model_guard import in_batch, release_all_resources
 from wenmai.config import Settings
-from wenmai.knowledge.document_management import create_document_management
 from wenmai.http import (
     create_eval_router,
     create_ingest_router,
@@ -17,6 +16,7 @@ from wenmai.http import (
     create_workbench_router,
 )
 from wenmai.http.ops_service import create_ops_service
+from wenmai.knowledge.document_management import create_document_management
 from wenmai.runtime import create_runtime
 
 

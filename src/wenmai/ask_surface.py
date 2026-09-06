@@ -25,6 +25,7 @@ def ask_surface(
     question: str,
     settings: Settings,
     *,
+    collection_id: str | None = None,
     culture_domain: str | None = None,
     retrieval_mode: str | None = None,
     rerank_enabled: bool | None = None,
@@ -39,6 +40,7 @@ def ask_surface(
         result = run_ask(
             question,
             settings,
+            collection_id=collection_id,
             culture_domain=culture_domain,
             retrieval_mode=retrieval_mode,
             rerank_enabled=rerank_enabled,

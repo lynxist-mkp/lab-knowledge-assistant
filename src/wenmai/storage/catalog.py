@@ -9,7 +9,7 @@ from wenmai.config import Settings
 from wenmai.knowledge.browse import ChunkSummary, CultureDomainGroup, DocumentSummary
 from wenmai.knowledge.domain import REVIEW_PENDING, culture_domain, preview, review_status, title
 from wenmai.models import Chunk
-from wenmai.storage.paths import store_path
+from wenmai.storage.paths import collection_storage_bindings
 
 
 @dataclass(frozen=True)
@@ -32,7 +32,7 @@ class DocumentCatalog:
 
     @classmethod
     def from_settings(cls, settings: Settings) -> DocumentCatalog:
-        return cls(store_path(settings, "catalog"))
+        return cls(collection_storage_bindings(settings).shared_catalog_path)
 
     def _load(self) -> None:
         raw = json.loads(self._path.read_text(encoding="utf-8"))

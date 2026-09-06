@@ -13,13 +13,14 @@ def images_get_ref(
     *,
     collection_id: str | None = None,
 ) -> dict[str, Any]:
+    scoped = document_management.for_collection(collection_id)
     try:
-        ref = document_management.get_image_ref(image_id, collection_id=collection_id)
+        ref = scoped.get_image_ref(image_id)
     except ImageNotFoundError as exc:
         raise ValueError(str(exc)) from exc
     return envelope(
         data=ref,
-        scope=scope_for(document_management.settings, collection_id=collection_id),
+        scope=scope_for(scoped.settings),
         refs=McpRefs(image_ids=[image_id]),
         meta=McpMeta(count=1),
     ).as_dict()
@@ -31,13 +32,14 @@ def images_get_content(
     *,
     collection_id: str | None = None,
 ) -> dict[str, Any]:
+    scoped = document_management.for_collection(collection_id)
     try:
-        content = document_management.get_image_content(image_id, collection_id=collection_id)
+        content = scoped.get_image_content(image_id)
     except ImageNotFoundError as exc:
         raise ValueError(str(exc)) from exc
     return envelope(
         data=content.as_dict(),
-        scope=scope_for(document_management.settings, collection_id=collection_id),
+        scope=scope_for(scoped.settings),
         refs=McpRefs(image_ids=[image_id]),
         meta=McpMeta(count=1),
     ).as_dict()
