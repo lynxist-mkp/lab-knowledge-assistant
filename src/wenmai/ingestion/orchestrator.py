@@ -44,21 +44,57 @@ class PrepareBody:
     previous_document_id: str | None
 
 
-@dataclass
 class PreparedIngest:
     """Opaque prepare result for one ingest run."""
 
-    body: PrepareBody
-    lifecycle: IngestionLifecycle
-    _recorder: PrepareTraceRecorder
+    __slots__ = ("__body", "__lifecycle", "__recorder")
+
+    def __init__(
+        self,
+        *,
+        body: PrepareBody,
+        lifecycle: IngestionLifecycle,
+        recorder: PrepareTraceRecorder,
+    ) -> None:
+        self.__body = body
+        self.__lifecycle = lifecycle
+        self.__recorder = recorder
+
+    @property
+    def source_path(self) -> Path:
+        return self.__body.source_path
+
+    @property
+    def document_id(self) -> str:
+        return self.__body.document_id
+
+    @property
+    def document_title(self) -> str:
+        return self.__body.document_title
+
+    @property
+    def document_source_path(self) -> str:
+        return self.__body.document_source_path
+
+    @property
+    def status(self) -> str:
+        return self.__body.status
+
+    @property
+    def chunks(self) -> list[Chunk]:
+        return self.__body.chunks
+
+    @property
+    def previous_document_id(self) -> str | None:
+        return self.__body.previous_document_id
 
     @property
     def trace_id(self) -> str:
-        return self._recorder.trace_id
+        return self.__recorder.trace_id
 
     @property
     def elapsed_ms(self) -> float:
-        return self._recorder.trace_context.total_elapsed_ms
+        return self.__recorder.trace_context.total_elapsed_ms
 
 
 @dataclass(frozen=True)
@@ -85,15 +121,14 @@ def finalize_prepared_ingest_success(
     upsert_elapsed_ms: float,
     document_id: str | None = None,
 ) -> None:
-    body = prepared.body
-    recorder = prepared._recorder
+    recorder = prepared._PreparedIngest__recorder
     recorder.set_summary(
-        source_path=body.document_source_path,
-        document_id=body.document_id,
-        title=body.document_title,
-        status=body.status,
-        chunk_count=len(body.chunks),
-        chunks_with_images=count_chunks_with_images(body.chunks),
+        source_path=prepared.document_source_path,
+        document_id=prepared.document_id,
+        title=prepared.document_title,
+        status=prepared.status,
+        chunk_count=len(prepared.chunks),
+        chunks_with_images=count_chunks_with_images(prepared.chunks),
     )
     recorder.record_embed(
         provider=embed_provider,
@@ -109,7 +144,7 @@ def finalize_prepared_ingest_success(
     recorder.close_and_save(settings)
     persist_ingestion_outcome(
         settings,
-        prepared.lifecycle,
+        prepared._PreparedIngest__lifecycle,
         recorder,
         document_id=document_id,
     )
@@ -122,13 +157,13 @@ def finalize_prepared_ingest_error(
     *,
     document_id: str | None = None,
 ) -> None:
-    recorder = prepared._recorder
+    recorder = prepared._PreparedIngest__recorder
     recorder.trace_context.error = f"{type(exc).__name__}: {exc}"
     recorder.trace_context.close()
     recorder.save_on_error(settings)
     persist_ingestion_outcome(
         settings,
-        prepared.lifecycle,
+        prepared._PreparedIngest__lifecycle,
         recorder,
         document_id=document_id,
     )
@@ -437,7 +472,7 @@ def prepare_ingest(
             chunks=chunks,
             previous_document_id=previous_document_id,
         )
-        return PreparedIngest(body=body, lifecycle=lifecycle, _recorder=trace_recorder)
+        return PreparedIngest(body=body, lifecycle=lifecycle, recorder=trace_recorder)
     except Exception as exc:
         trace_recorder.trace_context.error = f"{type(exc).__name__}: {exc}"
         trace_recorder.trace_context.close()

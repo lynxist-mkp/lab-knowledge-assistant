@@ -44,16 +44,15 @@ def commit_prepared_ingest(
 ) -> IngestResult:
     """Phase-2 入库: embed + upsert for a prepared document."""
     knowledge = knowledge or create_knowledge(settings)
-    body = prepared.body
 
     try:
         upserted = knowledge.commit_document(
-            source_path=body.document_source_path,
-            sha256=body.document_id,
-            document_id=body.document_id,
-            status=body.status,
-            chunks=body.chunks,
-            previous_document_id=body.previous_document_id,
+            source_path=prepared.document_source_path,
+            sha256=prepared.document_id,
+            document_id=prepared.document_id,
+            status=prepared.status,
+            chunks=prepared.chunks,
+            previous_document_id=prepared.previous_document_id,
         )
         finalize_prepared_ingest_success(
             prepared,
@@ -64,23 +63,23 @@ def commit_prepared_ingest(
             embed_dimension=upserted.embed_dimension,
             upsert_provider=upserted.upsert_provider,
             upsert_elapsed_ms=upserted.upsert_elapsed_ms,
-            document_id=body.document_id,
+            document_id=prepared.document_id,
         )
     except Exception as exc:
         finalize_prepared_ingest_error(
             prepared,
             settings,
             exc,
-            document_id=body.document_id,
+            document_id=prepared.document_id,
         )
         raise
 
     return IngestResult(
-        document_id=body.document_id,
-        chunk_count=len(body.chunks),
+        document_id=prepared.document_id,
+        chunk_count=len(prepared.chunks),
         elapsed_ms=prepared.elapsed_ms,
         trace_id=prepared.trace_id,
-        status=body.status,
+        status=prepared.status,
     )
 
 

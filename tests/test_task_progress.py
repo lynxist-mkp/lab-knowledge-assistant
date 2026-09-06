@@ -382,6 +382,9 @@ def test_failed_commit_keeps_document_link_in_task_progress(
     source = _write_markdown(tmp_path / "doc.md")
     prepared = prepare_ingest_source(source, test_settings)
     assert not isinstance(prepared, IngestResult)
+    assert not hasattr(prepared, "body")
+    assert not hasattr(prepared, "lifecycle")
+    assert not hasattr(prepared, "_recorder")
     assert not hasattr(prepared, "set_summary")
     assert not hasattr(prepared, "record_embed")
     assert not hasattr(prepared, "record_upsert")
@@ -403,7 +406,7 @@ def test_failed_commit_keeps_document_link_in_task_progress(
     )
     assert detail is not None
     assert detail.summary.status == "failed"
-    assert detail.summary.links["document_id"] == prepared.body.document_id
+    assert detail.summary.links["document_id"] == prepared.document_id
 
 
 def test_eval_writes_task_progress_without_query_trace_pollution(
